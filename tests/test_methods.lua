@@ -26,7 +26,8 @@ local GAB = loadAddon()
 WoW.fireAllRegistered()
 WoW.tick()
 GAB.Options._test.panel:Show()
-for _, cmd in ipairs({ "", "failures", "version", "options" }) do
+for _, cmd in ipairs({ "", "failures", "version", "options", "inspect", "inspect hide 1", "inspect restore",
+                        "layer rim off", "layer rim on", "tune", "tune rim 0.5", "tune reset", "theme smoked" }) do
     SlashCmdList.GLASSACTIONBARS(cmd)
 end
 

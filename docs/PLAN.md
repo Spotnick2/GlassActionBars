@@ -104,7 +104,7 @@ All of it runs under `/console taintLog 1`. A `RegisterStateDriver` check, which
 | `Bars.lua` | Lists the buttons from `ActionButtonUtil.ActionBarButtonNames`, plus Stance and Pet. Fades `MainActionBar.BorderArt`, the end caps (`Camelot/MainMenuBarEndCaps`; Bartender4's `BlizzardArt.lua` has a Forever case) and the dividers. Divider fades are re-applied, deferred, after `MainActionBar:UpdateDividers`, because pooled dividers are acquired again there. Everything is re-applied on `EDIT_MODE_LAYOUTS_UPDATED`. |
 | `Buttons.lua` | One visual builder shared by every family, plus a family adapter per family; details below. |
 | `Theme.lua` | Presets (clear / smoked / class) with live repaint through `Glass.SetSurfaceTint`. |
-| `Options.lua` | Canvas page: theme, empty-slot alpha, rim alpha, font size, show hotkeys and macro names. |
+| `Options.lua` | Canvas page: theme, show hotkeys and macro names, gryphons, skin on/off (after a `/reload`). Empty-slot strength, rim strength and font size wait for the first in-game look: their numbers are tuned to the owner's eye first, then exposed if still wanted. |
 | `GlassActionBars.lua` | Bootstrap (copy GlassMail): `DEFAULTS` stored as a sparse table with an `__index` fallback, setters shared by `/gab` and the options page, `MEASURED_ON_BUILD` warning. |
 
 `Buttons.lua`:

@@ -165,7 +165,7 @@ function Methods.SetWidth(w, x) w._width = x end
 function Methods.SetHeight(w, y) w._height = y end
 function Methods.GetWidth(w) return w._width end
 function Methods.GetHeight(w) return w._height end
-function Methods.SetAlpha(w, a) w._alpha = a end
+function Methods.SetAlpha(w, a) if not w._gradient then w._alpha = a end end
 function Methods.GetAlpha(w) return w._alpha or 1 end
 function Methods.GetParent(w) return w._parent end
 function Methods.SetParent(w, p) w._parent = p end
@@ -241,7 +241,10 @@ function Methods.SetDesaturated(t, on) t._desaturated = on == true end
 function Methods.SetColorTexture(t, r, g, b, a) t._color = { r, g, b, a } end
 function Methods.SetVertexColor(t, r, g, b, a) t._vertex = { r, g, b, a } end
 function Methods.AddMaskTexture(t, m) t._masks = t._masks or {}; table.insert(t._masks, m) end
-function Methods.SetGradient(t, orientation, c1, c2) t._gradient = { orientation, c1, c2 } end
+-- A gradient texture ignores SetAlpha on this client (GlassActionBars'
+-- /gab inspect, 2026-10-13: the wash read 1.00 right after SetAlpha(0)), so
+-- the stub ignores it too: only the gradient's own colours set its alpha.
+function Methods.SetGradient(t, orientation, c1, c2) t._gradient = { orientation, c1, c2 }; t._alpha = nil end
 function Methods.SetTextureSliceMargins(t, l, tp, r, b) t._slice = { l, tp, r, b } end
 -- Animations: groups record whether they play.
 function Methods.CreateAnimationGroup(w) return newWidget("AnimationGroup", w) end
@@ -426,6 +429,152 @@ function Methods.SetText(t, text, ...)
 end
 function Methods.IsTruncated(fs) return fs._truncated == true end
 function GameTooltip_Hide() GameTooltip:Hide() end
+
+--------------------------------------------------------------------------------
+-- The action bars (Blizzard_ActionBar, loaded before any addon), as the
+-- forever branch of wow-ui-source declares them: ActionButtonTemplate's
+-- parentKeys (Mainline/ActionButtonTemplate.xml), the mixin methods the skin
+-- hooks (copied onto each frame, as Mixin does), and the bars. Buttons are
+-- protected: WoW.violations records any change the client would refuse in
+-- combat.
+--------------------------------------------------------------------------------
+
+WoW.violations = {}
+for _, m in ipairs({ "SetPoint", "ClearAllPoints", "SetAllPoints", "SetParent", "SetSize", "SetWidth",
+                     "SetHeight", "Show", "Hide", "SetShown", "SetFrameLevel", "SetScale", "SetAttribute" }) do
+    local impl = Methods[m]
+    Methods[m] = function(w, ...)
+        if WoW.combat and w._protected then
+            table.insert(WoW.violations, (w._name or w._type) .. ":" .. m)
+            if m == "SetAttribute" then return end
+        end
+        if impl then return impl(w, ...) end
+    end
+end
+
+-- Hand-scripted slot contents: WoW.actions[slot] = true when the slot holds
+-- something; WoW.forms[i], WoW.petActions[i] likewise. A secret value is
+-- returned as is.
+WoW.actions, WoW.forms, WoW.petActions = {}, {}, {}
+function HasAction(slot)
+    if slot == nil then error("bad argument #1 to 'HasAction'") end
+    local v = WoW.actions[slot]
+    if issecretvalue(v) then return v end
+    return v == true
+end
+function GetShapeshiftFormInfo(i)
+    local v = WoW.forms[i]
+    if issecretvalue(v) then return v end
+    if v then return 136116, false, true, 5487 end
+end
+function GetPetActionInfo(i)
+    local v = WoW.petActions[i]
+    if issecretvalue(v) then return v end
+    if v then return "Attack", 132152, false, false, false, false, nil end
+end
+
+NUM_ACTIONBAR_BUTTONS = 12
+NUM_PET_ACTION_SLOTS = 10
+ActionButtonUtil = { ActionBarButtonNames = {
+    "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton", "MultiBarLeftButton",
+    "MultiBarRightButton", "MultiBar5Button", "MultiBar6Button", "MultiBar7Button",
+} }
+
+-- An ActionButtonTemplate button. `small`: SmallActionButtonTemplate (30x30).
+-- The methods are Blizzard's, shortened: UpdateButtonArt sets the two
+-- atlases again (ActionButtonOverrides.lua:2).
+local function actionButton(name, parent, small)
+    local b = CreateFrame("CheckButton", name, parent)
+    b._protected = true
+    b._level = (parent and parent._level or 0) + 1
+    local side = small and 30 or 45
+    b._width, b._height = side, side
+    b.icon = Methods.CreateTexture(b, name .. "Icon", "BACKGROUND")
+    b.IconMask = Methods.CreateMaskTexture(b)
+    b.SlotBackground = Methods.CreateTexture(b, nil, "BACKGROUND")
+    b.SlotArt = Methods.CreateTexture(b, nil, "BACKGROUND")
+    b.Flash = Methods.CreateTexture(b, name .. "Flash", "ARTWORK")
+    b.Name = Methods.CreateFontString(b, name .. "Name")
+    b.Border = Methods.CreateTexture(b, name .. "Border", "OVERLAY")
+    b.TextOverlayContainer = CreateFrame("Frame", nil, b)
+    b.TextOverlayContainer._level = 500
+    b.HotKey = Methods.CreateFontString(b.TextOverlayContainer, name .. "HotKey")
+    b.Count = Methods.CreateFontString(b.TextOverlayContainer, name .. "Count")
+    -- The container's own parentKeys; its OnLoad aliases them onto the button.
+    b.TextOverlayContainer.HotKey, b.TextOverlayContainer.Count = b.HotKey, b.Count
+    b.cooldown = CreateFrame("Cooldown", name .. "Cooldown", b)
+    b.cooldown._level = b._level
+    for _, state in ipairs({ "Normal", "Pushed", "Highlight", "Checked" }) do
+        Methods["Set" .. state .. "Texture"](b, "atlas:" .. state)
+        b[state .. "Texture"] = Methods["Get" .. state .. "Texture"](b)
+    end
+    rawset(b, "UpdateButtonArt", function(self)
+        self.NormalTexture._file = "UI-HUD-ActionBar-IconFrame"
+        self.PushedTexture._file = "UI-HUD-ActionBar-IconFrame-Down"
+        self.PushedTexture._blend = nil
+        self._artUpdates = (self._artUpdates or 0) + 1
+    end)
+    return b
+end
+WoW.actionButton = actionButton
+function Methods.SetBlendMode(t, mode) t._blend = mode end
+
+local function bar(name)
+    local f = CreateFrame("Frame", name, UIParent)
+    f._protected = true
+    f._level = 50
+    return f
+end
+
+-- A frame pool (Blizzard_SharedXMLBase/Pools): EnumerateActive iterates its frames.
+local function pool(owner)
+    local p = { active = {} }
+    function p:Acquire()
+        local f = CreateFrame("Frame", nil, owner)
+        self.active[f] = true
+        return f
+    end
+    function p:ReleaseAll() self.active = {} end
+    function p:EnumerateActive() return pairs(self.active) end
+    return p
+end
+
+-- The main bar: its border art, the end caps (each an Edit Mode system with
+-- a texture), the page number, and dividers between its buttons.
+MainActionBar = bar("MainActionBar")
+MainActionBar.BorderArt = Methods.CreateTexture(MainActionBar, nil, "BACKGROUND")
+MainActionBar.EndCaps = CreateFrame("Frame", nil, MainActionBar)
+for _, key in ipairs({ "LeftEndCap", "RightEndCap" }) do
+    MainActionBar.EndCaps[key] = CreateFrame("Frame", nil, MainActionBar.EndCaps)
+    MainActionBar.EndCaps[key].Texture = Methods.CreateTexture(MainActionBar.EndCaps[key], nil, "OVERLAY")
+end
+MainActionBar.ActionBarPageNumber = CreateFrame("Frame", nil, MainActionBar)
+MainActionBar.HorizontalDividersPool = pool(MainActionBar)
+MainActionBar.VerticalDividersPool = pool(MainActionBar)
+rawset(MainActionBar, "UpdateDividers", function(self)
+    self.HorizontalDividersPool:ReleaseAll()
+    for _ = 1, 11 do self.HorizontalDividersPool:Acquire() end
+end)
+MainActionBar:UpdateDividers()
+
+local barOf = { ActionButton = MainActionBar }
+for _, prefix in ipairs(ActionButtonUtil.ActionBarButtonNames) do
+    local parent = barOf[prefix] or bar((prefix:gsub("Button$", "")))
+    for i = 1, NUM_ACTIONBAR_BUTTONS do
+        local b = actionButton(prefix .. i, parent)
+        b.action = i
+        b.index = i
+        b.bar = parent
+        rawset(b, "Update", function(self) self._updates = (self._updates or 0) + 1 end)
+    end
+end
+
+StanceBar = bar("StanceBar")
+rawset(StanceBar, "UpdateState", function() end)
+for i = 1, 10 do actionButton("StanceButton" .. i, StanceBar, true).index = i end
+PetActionBar = bar("PetActionBar")
+rawset(PetActionBar, "Update", function() end)
+for i = 1, NUM_PET_ACTION_SLOTS do actionButton("PetActionButton" .. i, PetActionBar, true).index = i end
 
 --------------------------------------------------------------------------------
 -- Driving

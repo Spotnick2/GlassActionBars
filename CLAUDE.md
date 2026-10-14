@@ -16,7 +16,8 @@ them: a Utility bar ported from Apotheca's profession bar, and a public API so o
 [docs/PLAN.md](docs/PLAN.md); the mockup is [docs/mockups/action-bars.png](docs/mockups/action-bars.png).
 Measured results go in `docs/FOREVER-PROBE.md`.
 
-**Status: scaffold.** Next: the probe (issue #2), then the skin.
+**Status: v0.1.0 in progress.** The probe (`Tools/GABProbe`) and the skin are written; the skin
+awaits the probe's answers in game (docs/FOREVER-PROBE.md) before it ships.
 
 ## The UI contract (non-negotiable)
 
@@ -39,8 +40,9 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 
 ## Layout
 
-TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Options.lua`
--> `GlassActionBars.lua`. Feature files load between `Glass.lua` and `Options.lua`.
+TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Theme.lua` ->
+`Buttons.lua` -> `Bars.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
+`Glass.lua` and `Options.lua`.
 
 - **`Compat.lua`**: `GlassActionBars.API`, the only route to client APIs that moved or may be
   absent: `IsSecret`, `Plain`, `NoteCombat` / `InCombat`, `Fail(key, err)` (the **one** failure
@@ -48,11 +50,24 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `ClassColor`, `SafeFrame`; `MEASURED_ON_BUILD`.
 - **`Glass.lua`**: `GlassActionBars.Glass = LibStub("LibGlass-1.0"):New({ preset = "clean" })`, and
   `GlassActionBars.MEDIA` for our own textures. Material changes are LibGlass PRs.
+- **`Theme.lua`**: clear / smoked / class glass (GlassMiniMap's), repainted live on every
+  registered surface; only body regions (tint, wash), never the rims.
+- **`Buttons.lua`**: the skin. `Build(button, regions)` (shared by every family, and later by the
+  provider API): a body frame one level under the button, its rim raised one level over it, the
+  stock frame art faded, the pushed texture made a bright rim, the text in the glass font.
+  `SetOccupied` makes the rim bright or faint. Family adapters: action buttons hook their own
+  `UpdateButtonArt` / `Update` / `UpdateHotkeys`; stance and pet hook their bar's
+  `UpdateState` / `Update`. A login in combat waits for the fight to end.
+- **`Bars.lua`**: the main bar's `BorderArt`, its pooled dividers (re-faded after
+  `UpdateDividers`) and the end caps' textures (`/gab gryphons`), re-applied on
+  `EDIT_MODE_LAYOUTS_UPDATED`.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using
   `Options.radios` (choices) and `Options.checkbox` (on/off).
 - **`GlassActionBars.lua`**: bootstrap, saved settings (only what the player set is saved), the
   `Settings` helpers, `/gab`.
+- **`Tools/GABProbe/`**: the throwaway measurement addon (`/gabprobe help`), results in
+  `docs/FOREVER-PROBE.md`.
 
 ## Action bar facts for this client
 

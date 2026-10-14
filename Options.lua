@@ -118,6 +118,30 @@ panel:SetScript("OnShow", function()
     for _, refresh in ipairs(refreshers) do refresh() end
 end)
 
+-- The look: the glass, the text on the buttons, the gryphons, and glass or
+-- Blizzard's own art.
+Options.AddSection(function(parent, anchor)
+    local look = label(parent, "The glass", "GameFontNormal")
+    look:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -16)
+    local choices = {}
+    for _, name in ipairs(GAB.Theme.NAMES) do choices[#choices + 1] = { name, GAB.Theme.LABELS[name] } end
+    local last, group = Options.radios(parent, look, choices, function() return GAB.db.theme end,
+        GAB.Settings.SetTheme)
+    Options._test.themeRadios = group
+    local buttons = label(parent, "On the buttons", "GameFontNormal")
+    buttons:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -16)
+    local hotkeys = Options.checkbox(parent, buttons, "Key bindings",
+        function() return GAB.db.showHotkeys end, GAB.Settings.SetShowHotkeys)
+    local macros = Options.checkbox(parent, hotkeys, "Macro names",
+        function() return GAB.db.showMacroNames end, GAB.Settings.SetShowMacroNames)
+    local gryphons = Options.checkbox(parent, macros, "The main bar's gryphons",
+        function() return GAB.db.endCaps end, GAB.Settings.SetEndCaps)
+    local skin = Options.checkbox(parent, gryphons, "Glass on the action bars (Blizzard's own art when off, after a /reload)",
+        function() return GAB.db.skin end, GAB.Settings.SetSkin)
+    Options._test.hotkeys, Options._test.macros, Options._test.gryphons, Options._test.skin = hotkeys, macros, gryphons, skin
+    return skin
+end)
+
 -- Called once at PLAYER_LOGIN by GlassActionBars.lua.
 function Options.Register()
     if category or not (Settings and Settings.RegisterCanvasLayoutCategory) then return end
