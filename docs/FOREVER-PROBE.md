@@ -8,7 +8,12 @@ to `C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md` instead.
 
 1. `pwsh Tools\deploy.ps1 -Probe` (the addon itself may stay disabled; the probe stands alone).
 2. In game: `/console scriptErrors 1`, `/console taintLog 1`, `/reload`.
-3. `/gabprobe regions` and `/gabprobe levels`.
+3. `/gabprobe regions` (every region of the action, stance and pet buttons, child frames
+   included) and `/gabprobe levels`.
+   The secret samples (question 3) read a slot that holds something: have at least one action on
+   a bar, and play a character with a form or stance and one with a pet if you can. A family
+   with nothing to read is logged "not sampled", which answers nothing; the question stays open
+   for it.
 4. `/gabprobe alpha on`, `/gabprobe hearth` (use the Hearthstone first if it is ready, so its
    cooldown runs), and optionally `/gabprobe driver`.
 5. One trial per operation, so each count belongs to one cause: `/gabprobe trial <label>`, do
@@ -20,7 +25,8 @@ to `C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md` instead.
    - `trial hideart` - toggle "Hide Bar Art" on the main bar (and back in a second trial)
    - `trial form` - change form or stance once (druid / warrior / rogue stealth), if you can
    - `trial pet` - summon or dismiss a pet (warlock / hunter), if you can
-   - `trial combat` - then fight something for a few seconds, pressing keybinds and swapping form
+   - `trial combat` - then fight something for a few seconds (more than one: the samples are
+     taken 1 s in, and skipped if the fight is already over), pressing keybinds and swapping form
      or stance; the counts print when the fight ends
 6. Exit the client fully. Send `WTF\Account\<account>\SavedVariables\GABProbe.lua` and
    `Logs\taint.log`.

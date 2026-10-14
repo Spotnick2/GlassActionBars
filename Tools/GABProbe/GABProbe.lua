@@ -12,13 +12,15 @@
 --      the skin will post-hook (UpdateButtonArt, Update, SetButtonState,
 --      UpdateFlash, UpdateHotkeys on ActionButton1; StanceBar UpdateState;
 --      PetActionBar Update; MainActionBar UpdateDividers ...)
---   S  secrets: 1 s into every combat, whether HasAction / btn.action /
---      GetShapeshiftFormInfo / GetPetActionInfo come back secret
+--   S  secrets: 1 s into every combat (skipped if it ended), whether HasAction /
+--      C_ActionBar.HasAction / GetShapeshiftFormInfo / GetPetActionInfo come back
+--      secret, each on a slot that was OCCUPIED when picked ("not sampled" else)
 --   T  taint: ADDON_ACTION_BLOCKED / _FORBIDDEN, with the function
 --
 -- Commands (/gabprobe):
---   regions [frame]  the regions and child frames of a button (default: ActionButton1,
---                    StanceButton1, PetActionButton1): parentKey, type, size, alpha, layer, level
+--   regions [frame]  the regions of a button and its child frames, 3 deep, by key path
+--                    (default: ActionButton1, StanceButton1, PetActionButton1): type, size,
+--                    alpha, layer, atlas, level
 --   levels           frame levels on ActionButton1: the button, its cooldowns, the text
 --                    container, overlays, and a test frame at button + 1
 --   trial <label>    zero the counts under a label: do ONE operation, then `counts`
@@ -120,20 +122,66 @@ end
 -- S: secrets
 --------------------------------------------------------------------------------
 
-local function sampleSecrets(why)
-    local b = ActionButton1
-    if b then
-        local ok, action = pcall(function() return b.action end)
-        local ok2, has = pcall(HasAction, action)
-        log(("S[%s]: ActionButton1.action=%s HasAction=%s (%s)"):format(why, ok and plain(action) or "error",
-            ok2 and plain(has) or ("error " .. tostring(has)), type(has)))
+-- What to sample: an OCCUPIED slot of each family, chosen out of combat
+-- (login, and in the PLAYER_REGEN_DISABLED handler, which runs before the
+-- lockdown). An empty slot's false/nil says nothing about whether the reader
+-- returns secrets for a filled one (Codex's review on #11), so a family with
+-- nothing to sample is logged as "not sampled", never as "no secret".
+local BAR_PREFIXES = { "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton", "MultiBarLeftButton",
+    "MultiBarRightButton", "MultiBar5Button", "MultiBar6Button", "MultiBar7Button" }
+local picks = {}
+
+local function pickSamples()
+    picks = {}
+    for _, prefix in ipairs(BAR_PREFIXES) do
+        for i = 1, 12 do
+            local b = _G[prefix .. i]
+            local ok, action = pcall(function() return b and b.action end)
+            if ok and type(action) == "number" then
+                local okh, has = pcall(HasAction, action)
+                if okh and has == true then picks.action = { name = prefix .. i, slot = action }; break end
+            end
+        end
+        if picks.action then break end
     end
-    local ok3, tex = pcall(GetShapeshiftFormInfo, 1)
-    log(("S[%s]: GetShapeshiftFormInfo(1) texture=%s"):format(why, ok3 and plain(tex) or "error"))
-    local ok4, name = pcall(GetPetActionInfo, 1)
-    log(("S[%s]: GetPetActionInfo(1) name=%s"):format(why, ok4 and plain(name) or "error"))
-    local ok5, n = pcall(GetNumShapeshiftForms)
-    log(("S[%s]: GetNumShapeshiftForms=%s"):format(why, ok5 and plain(n) or "error"))
+    local okn, n = pcall(GetNumShapeshiftForms)
+    if okn and type(n) == "number" and n > 0 then picks.stance = 1 end
+    for i = 1, 10 do
+        local okp, name = pcall(GetPetActionInfo, i)
+        if okp and name ~= nil then picks.pet = i; break end
+    end
+end
+
+local function secretText(ok, v)
+    if not ok then return "error " .. tostring(v) end
+    if issecretvalue and issecretvalue(v) then return "SECRET" end
+    return "plain " .. tostring(v)
+end
+
+local function sampleSecrets(why)
+    if picks.action then
+        local a = picks.action
+        local ok, has = pcall(HasAction, a.slot)
+        log(("S[%s]: action %s (slot %d, occupied when picked): HasAction %s"):format(why, a.name, a.slot, secretText(ok, has)))
+        if C_ActionBar and C_ActionBar.HasAction then
+            local ok2, has2 = pcall(C_ActionBar.HasAction, a.slot)
+            log(("S[%s]:   C_ActionBar.HasAction %s"):format(why, secretText(ok2, has2)))
+        end
+    else
+        log(("S[%s]: action: not sampled (no slot with an action)"):format(why))
+    end
+    if picks.stance then
+        local ok, tex = pcall(GetShapeshiftFormInfo, picks.stance)
+        log(("S[%s]: stance 1: GetShapeshiftFormInfo texture %s"):format(why, secretText(ok, tex)))
+    else
+        log(("S[%s]: stance: not sampled (no form or stance)"):format(why))
+    end
+    if picks.pet then
+        local ok, name = pcall(GetPetActionInfo, picks.pet)
+        log(("S[%s]: pet slot %d: GetPetActionInfo name %s"):format(why, picks.pet, secretText(ok, name)))
+    else
+        log(("S[%s]: pet: not sampled (no pet action)"):format(why))
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -153,26 +201,39 @@ local function describe(key, v)
     return table.concat(parts, "  ")
 end
 
-local function regions(name)
-    local f = _G[name]
-    if not f then return log("regions: no " .. name) end
-    log("regions of " .. name .. ":")
-    local keys = {}
+-- Every region of a button and of its child frames, with the path of keys
+-- that reaches it (HotKey and Count live in TextOverlayContainer; overlays in
+-- other children): Codex's review on #11.
+local function regionsOf(f, path, depth)
+    local named = {}
     for k, v in pairs(f) do
-        if type(k) == "string" and type(v) == "table" and v.GetObjectType then keys[#keys + 1] = k end
-    end
-    table.sort(keys)
-    for _, k in ipairs(keys) do
-        local line = describe(k, f[k])
-        if line then log("  " .. line) end
+        if type(k) == "string" and type(v) == "table" then named[v] = k end
     end
     local unnamed = 0
     for _, r in ipairs({ f:GetRegions() }) do
-        local found = false
-        for _, k in ipairs(keys) do if f[k] == r then found = true end end
-        if not found then unnamed = unnamed + 1 end
+        if named[r] then
+            local line = describe(path .. named[r], r)
+            if line then log("  " .. line) end
+        else
+            unnamed = unnamed + 1
+            local line = describe(path .. "<region>", r)
+            if line then log("  " .. line) end
+        end
     end
-    log("  (" .. unnamed .. " regions without a key; " .. select("#", f:GetChildren()) .. " child frames)")
+    if depth <= 0 then return end
+    for _, child in ipairs({ f:GetChildren() }) do
+        local key = named[child] or "<frame>"
+        local line = describe(path .. key, child)
+        if line then log("  " .. line) end
+        regionsOf(child, path .. key .. ".", depth - 1)
+    end
+end
+
+local function regions(name)
+    local f = _G[name]
+    if not f then return log("regions: no " .. name) end
+    log("regions of " .. name .. " (and its child frames, 3 deep):")
+    regionsOf(f, "", 3)
 end
 
 local function levels()
@@ -288,11 +349,18 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
         local v, b = GetBuildInfo()
         log("session start, client " .. tostring(v) .. "." .. tostring(b))
         installWriters()
+        pickSamples()
         sampleSecrets("login")
     elseif event == "PLAYER_REGEN_DISABLED" then
         inCombat = true
         log("combat start")
+        pickSamples()   -- still out of lockdown here: choose occupied slots
         after(1, function()
+            -- A fight that ended within the second would make these out-of-combat
+            -- reads, labelled "combat" (Codex's review on #11): skip them.
+            if not InCombatLockdown() then
+                return log("combat ended within 1 s: the combat samples were skipped")
+            end
             sampleSecrets("combat")
             if armAlpha then alphaTest() end
             applyHearth("combat")
@@ -332,7 +400,9 @@ SlashCmdList.GABPROBE = function(msg)
                 resetCounts()
                 log("counts reset")
             else printCounts() end
-        elseif cmd == "secret" then sampleSecrets("now")
+        elseif cmd == "secret" then
+            if not InCombatLockdown() then pickSamples() end
+            sampleSecrets(InCombatLockdown() and "now, combat" or "now")
         elseif cmd == "alpha" then
             armAlpha = arg ~= "off"
             log("alpha test " .. (armAlpha and "armed for the next combat" or "off"))
