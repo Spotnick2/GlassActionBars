@@ -158,6 +158,13 @@ end
 
 function Buttons.IsSkinned(button) return skins[button] ~= nil end
 
+-- Blizzard set a skinned button's art again (a family's own writer, e.g. the
+-- bag slots' UpdateTextures): fade it and take the pressed look back.
+function Buttons.Restyle(button)
+    local s = skins[button]
+    if s then API.Try("skin:art", function() styleArt(s); relevel(s) end) end
+end
+
 -- A skinned button's state ({ button, body, g, regions, occupied, small }),
 -- read-only, for Inspect.lua; and every one in turn.
 function Buttons.State(button) return skins[button] end

@@ -577,6 +577,69 @@ rawset(PetActionBar, "Update", function() end)
 for i = 1, NUM_PET_ACTION_SLOTS do actionButton("PetActionButton" .. i, PetActionBar, true).index = i end
 
 --------------------------------------------------------------------------------
+-- The bag bar (Blizzard_MainMenuBarBagButtons, Shared + Camelot): BagsBar with
+-- its BorderArt and divider pools, re-laid out by Layout; the slots are item
+-- buttons whose UpdateTextures sets their frame atlases again; a bag slot
+-- holds a bag when GetInventoryItemTexture says so (WoW.bags[id]).
+--------------------------------------------------------------------------------
+
+BagsBar = bar("BagsBar")
+BagsBar._protected = nil
+BagsBar.BorderArt = Methods.CreateTexture(BagsBar, nil, "BACKGROUND")
+BagsBar.HorizontalDividersPool = pool(BagsBar)
+BagsBar.VerticalDividersPool = pool(BagsBar)
+rawset(BagsBar, "UpdateDividers", function(self)
+    self.HorizontalDividersPool:ReleaseAll()
+    for _ = 1, 5 do self.HorizontalDividersPool:Acquire() end
+end)
+rawset(BagsBar, "Layout", function(self) self:UpdateDividers() end)
+BagsBar:Layout()
+
+WoW.bagTextures = {}
+function GetInventoryItemTexture(unit, slot) if unit == "player" then return WoW.bagTextures[slot] end end
+
+local function bagButton(name, id)
+    local b = CreateFrame("Button", name, BagsBar)
+    b._level = BagsBar._level + 1
+    b._width, b._height = 45, 45
+    b._id = id
+    b.icon = Methods.CreateTexture(b, name .. "IconTexture", "BORDER")
+    b.Count = Methods.CreateFontString(b, name .. "Count")
+    b.SlotHighlightTexture = Methods.CreateTexture(b, nil, "OVERLAY")
+    for _, state in ipairs({ "Normal", "Pushed", "Highlight" }) do
+        Methods["Set" .. state .. "Texture"](b, "atlas:" .. state)
+        b[state .. "Texture"] = Methods["Get" .. state .. "Texture"](b)
+    end
+    rawset(b, "UpdateTextures", function(self)
+        self.NormalTexture._file = "ui-hud-actionbar-iconframe-bags"
+        self.PushedTexture._file = "ui-hud-actionbar-iconframe-bags"
+        self.PushedTexture._blend = nil
+        self.HighlightTexture._alpha = 0.4
+    end)
+    return b
+end
+function Methods.GetID(w) return w._id or 0 end
+bagButton("MainMenuBarBackpackButton", 0)
+for i = 0, 3 do bagButton("CharacterBag" .. i .. "Slot", 31 + i) end
+bagButton("CharacterReagentBag0Slot", 35)
+bagButton("KeyRingButton", 0)._width = 33
+
+--------------------------------------------------------------------------------
+-- The micro menu (Blizzard_MicroMenu, Camelot): MicroMenuContainer (the Edit
+-- Mode system) holding MicroMenu, whose BorderArt and BackgroundArt are the
+-- dark panel; Blizzard reparents MicroMenu for the override bar and pet battles.
+--------------------------------------------------------------------------------
+
+MicroMenuContainer = CreateFrame("Frame", "MicroMenuContainer", UIParent)
+MicroMenu = CreateFrame("Frame", "MicroMenu", MicroMenuContainer)
+MicroMenu._level = 51
+MicroMenu.BorderArt = Methods.CreateTexture(MicroMenu, nil, "BACKGROUND")
+MicroMenu.BackgroundArt = Methods.CreateTexture(MicroMenu, nil, "BACKGROUND")
+CharacterMicroButton = CreateFrame("Button", "CharacterMicroButton", MicroMenu)
+CharacterMicroButton.Background = Methods.CreateTexture(CharacterMicroButton, nil, "BACKGROUND")
+OverrideActionBar = CreateFrame("Frame", "OverrideActionBar", UIParent)
+
+--------------------------------------------------------------------------------
 -- Driving
 --------------------------------------------------------------------------------
 
