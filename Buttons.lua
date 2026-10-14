@@ -129,9 +129,10 @@ function Buttons.Build(button, regions)
     skins[button] = s
     -- The body's paint first, and every later step on its own: a step that
     -- throws on the client (a region method Blizzard's art refuses) must not
-    -- leave the body unpainted and out of /gab tune's reach, as the first
-    -- build did (owner's report, 2026-10-13: wash 0 and body 0 left a grey
-    -- fill). A failure is recorded per step and button for /gab failures.
+    -- leave the body unpainted and out of /gab tune's reach. A failure is
+    -- recorded per step and button for /gab failures. (The owner's grey fill,
+    -- 2026-10-13, turned out to be the wash's gradient ignoring SetAlpha: see
+    -- Theme.lua's paint.)
     GAB.Theme.Register(g, function() return Buttons.Tune("wash"), Buttons.Tune("body") end)
     local name = API.Plain(button:GetName()) or "?"
     API.Try("skin:rim:" .. name, paintRim, s)

@@ -36,8 +36,10 @@ GAB.Settings.SetTune("wash", 0)
 GAB.Settings.SetTune("body", 0)
 for _, b in ipairs({ ActionButton1, ActionButton5, MultiBarBottomLeftButton3, StanceButton1 }) do
     local g = GAB.Buttons.State(b).g
-    eq(g.wash:GetAlpha(), 0, b._name .. ": wash 0 reaches the body")
+    check(close(g.wash._gradient[3].a, 0), b._name .. ": wash 0 reaches the haze's gradient")
+    check(not g.wash:IsShown(), b._name .. ": the haze hidden")
     check(close(g.tint._color[4], 0), b._name .. ": body 0 reaches the tint")
+    check(not g.tint:IsShown(), b._name .. ": the tint hidden")
     eq(g.shadow:GetAlpha(), 0, b._name .. ": no shadow")
     eq(g.grain:GetAlpha(), 0, b._name .. ": no grain")
 end

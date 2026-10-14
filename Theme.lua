@@ -51,15 +51,28 @@ end
 
 -- A surface's own scale on the theme's wash and body alpha (the buttons'
 -- /gab tune), read at every paint.
+--
+-- The wash is a gradient (LibGlass: clear at the bottom to STYLE.wash white
+-- at the top), and on this client a gradient texture ignores SetAlpha:
+-- /gab inspect read the wash at alpha 1.00 right after SetAlpha(0) (owner's
+-- session, 2026-10-13), where every plain texture reads back what was set.
+-- So the wash is repainted through its gradient, and the tint through its
+-- colour; each is hidden outright at zero, so nothing is left to draw.
 local function paint(s, name, tint)
     local g, p = s.g, Theme.PRESETS[name]
     local wash, body = 1, 1
     if s.scale then wash, body = s.scale() end
     local built = g.tint.glassColor or Glass.STYLE.tint
     local c = tint or built
-    Glass.SetSurfaceTint(g, c[1], c[2], c[3], (c[4] or built[4]) * body)
+    local a = (c[4] or built[4]) * body
+    Glass.SetSurfaceTint(g, c[1], c[2], c[3], a)
+    g.tint:SetShown(a > 0)
     if g.grain then g.grain:SetAlpha(0) end   -- no grain at button size (LibGlass Pill's rule)
-    if g.wash then g.wash:SetAlpha((p.wash or 1) * wash) end
+    if g.wash then
+        local top = (Glass.STYLE.wash or 0) * (p.wash or 1) * wash
+        g.wash:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, top))
+        g.wash:SetShown(top > 0)
+    end
 end
 
 -- Add a surface and paint it with the current theme. `scale`, optional:

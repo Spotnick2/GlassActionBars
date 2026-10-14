@@ -165,7 +165,7 @@ function Methods.SetWidth(w, x) w._width = x end
 function Methods.SetHeight(w, y) w._height = y end
 function Methods.GetWidth(w) return w._width end
 function Methods.GetHeight(w) return w._height end
-function Methods.SetAlpha(w, a) w._alpha = a end
+function Methods.SetAlpha(w, a) if not w._gradient then w._alpha = a end end
 function Methods.GetAlpha(w) return w._alpha or 1 end
 function Methods.GetParent(w) return w._parent end
 function Methods.SetParent(w, p) w._parent = p end
@@ -241,7 +241,10 @@ function Methods.SetDesaturated(t, on) t._desaturated = on == true end
 function Methods.SetColorTexture(t, r, g, b, a) t._color = { r, g, b, a } end
 function Methods.SetVertexColor(t, r, g, b, a) t._vertex = { r, g, b, a } end
 function Methods.AddMaskTexture(t, m) t._masks = t._masks or {}; table.insert(t._masks, m) end
-function Methods.SetGradient(t, orientation, c1, c2) t._gradient = { orientation, c1, c2 } end
+-- A gradient texture ignores SetAlpha on this client (GlassActionBars'
+-- /gab inspect, 2026-10-13: the wash read 1.00 right after SetAlpha(0)), so
+-- the stub ignores it too: only the gradient's own colours set its alpha.
+function Methods.SetGradient(t, orientation, c1, c2) t._gradient = { orientation, c1, c2 }; t._alpha = nil end
 function Methods.SetTextureSliceMargins(t, l, tp, r, b) t._slice = { l, tp, r, b } end
 -- Animations: groups record whether they play.
 function Methods.CreateAnimationGroup(w) return newWidget("AnimationGroup", w) end
