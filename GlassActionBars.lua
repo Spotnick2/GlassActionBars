@@ -130,6 +130,8 @@ local function helpLines()
         "/gab gryphons on/off - the main bar's end caps (" .. onoff(db.endCaps) .. ")",
         "/gab skin on/off - glass, or Blizzard's own art after a /reload (" .. onoff(db.skin) .. ")",
         "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body)",
+        "/gab inspect [button|hide n|show n|restore] - what a button draws, layer by layer",
+        "/gab layer <name> off/on - hide one layer on every button, for a look (a /reload undoes it)",
         "/gab options - open the options page",
         "/gab failures - what failed to build or register",
         "/gab version - client build vs the measured one",
@@ -174,6 +176,22 @@ local function slash(msg)
             say(("tune %s %.2f"):format(key, GAB.Buttons.Tune(key)))
         else
             say("/gab tune <" .. table.concat(GAB.Buttons.TUNE_ORDER, "|") .. "> <0..1>, or /gab tune reset")
+        end
+    elseif cmd == "inspect" then
+        local sub, n = arg:match("^(%S*)%s*(.-)$")
+        if sub == "hide" and tonumber(n) then GAB.Inspect.Hide(tonumber(n))
+        elseif sub == "show" and tonumber(n) then GAB.Inspect.Show(tonumber(n))
+        elseif sub == "restore" then GAB.Inspect.Restore()
+        else
+            -- A button's name keeps its case: read it from the raw message.
+            local raw = (msg or ""):match("^%s*%S+%s+(%S+)")
+            GAB.Inspect.Run(raw)
+        end
+    elseif cmd == "layer" then
+        local name, state = (msg or ""):match("^%s*%S+%s+(%S+)%s*(%S*)")
+        state = state and state:lower()
+        if not (name and (state == "on" or state == "off") and GAB.Inspect.Layer(name, state == "on")) then
+            say("/gab layer <" .. table.concat(GAB.Inspect.LAYER_NAMES, "|") .. "> off/on")
         end
     elseif cmd == "options" then
         if not GAB.Options.Open() then say("Esc > Options > AddOns > Glass Action Bars") end

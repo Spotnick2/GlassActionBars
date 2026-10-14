@@ -497,6 +497,8 @@ local function actionButton(name, parent, small)
     b.TextOverlayContainer._level = 500
     b.HotKey = Methods.CreateFontString(b.TextOverlayContainer, name .. "HotKey")
     b.Count = Methods.CreateFontString(b.TextOverlayContainer, name .. "Count")
+    -- The container's own parentKeys; its OnLoad aliases them onto the button.
+    b.TextOverlayContainer.HotKey, b.TextOverlayContainer.Count = b.HotKey, b.Count
     b.cooldown = CreateFrame("Cooldown", name .. "Cooldown", b)
     b.cooldown._level = b._level
     for _, state in ipairs({ "Normal", "Pushed", "Highlight", "Checked" }) do

@@ -13,5 +13,6 @@ Glass.lua
 Theme.lua
 Buttons.lua
 Bars.lua
+Inspect.lua
 Options.lua
 GlassActionBars.lua

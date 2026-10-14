@@ -90,21 +90,26 @@ end
 
 -- Blizzard's frame art faded, the pushed look made ours. Run again after
 -- every UpdateButtonArt.
+local function stylePushed(s)
+    local p = s.regions.pushed
+    if not p then return end
+    local S = Glass.SIZES[s.g.size]
+    p:SetTexture(Glass.MEDIA .. S.rim)
+    p:SetTextureSliceMargins(S.rimMargin, S.rimMargin, S.rimMargin, S.rimMargin)
+    p:ClearAllPoints()
+    p:SetAllPoints(s.button)
+    p:SetVertexColor(1, 1, 1, 1)
+    p:SetBlendMode("ADD")
+end
+
+-- The fades first, each on its own, then the pressed look: one refusal
+-- never leaves the rest undone.
 local function styleArt(s)
     local r = s.regions
     for _, key in ipairs({ "normal", "slotArt", "slotBackground" }) do
-        if r[key] then r[key]:SetAlpha(0) end
+        if r[key] then API.Try("skin:fade:" .. key, r[key].SetAlpha, r[key], 0) end
     end
-    local p = r.pushed
-    if p then
-        local S = Glass.SIZES[s.g.size]
-        p:SetTexture(Glass.MEDIA .. S.rim)
-        p:SetTextureSliceMargins(S.rimMargin, S.rimMargin, S.rimMargin, S.rimMargin)
-        p:ClearAllPoints()
-        p:SetAllPoints(s.button)
-        p:SetVertexColor(1, 1, 1, 1)
-        p:SetBlendMode("ADD")
-    end
+    API.Try("skin:pushed", stylePushed, s)
 end
 
 -- The glass on one button. `regions` names its parts: icon, cooldown,
@@ -120,18 +125,29 @@ function Buttons.Build(button, regions)
     g.shadow:SetAlpha(0)   -- it would spill onto the next button (LibGlass Pill's rule)
     g.grain:SetAlpha(0)
     local s = { button = button, body = body, g = g, regions = regions or {}, occupied = true,
-                small = button:GetWidth() < 40 }
+                small = (API.Plain(button:GetWidth()) or 45) < 40 }
     skins[button] = s
-    relevel(s)
-    styleArt(s)
-    styleText(s)
-    paintRim(s)
-    if s.regions.highlight then s.regions.highlight:SetAlpha(Buttons.HIGHLIGHT) end
+    -- The body's paint first, and every later step on its own: a step that
+    -- throws on the client (a region method Blizzard's art refuses) must not
+    -- leave the body unpainted and out of /gab tune's reach, as the first
+    -- build did (owner's report, 2026-10-13: wash 0 and body 0 left a grey
+    -- fill). A failure is recorded per step and button for /gab failures.
     GAB.Theme.Register(g, function() return Buttons.Tune("wash"), Buttons.Tune("body") end)
+    local name = API.Plain(button:GetName()) or "?"
+    API.Try("skin:rim:" .. name, paintRim, s)
+    API.Try("skin:level:" .. name, relevel, s)
+    API.Try("skin:art:" .. name, styleArt, s)
+    API.Try("skin:text:" .. name, styleText, s)
+    if s.regions.highlight then API.Try("skin:highlight:" .. name, s.regions.highlight.SetAlpha, s.regions.highlight, Buttons.HIGHLIGHT) end
     return s
 end
 
 function Buttons.IsSkinned(button) return skins[button] ~= nil end
+
+-- A skinned button's state ({ button, body, g, regions, occupied, small }),
+-- read-only, for Inspect.lua; and every one in turn.
+function Buttons.State(button) return skins[button] end
+function Buttons.Each(fn) for _, s in pairs(skins) do fn(s) end end
 
 -- A nil `occupied` (unreadable: secret, or the reader failed) keeps the last state.
 function Buttons.SetOccupied(button, occupied)
