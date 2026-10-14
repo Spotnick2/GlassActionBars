@@ -1,0 +1,14 @@
+## Interface: 16001
+## Title: |cff7fd4ffGlass|r Action Bars
+## Notes: Liquid-glass look for Blizzard's action bars. /gab help
+## Author: Spotnick
+## Version: @project-version@
+## X-License: MIT
+## X-Curse-Project-ID: 1744070
+## SavedVariables: GlassActionBarsDB
+
+Libs\LibGlass-1.0\LibGlass-1.0.xml
+Compat.lua
+Glass.lua
+Options.lua
+GlassActionBars.lua
