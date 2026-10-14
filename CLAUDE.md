@@ -41,7 +41,8 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 ## Layout
 
 TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Theme.lua` ->
-`Buttons.lua` -> `Bars.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
+`Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Inspect.lua` -> `Options.lua` ->
+`GlassActionBars.lua`. Feature files load between
 `Glass.lua` and `Options.lua`.
 
 - **`Compat.lua`**: `GlassActionBars.API`, the only route to client APIs that moved or may be
@@ -61,6 +62,16 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
 - **`Bars.lua`**: the main bar's `BorderArt`, its pooled dividers (re-faded after
   `UpdateDividers`) and the end caps' textures (`/gab gryphons`), re-applied on
   `EDIT_MODE_LAYOUTS_UPDATED`.
+- **`Bags.lua`**: the bag bar (#14), full glass through `Buttons.Build`: the backpack, four bag
+  slots, reagent bag and key ring, re-styled after each slot's own `UpdateTextures`, the rim by
+  `GetInventoryItemTexture` (Blizzard's `HasBagEquipped`); `BagsBar.BorderArt` and its pooled
+  dividers (after `Layout` / `UpdateDividers`) faded. Never `SetAlpha` on a bag button itself:
+  `ItemButtonMixin` replaces it.
+- **`MicroMenu.lua`**: a glass panel behind the micro menu (#14) in place of `MicroMenu.BorderArt` /
+  `BackgroundArt`. The micro buttons are left alone: their bronze frame is baked into each icon
+  atlas. The panel is its own frame (MicroMenu flattens its children's render layers), one level
+  under, rims at its own level, shown only while MicroMenu is home in `MicroMenuContainer`.
+- **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using
   `Options.radios` (choices) and `Options.checkbox` (on/off).

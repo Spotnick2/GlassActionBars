@@ -227,6 +227,8 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         start("options", GAB.Options.Register)
         start("buttons", GAB.Buttons.Start)
         start("bars", GAB.Bars.Start)
+        start("bags", GAB.Bags.Start)
+        start("micro", GAB.Micro.Start)
     elseif event == "PLAYER_ENTERING_WORLD" then
         GAB.Theme.Retry()
         -- arg1 = isInitialLogin. The build warning asks the developer to
