@@ -132,18 +132,23 @@ local BAR_PREFIXES = { "ActionButton", "MultiBarBottomLeftButton", "MultiBarBott
 local picks = {}
 
 local function pickSamples()
+    local old = picks
     picks = {}
+    local sawSecret = false
     for _, prefix in ipairs(BAR_PREFIXES) do
         for i = 1, 12 do
             local b = _G[prefix .. i]
             local ok, action = pcall(function() return b and b.action end)
             if ok and type(action) == "number" then
                 local okh, has = pcall(HasAction, action)
-                if okh and has == true then picks.action = { name = prefix .. i, slot = action }; break end
+                if okh and issecretvalue and issecretvalue(has) then sawSecret = true
+                elseif okh and has == true then picks.action = { name = prefix .. i, slot = action }; break end
             end
         end
         if picks.action then break end
     end
+    -- Answers already secret when picking: keep the earlier, plainly occupied pick.
+    if not picks.action and sawSecret then picks.action = old.action end
     local okn, n = pcall(GetNumShapeshiftForms)
     if okn and type(n) == "number" and n > 0 then picks.stance = 1 end
     for i = 1, 10 do
