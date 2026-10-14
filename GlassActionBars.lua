@@ -29,6 +29,15 @@ local function ensureDefaults()
     end
     -- A theme this version doesn't know falls back to the default.
     if db.theme ~= nil and not GAB.Theme.IsValid(db.theme) then db.theme = nil end
+    -- /gab tune: only known keys with a number in 0..1 survive.
+    if db.tune ~= nil then
+        if type(db.tune) ~= "table" then db.tune = nil else
+            for k, v in pairs(db.tune) do
+                if not GAB.Buttons.TUNE[k] or type(v) ~= "number" or v < 0 or v > 1 then db.tune[k] = nil end
+            end
+            if next(db.tune) == nil then db.tune = nil end
+        end
+    end
     setmetatable(db, { __index = DEFAULTS })
     return db
 end
@@ -60,6 +69,22 @@ end
 function Settings.SetEndCaps(on)
     GAB.db.endCaps = on == true
     GAB.Bars.Refresh()
+    return true
+end
+
+-- One of the look's numbers (Buttons.TUNE), 0..1, repainted live; nil puts
+-- the built-in value back. False for an unknown key or a bad value.
+function Settings.SetTune(key, value)
+    if not GAB.Buttons.TUNE[key] then return false end
+    if value ~= nil and (type(value) ~= "number" or not (value >= 0 and value <= 1)) then return false end
+    if value ~= nil then
+        GAB.db.tune = rawget(GAB.db, "tune") or {}
+        GAB.db.tune[key] = value
+    elseif rawget(GAB.db, "tune") then
+        GAB.db.tune[key] = nil
+        if next(GAB.db.tune) == nil then GAB.db.tune = nil end
+    end
+    GAB.Buttons.RefreshLook()
     return true
 end
 
@@ -104,6 +129,7 @@ local function helpLines()
         "/gab macros on/off - macro names on the buttons (" .. onoff(db.showMacroNames) .. ")",
         "/gab gryphons on/off - the main bar's end caps (" .. onoff(db.endCaps) .. ")",
         "/gab skin on/off - glass, or Blizzard's own art after a /reload (" .. onoff(db.skin) .. ")",
+        "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body)",
         "/gab options - open the options page",
         "/gab failures - what failed to build or register",
         "/gab version - client build vs the measured one",
@@ -133,6 +159,22 @@ local function slash(msg)
         if ONOFF[arg] == nil then return say("/gab skin on/off") end
         Settings.SetSkin(ONOFF[arg])
         say("skin " .. arg .. " after a /reload")
+    elseif cmd == "tune" then
+        local key, value = arg:match("^(%S*)%s*(.-)$")
+        if key == "reset" then
+            for _, k in ipairs(GAB.Buttons.TUNE_ORDER) do Settings.SetTune(k, nil) end
+            say("tune: the built-in values")
+        elseif key == "" then
+            for _, k in ipairs(GAB.Buttons.TUNE_ORDER) do
+                say(("tune %s %.2f - %s"):format(k, GAB.Buttons.Tune(k), GAB.Buttons.TUNE[k][2]))
+            end
+        elseif GAB.Buttons.TUNE[key] and value == "" then
+            say(("tune %s %.2f - %s"):format(key, GAB.Buttons.Tune(key), GAB.Buttons.TUNE[key][2]))
+        elseif tonumber(value) and Settings.SetTune(key, tonumber(value)) then
+            say(("tune %s %.2f"):format(key, GAB.Buttons.Tune(key)))
+        else
+            say("/gab tune <" .. table.concat(GAB.Buttons.TUNE_ORDER, "|") .. "> <0..1>, or /gab tune reset")
+        end
     elseif cmd == "options" then
         if not GAB.Options.Open() then say("Esc > Options > AddOns > Glass Action Bars") end
     elseif cmd == "failures" then

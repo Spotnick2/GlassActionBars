@@ -49,32 +49,36 @@ local function tintFor(name)
     return p.tint, true
 end
 
-local function paint(g, name, tint)
-    local p = Theme.PRESETS[name]
-    if tint then
-        Glass.SetSurfaceTint(g, tint[1], tint[2], tint[3], tint[4])
-    else
-        Glass.SetSurfaceTint(g)
-    end
+-- A surface's own scale on the theme's wash and body alpha (the buttons'
+-- /gab tune), read at every paint.
+local function paint(s, name, tint)
+    local g, p = s.g, Theme.PRESETS[name]
+    local wash, body = 1, 1
+    if s.scale then wash, body = s.scale() end
+    local built = g.tint.glassColor or Glass.STYLE.tint
+    local c = tint or built
+    Glass.SetSurfaceTint(g, c[1], c[2], c[3], (c[4] or built[4]) * body)
     if g.grain then g.grain:SetAlpha(0) end   -- no grain at button size (LibGlass Pill's rule)
-    if g.wash then g.wash:SetAlpha(p.wash or 1) end
+    if g.wash then g.wash:SetAlpha((p.wash or 1) * wash) end
 end
 
--- Add a surface and paint it with the current theme.
-function Theme.Register(g)
+-- Add a surface and paint it with the current theme. `scale`, optional:
+-- a function returning the surface's wash and body factors.
+function Theme.Register(g, scale)
     if type(g) ~= "table" or not g.tint then return end
-    surfaces[#surfaces + 1] = g
+    local s = { g = g, scale = scale }
+    surfaces[#surfaces + 1] = s
     local name = current()
     local tint, known = tintFor(name)
     if not known then Theme.pending = true end
-    API.Try("theme:paint", paint, g, name, tint)
+    API.Try("theme:paint", paint, s, name, tint)
 end
 
 -- Repaint every surface. Returns false while the class colour is unreadable.
 function Theme.Refresh()
     local name = current()
     local tint, known = tintFor(name)
-    for _, g in ipairs(surfaces) do API.Try("theme:paint", paint, g, name, tint) end
+    for _, s in ipairs(surfaces) do API.Try("theme:paint", paint, s, name, tint) end
     Theme.pending = not known
     return known
 end

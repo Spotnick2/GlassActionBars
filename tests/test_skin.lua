@@ -70,18 +70,18 @@ eq(T.skins[ActionButton1].small, false, "action buttons are not")
 
 -- The rim: bright with an action, faint without, kept when unreadable.
 local function rim(b) return T.skins[b].g.rim:GetAlpha() end
-local full = Glass.STYLE.rimAlpha
+local full = GAB.Buttons.Tune("rim")
 check(close(rim(ActionButton1), full), "a slot with an action: full rim")
-check(close(rim(ActionButton2), full * GAB.Buttons.EMPTY_RIM), "an empty slot: faint rim")
+check(close(rim(ActionButton2), full * GAB.Buttons.Tune("empty")), "an empty slot: faint rim")
 WoW.actions[2] = true
 ActionButton2:Update()
 check(close(rim(ActionButton2), full), "Blizzard's Update: the rim follows the slot")
 WoW.actions[2] = nil
 ActionButton2:Update()
-check(close(rim(ActionButton2), full * GAB.Buttons.EMPTY_RIM), "  and back")
+check(close(rim(ActionButton2), full * GAB.Buttons.Tune("empty")), "  and back")
 WoW.actions[2] = WoW.Secret("HasAction")
 ActionButton2:Update()
-check(close(rim(ActionButton2), full * GAB.Buttons.EMPTY_RIM), "a secret answer keeps the last state")
+check(close(rim(ActionButton2), full * GAB.Buttons.Tune("empty")), "a secret answer keeps the last state")
 WoW.actions[2] = nil
 
 -- UpdateButtonArt sets Blizzard's atlases again: the skin follows it.
@@ -95,11 +95,11 @@ eq(ActionButton3.PushedTexture._blend, "ADD", "  added light again")
 WoW.forms[1] = true
 StanceBar:UpdateState()
 check(close(rim(StanceButton1), full), "a known form: full rim")
-check(close(rim(StanceButton2), full * GAB.Buttons.EMPTY_RIM), "no second form: faint rim")
+check(close(rim(StanceButton2), full * GAB.Buttons.Tune("empty")), "no second form: faint rim")
 WoW.petActions[3] = true
 PetActionBar:Update()
 check(close(rim(PetActionButton3), full), "a pet action: full rim")
-check(close(rim(PetActionButton4), full * GAB.Buttons.EMPTY_RIM), "an empty pet slot: faint rim")
+check(close(rim(PetActionButton4), full * GAB.Buttons.Tune("empty")), "an empty pet slot: faint rim")
 
 -- Text: the glass font, outlined; hotkeys and macro names can be turned off.
 local file = Glass.FONTS[Glass.fontKey].file
@@ -117,13 +117,45 @@ GAB.Settings.SetShowMacroNames(true)
 -- Themes repaint every button's body live.
 local tint = T.skins[ActionButton1].g.tint
 GAB.Settings.SetTheme("smoked")
-check(close(tint._color[4], 0.62), "smoked: the darker body")
+local body = GAB.Buttons.Tune("body")
+check(close(tint._color[4], 0.62 * body), "smoked: the darker body (times the buttons' body factor)")
 GAB.Settings.SetTheme("class")
 check(close(tint._color[1], 0.53 * 0.6), "class: the class colour, shaded")
 GAB.Settings.SetTheme("clear")
-check(close(tint._color[4], Glass.STYLE.tint[4]), "clear: as built")
+check(close(tint._color[4], Glass.STYLE.tint[4] * body), "clear: as built (times the body factor)")
 eq(GAB.Settings.SetTheme("neon"), false, "an unknown theme is refused")
 eq(GAB.db.theme, "clear", "  and changes nothing")
+
+-- /gab tune: the look's numbers, live, saved, validated.
+local dark = T.skins[ActionButton1].g.dark
+eq(GAB.Settings.SetTune("rim", 0.5), true, "tune rim 0.5")
+check(close(rim(ActionButton1), 0.5), "  the rim repainted live")
+check(close(rim(ActionButton2), 0.5 * GAB.Buttons.Tune("empty")), "  empty slots too")
+eq(GlassActionBarsDB.tune.rim, 0.5, "  saved")
+GAB.Settings.SetTune("dark", 0.2)
+check(close(dark:GetAlpha(), 0.2), "tune dark: the inner line")
+local wash = T.skins[ActionButton1].g.wash
+GAB.Settings.SetTune("wash", 0.5)
+check(close(wash:GetAlpha(), 0.5), "tune wash: the haze, live")
+GAB.Settings.SetTune("body", 0.5)
+check(close(tint._color[4], Glass.STYLE.tint[4] * 0.5), "tune body: the tint's alpha, live")
+eq(GAB.Settings.SetTune("rim", 2), false, "out of range refused")
+eq(GAB.Settings.SetTune("rim", 0 / 0), false, "NaN refused")
+eq(GAB.Settings.SetTune("glow", 0.5), false, "an unknown key refused")
+newChat()
+SlashCmdList.GLASSACTIONBARS("tune rim")
+check(chatHas("tune rim 0.50"), "/gab tune rim prints, changes nothing")
+SlashCmdList.GLASSACTIONBARS("tune reset")
+eq(rawget(GlassActionBarsDB, "tune"), nil, "tune reset: nothing saved")
+check(close(rim(ActionButton1), GAB.Buttons.TUNE.rim[1]), "  the built-in rim back")
+GlassActionBarsDB = { tune = { rim = 0.3, bogus = 1, dark = 7 } }
+local db = GAB._test.ensureDefaults()
+eq(db.tune.rim, 0.3, "a saved tune value survives a load")
+eq(db.tune.bogus, nil, "  an unknown key doesn't")
+eq(db.tune.dark, nil, "  nor an out-of-range value")
+GAB.db = db
+GAB.Settings.SetTune("rim", nil)
+eq(rawget(GAB.db, "tune"), nil, "the last tune value cleared: no tune table left")
 
 -- The main bar's art.
 eq(MainActionBar.BorderArt:GetAlpha(), 0, "the main bar's border art faded")

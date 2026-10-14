@@ -34,8 +34,27 @@ GAB.Buttons = Buttons
 local skins = setmetatable({}, { __mode = "k" })   -- button -> state
 
 Buttons.SIZE = "small"        -- thin_small under the clean preset
-Buttons.EMPTY_RIM = 0.35      -- the rim's strength on an empty slot, as a fraction of a full one
 Buttons.HIGHLIGHT = 0.4       -- the hover glow, softened as LibGlass's Pill does
+
+-- The look's numbers, tuned live in game with /gab tune (saved in
+-- GlassActionBarsDB.tune) until they are settled, then baked in here. The
+-- first pass (owner's screenshot, 2026-10-13) read as frosted tiles with no
+-- outline and a heavy dark frame round the icons; the mockup wants a clear
+-- body and a crisp light rim.
+Buttons.TUNE = {
+    rim = { 1.0, "the rim's alpha on a slot with an action" },
+    empty = { 0.75, "the rim on an empty slot, as a fraction of a full one" },
+    dark = { 0.4, "the dark inner line under the rim" },
+    wash = { 0.35, "the body's top-down haze, as a fraction of the theme's" },
+    body = { 0.8, "the body's tint alpha, as a fraction of the theme's" },
+}
+Buttons.TUNE_ORDER = { "rim", "empty", "dark", "wash", "body" }
+
+function Buttons.Tune(key)
+    local saved = GAB.db and type(GAB.db.tune) == "table" and GAB.db.tune[key]
+    if type(saved) == "number" then return saved end
+    return Buttons.TUNE[key][1]
+end
 
 local function font()
     local f = Glass.FONTS[Glass.fontKey] or Glass.FONTS.arial
@@ -56,9 +75,9 @@ local function styleText(s)
 end
 
 local function paintRim(s)
-    local f = s.occupied and 1 or Buttons.EMPTY_RIM
-    s.g.rim:SetAlpha(Glass.STYLE.rimAlpha * f)
-    s.g.dark:SetAlpha(f)
+    local f = s.occupied and 1 or Buttons.Tune("empty")
+    s.g.rim:SetAlpha(Buttons.Tune("rim") * f)
+    s.g.dark:SetAlpha(Buttons.Tune("dark") * f)
 end
 
 -- The body under the button, the rim over it. Run again whenever Blizzard
@@ -108,7 +127,7 @@ function Buttons.Build(button, regions)
     styleText(s)
     paintRim(s)
     if s.regions.highlight then s.regions.highlight:SetAlpha(Buttons.HIGHLIGHT) end
-    GAB.Theme.Register(g)
+    GAB.Theme.Register(g, function() return Buttons.Tune("wash"), Buttons.Tune("body") end)
     return s
 end
 
@@ -125,6 +144,12 @@ end
 -- Settings changed: hotkeys and macro names shown or not.
 function Buttons.RefreshText()
     for _, s in pairs(skins) do API.Try("skin:text", styleText, s) end
+end
+
+-- /gab tune: a number changed, repaint every button.
+function Buttons.RefreshLook()
+    for _, s in pairs(skins) do API.Try("skin:rim", paintRim, s) end
+    GAB.Theme.Refresh()
 end
 
 --------------------------------------------------------------------------------
