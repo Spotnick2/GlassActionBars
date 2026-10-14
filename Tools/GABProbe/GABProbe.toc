@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: GABProbe
+## Notes: Throwaway probe for Glass Action Bars: button regions, Blizzard's writers, secrets, levels, bar alpha in combat, Hearthstone cooldown. /gabprobe help
+## Author: Spotnick
+## Version: dev
+## SavedVariables: GABProbeDB
+
+GABProbe.lua
