@@ -37,16 +37,16 @@ Buttons.SIZE = "small"        -- thin_small under the clean preset
 Buttons.HIGHLIGHT = 0.4       -- the hover glow, softened as LibGlass's Pill does
 
 -- The look's numbers, tuned live in game with /gab tune (saved in
--- GlassActionBarsDB.tune) until they are settled, then baked in here. The
--- first pass (owner's screenshot, 2026-10-13) read as frosted tiles with no
--- outline and a heavy dark frame round the icons; the mockup wants a clear
--- body and a crisp light rim.
+-- GlassActionBarsDB.tune), then baked in here. The first pass read as
+-- frosted tiles with no outline and a heavy dark frame round the icons; these
+-- are the owner's tuned values (2026-10-13), once the wash could reach zero:
+-- a nearly clear body and a light rim.
 Buttons.TUNE = {
-    rim = { 1.0, "the rim's alpha on a slot with an action" },
-    empty = { 0.75, "the rim on an empty slot, as a fraction of a full one" },
-    dark = { 0.4, "the dark inner line under the rim" },
-    wash = { 0.35, "the body's top-down haze, as a fraction of the theme's" },
-    body = { 0.8, "the body's tint alpha, as a fraction of the theme's" },
+    rim = { 0.85, "the rim's alpha on a slot with an action" },
+    empty = { 0.45, "the rim on an empty slot, as a fraction of a full one" },
+    dark = { 0.15, "the dark inner line under the rim" },
+    wash = { 0.04, "the body's top-down haze, as a fraction of the theme's" },
+    body = { 0.10, "the body's tint alpha, as a fraction of the theme's" },
 }
 Buttons.TUNE_ORDER = { "rim", "empty", "dark", "wash", "body" }
 

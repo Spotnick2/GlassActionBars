@@ -152,9 +152,10 @@ check(chatHas("tune rim 0.50"), "/gab tune rim prints, changes nothing")
 SlashCmdList.GLASSACTIONBARS("tune reset")
 eq(rawget(GlassActionBarsDB, "tune"), nil, "tune reset: nothing saved")
 check(close(rim(ActionButton1), GAB.Buttons.TUNE.rim[1]), "  the built-in rim back")
-GlassActionBarsDB = { tune = { rim = 0.3, bogus = 1, dark = 7 } }
+GlassActionBarsDB = { tune = { rim = 0.3, bogus = 1, dark = 7, empty = GAB.Buttons.TUNE.empty[1] } }
 local db = GAB._test.ensureDefaults()
 eq(db.tune.rim, 0.3, "a saved tune value survives a load")
+eq(db.tune.empty, nil, "  one equal to the built-in value is dropped")
 eq(db.tune.bogus, nil, "  an unknown key doesn't")
 eq(db.tune.dark, nil, "  nor an out-of-range value")
 GAB.db = db

@@ -33,7 +33,10 @@ local function ensureDefaults()
     if db.tune ~= nil then
         if type(db.tune) ~= "table" then db.tune = nil else
             for k, v in pairs(db.tune) do
-                if not GAB.Buttons.TUNE[k] or type(v) ~= "number" or v < 0 or v > 1 then db.tune[k] = nil end
+                local known = GAB.Buttons.TUNE[k]
+                if not known or type(v) ~= "number" or not (v >= 0 and v <= 1) or v == known[1] then
+                    db.tune[k] = nil   -- unknown, out of range, or the built-in value
+                end
             end
             if next(db.tune) == nil then db.tune = nil end
         end
