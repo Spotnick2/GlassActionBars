@@ -173,18 +173,14 @@ local function eachButton(prefix, n, fn)
 end
 
 -- Action buttons: the main bar and the seven extra bars. Each button's own
--- Update and UpdateHotkeys say when its slot or its key changed.
+-- Update says when its slot changed. (UpdateHotkeys sets the hotkey's text,
+-- size and anchor, never its font, so the font set once holds.)
 local function skinActionBars()
     local function onUpdate(self) Buttons.SetOccupied(self, READ.action(self)) end
-    local function onHotkeys(self)
-        local s = skins[self]
-        if s then API.Try("skin:text", styleText, s) end
-    end
     for _, prefix in ipairs(ActionButtonUtil.ActionBarButtonNames) do
         eachButton(prefix, NUM_ACTIONBAR_BUTTONS, function(b)
             skinStock(b)
             if type(b.Update) == "function" then hooksecurefunc(b, "Update", onUpdate) end
-            if type(b.UpdateHotkeys) == "function" then hooksecurefunc(b, "UpdateHotkeys", onHotkeys) end
             onUpdate(b)
         end)
     end

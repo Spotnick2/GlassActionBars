@@ -106,8 +106,6 @@ local file = Glass.FONTS[Glass.fontKey].file
 eq(ActionButton1.HotKey._font[1], file, "the hotkey in the glass font")
 eq(ActionButton1.HotKey._font[3], "OUTLINE", "  outlined")
 eq(ActionButton1.Count._font[1], file, "the count in the glass font")
-ActionButton1:UpdateHotkeys()
-eq(ActionButton1.HotKey._font[1], file, "UpdateHotkeys: the glass font again")
 GAB.Settings.SetShowHotkeys(false)
 eq(ActionButton1.HotKey:GetAlpha(), 0, "hotkeys off")
 GAB.Settings.SetShowHotkeys(true)

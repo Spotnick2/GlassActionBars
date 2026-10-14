@@ -561,7 +561,6 @@ for _, prefix in ipairs(ActionButtonUtil.ActionBarButtonNames) do
         b.index = i
         b.bar = parent
         rawset(b, "Update", function(self) self._updates = (self._updates or 0) + 1 end)
-        rawset(b, "UpdateHotkeys", function(self) self.HotKey:SetFont("Fonts\\ARIALN.TTF", 11, "") end)
     end
 end
 
