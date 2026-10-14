@@ -45,7 +45,7 @@ end
 
 -- Every button is skinned; its stock art faded, not hidden.
 local Glass = GAB.Glass
-local rimFile = Glass.MEDIA .. Glass.SIZES.thin_small.rim
+local rimFile = GAB.MEDIA .. "ButtonRim"
 for _, f in ipairs(FRAMES) do
     if f._type == "CheckButton" then
         local name = f._name
@@ -56,6 +56,9 @@ for _, f in ipairs(FRAMES) do
         end
         eq(f.PushedTexture._file, rimFile, name .. ": pressed, the glass rim")
         eq(f.PushedTexture._blend, "ADD", name .. ": pressed, added light")
+        eq(f.PushedTexture._slice and f.PushedTexture._slice[1], 8, name .. ": pressed, sliced like the mask")
+        eq(T.skins[f].g.rim._file, rimFile, name .. ": our own rim")
+        eq(T.skins[f].g.rim._slice and T.skins[f].g.rim._slice[1], 8, name .. ": the rim sliced like the mask")
         eq(f.HighlightTexture:GetAlpha(), GAB.Buttons.HIGHLIGHT, name .. ": hover softened")
         local s = T.skins[f]
         check(s.body:GetFrameLevel() < f:GetFrameLevel(), name .. ": the body under the button")

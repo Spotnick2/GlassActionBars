@@ -40,9 +40,10 @@ Buttons.HIGHLIGHT = 0.4       -- the hover glow, softened as LibGlass's Pill doe
 -- GlassActionBarsDB.tune), then baked in here. The first pass read as
 -- frosted tiles with no outline and a heavy dark frame round the icons; these
 -- are the owner's tuned values (2026-10-13), once the wash could reach zero:
--- a nearly clear body and a light rim.
+-- a nearly clear body and a light rim. The rim's 0.55 is a starting point for
+-- our own, much stronger rim texture, to be retuned in game.
 Buttons.TUNE = {
-    rim = { 0.85, "the rim's alpha on a slot with an action" },
+    rim = { 0.55, "the rim's alpha on a slot with an action (ButtonRim, near-full at 1)" },
     empty = { 0.45, "the rim on an empty slot, as a fraction of a full one" },
     dark = { 0.15, "the dark inner line under the rim" },
     wash = { 0.04, "the body's top-down haze, as a fraction of the theme's" },
@@ -90,12 +91,24 @@ end
 
 -- Blizzard's frame art faded, the pushed look made ours. Run again after
 -- every UpdateButtonArt.
+-- Our own rim (Tools/make_rim.py): LibGlass's thin rim peaks at 86/255, too
+-- faint once the body went clear. Same geometry as body_mask_small (32 px,
+-- radius 7, slice margins 8); a crisp line, brightest along the top, quiet at
+-- the bottom, near-full alpha at its brightest for /gab tune's headroom.
+Buttons.RIM = "ButtonRim"
+Buttons.RIM_MARGIN = 8
+
+local function rimTexture(t)
+    t:SetTexture(GAB.MEDIA .. Buttons.RIM)
+    t:SetTextureSliceMargins(Buttons.RIM_MARGIN, Buttons.RIM_MARGIN, Buttons.RIM_MARGIN, Buttons.RIM_MARGIN)
+    local modes = Enum and Enum.UITextureSliceMode
+    t:SetTextureSliceMode((modes and modes.Stretched) or 0)
+end
+
 local function stylePushed(s)
     local p = s.regions.pushed
     if not p then return end
-    local S = Glass.SIZES[s.g.size]
-    p:SetTexture(Glass.MEDIA .. S.rim)
-    p:SetTextureSliceMargins(S.rimMargin, S.rimMargin, S.rimMargin, S.rimMargin)
+    rimTexture(p)
     p:ClearAllPoints()
     p:SetAllPoints(s.button)
     p:SetVertexColor(1, 1, 1, 1)
@@ -124,6 +137,7 @@ function Buttons.Build(button, regions)
     local g = Glass.Apply(body, Buttons.SIZE)
     g.shadow:SetAlpha(0)   -- it would spill onto the next button (LibGlass Pill's rule)
     g.grain:SetAlpha(0)
+    rimTexture(g.rim)      -- our rim on the surface's own rim region (ours to retexture)
     local s = { button = button, body = body, g = g, regions = regions or {}, occupied = true,
                 small = (API.Plain(button:GetWidth()) or 45) < 40 }
     skins[button] = s

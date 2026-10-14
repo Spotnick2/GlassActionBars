@@ -56,4 +56,16 @@ eq(GlassActionBars.Glass.MEDIA, "Interface\\AddOns\\GlassActionBars\\Libs\\LibGl
     "MEDIA is the embedded copy's")
 eq(GlassActionBars.MEDIA, "Interface\\AddOns\\GlassActionBars\\Media\\", "our own media folder")
 
+-- Our own textures ship, as uncompressed 32-bit TGA (what Tools/make_rim.py writes).
+local tga = io.open("Media/ButtonRim.tga", "rb")
+check(tga ~= nil, "Media/ButtonRim.tga exists")
+if tga then
+    local header = tga:read(18)
+    tga:close()
+    eq(header:byte(3), 2, "  uncompressed truecolour")
+    eq(header:byte(13) + 256 * header:byte(14), 32, "  32 wide (body_mask_small's size)")
+    eq(header:byte(15) + 256 * header:byte(16), 32, "  32 high")
+    eq(header:byte(17), 32, "  32 bits, with alpha")
+end
+
 done("test_toc")
