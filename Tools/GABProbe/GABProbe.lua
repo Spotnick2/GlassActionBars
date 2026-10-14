@@ -149,12 +149,20 @@ local function pickSamples()
     end
     -- Answers already secret when picking: keep the earlier, plainly occupied pick.
     if not picks.action and sawSecret then picks.action = old.action end
+    -- Every answer is checked for a secret BEFORE it is compared: a comparison
+    -- on a secret throws, and this runs in the PLAYER_REGEN_DISABLED handler,
+    -- where a throw would lose the whole fight's samples (Codex, #11). A
+    -- secret answer keeps the earlier, plainly picked slot.
     local okn, n = pcall(GetNumShapeshiftForms)
-    if okn and type(n) == "number" and n > 0 then picks.stance = 1 end
+    if okn and issecretvalue and issecretvalue(n) then picks.stance = old.stance
+    elseif okn and type(n) == "number" and n > 0 then picks.stance = 1 end
+    local petSecret = false
     for i = 1, 10 do
         local okp, name = pcall(GetPetActionInfo, i)
-        if okp and name ~= nil then picks.pet = i; break end
+        if okp and issecretvalue and issecretvalue(name) then petSecret = true
+        elseif okp and name ~= nil then picks.pet = i; break end
     end
+    if not picks.pet and petSecret then picks.pet = old.pet end
 end
 
 local function secretText(ok, v)
@@ -342,10 +350,18 @@ end
 --------------------------------------------------------------------------------
 
 local ev = CreateFrame("Frame")
+-- RegisterEvent throws on an unknown name and returns false on a refusal
+-- (porting guide): both are reported, or a measurement would silently be
+-- missing (Codex, #11). Logged at login, once the saved log exists.
+local registerFailures = {}
 for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ADDON_ACTION_BLOCKED",
                      "ADDON_ACTION_FORBIDDEN" }) do
-    local ok, err = pcall(ev.RegisterEvent, ev, e)
-    if not ok then print("GABProbe: could not register " .. e .. ": " .. tostring(err)) end
+    local ok, registered = pcall(ev.RegisterEvent, ev, e)
+    if not ok or registered == false then
+        local why = ok and "refused" or tostring(registered)
+        registerFailures[#registerFailures + 1] = e .. " (" .. why .. ")"
+        print("GABProbe: could not register " .. e .. ": " .. why)
+    end
 end
 ev:SetScript("OnEvent", function(_, event, a1, a2)
     if event == "PLAYER_LOGIN" then
@@ -353,6 +369,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
         GABProbeDB.log = GABProbeDB.log or {}
         local v, b = GetBuildInfo()
         log("session start, client " .. tostring(v) .. "." .. tostring(b))
+        for _, f in ipairs(registerFailures) do log("could not register " .. f .. ": its measurement is missing") end
         installWriters()
         pickSamples()
         sampleSecrets("login")
