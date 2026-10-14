@@ -8,7 +8,13 @@ local API = GAB.API
 local say = API.Print
 
 -- Account-wide (GlassActionBarsDB). Each feature adds its settings here as it lands.
-local DEFAULTS = {}
+local DEFAULTS = {
+    skin = true,            -- the glass on Blizzard's bars (off: Blizzard's own art, after a /reload)
+    theme = "clear",        -- one of GAB.Theme.NAMES
+    showHotkeys = true,     -- the key binding text on each button
+    showMacroNames = true,  -- a macro's name on its button
+    endCaps = false,        -- the main bar's gryphons
+}
 GAB.DEFAULTS = DEFAULTS
 
 -- Only what the player SET is saved: everything else falls through to
@@ -21,6 +27,8 @@ local function ensureDefaults()
     for k, v in pairs(DEFAULTS) do
         if db[k] == v then db[k] = nil end
     end
+    -- A theme this version doesn't know falls back to the default.
+    if db.theme ~= nil and not GAB.Theme.IsValid(db.theme) then db.theme = nil end
     setmetatable(db, { __index = DEFAULTS })
     return db
 end
@@ -28,6 +36,39 @@ end
 -- Every setting goes through here: /gab and the options page.
 local Settings = {}
 GAB.Settings = Settings
+
+-- False for a name that isn't a theme; the setting is left as it was.
+function Settings.SetTheme(name)
+    if not GAB.Theme.IsValid(name) then return false end
+    GAB.db.theme = name
+    GAB.Theme.Refresh()
+    return true
+end
+
+function Settings.SetShowHotkeys(on)
+    GAB.db.showHotkeys = on == true
+    GAB.Buttons.RefreshText()
+    return true
+end
+
+function Settings.SetShowMacroNames(on)
+    GAB.db.showMacroNames = on == true
+    GAB.Buttons.RefreshText()
+    return true
+end
+
+function Settings.SetEndCaps(on)
+    GAB.db.endCaps = on == true
+    GAB.Bars.Refresh()
+    return true
+end
+
+-- The skin can't be taken off live: Blizzard set the art we replaced, and
+-- only its own code puts it back. Takes effect at the next /reload.
+function Settings.SetSkin(on)
+    GAB.db.skin = on == true
+    return true
+end
 
 -- A dev build, by its version: "dev" from the deploy script, or the
 -- packager's token left unreplaced (matched as a pattern, never written whole:
@@ -53,8 +94,16 @@ local function failures()
 end
 
 -- The command list: /gab help prints it.
+local function onoff(v) return v and "on" or "off" end
+
 local function helpLines()
+    local db = GAB.db
     return {
+        "/gab theme " .. table.concat(GAB.Theme.NAMES, "/") .. " - the glass (" .. db.theme .. ")",
+        "/gab hotkeys on/off - key bindings on the buttons (" .. onoff(db.showHotkeys) .. ")",
+        "/gab macros on/off - macro names on the buttons (" .. onoff(db.showMacroNames) .. ")",
+        "/gab gryphons on/off - the main bar's end caps (" .. onoff(db.endCaps) .. ")",
+        "/gab skin on/off - glass, or Blizzard's own art after a /reload (" .. onoff(db.skin) .. ")",
         "/gab options - open the options page",
         "/gab failures - what failed to build or register",
         "/gab version - client build vs the measured one",
@@ -62,9 +111,29 @@ local function helpLines()
 end
 GAB.HelpLines = helpLines
 
+local ONOFF = { on = true, off = false }
+
+-- /gab <name> on/off for an on/off setting.
+local SWITCHES = {
+    hotkeys = { Settings.SetShowHotkeys, "key bindings on the buttons" },
+    macros = { Settings.SetShowMacroNames, "macro names on the buttons" },
+    gryphons = { Settings.SetEndCaps, "the main bar's end caps" },
+}
+
 local function slash(msg)
-    local cmd = (msg or ""):lower():match("^%s*(%S*)")
-    if cmd == "options" then
+    local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
+    if cmd == "theme" then
+        if Settings.SetTheme(arg) then say("theme " .. arg)
+        else say("/gab theme " .. table.concat(GAB.Theme.NAMES, "/")) end
+    elseif SWITCHES[cmd] then
+        if ONOFF[arg] == nil then return say("/gab " .. cmd .. " on/off") end
+        SWITCHES[cmd][1](ONOFF[arg])
+        say(SWITCHES[cmd][2] .. " " .. arg)
+    elseif cmd == "skin" then
+        if ONOFF[arg] == nil then return say("/gab skin on/off") end
+        Settings.SetSkin(ONOFF[arg])
+        say("skin " .. arg .. " after a /reload")
+    elseif cmd == "options" then
         if not GAB.Options.Open() then say("Esc > Options > AddOns > Glass Action Bars") end
     elseif cmd == "failures" then
         failures()
@@ -93,7 +162,10 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         -- SavedVariables are read here at the latest (porting guide: not at file scope).
         if not GAB.db then GAB.db = ensureDefaults() end
         start("options", GAB.Options.Register)
+        start("buttons", GAB.Buttons.Start)
+        start("bars", GAB.Bars.Start)
     elseif event == "PLAYER_ENTERING_WORLD" then
+        GAB.Theme.Retry()
         -- arg1 = isInitialLogin. The build warning asks the developer to
         -- re-measure; a player can't act on it, and /reload never repeats it.
         if arg1 and GAB.IsDev() and API.ClientBuild() ~= GAB.MEASURED_ON_BUILD then
