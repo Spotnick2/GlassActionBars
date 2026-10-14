@@ -21,7 +21,8 @@
 --                    StanceButton1, PetActionButton1): parentKey, type, size, alpha, layer, level
 --   levels           frame levels on ActionButton1: the button, its cooldowns, the text
 --                    container, overlays, and a test frame at button + 1
---   counts           the writer counts so far; `counts reset` zeroes them
+--   trial <label>    zero the counts under a label: do ONE operation, then `counts`
+--   counts           the writer counts since the trial (only those that fired); `counts reset`
 --   secret           sample the secrets now
 --   alpha on/off     arm the combat alpha test: 1 s into the next combat, SetAlpha(0.4) on
 --                    MultiBarBottomLeft (pcall), back to 1 at 3 s; logs any block
@@ -93,11 +94,26 @@ local function installWriters()
     log("W: " .. n .. " writers hooked")
 end
 
+-- A trial: counts zeroed under a label, one operation, then `counts`, so each
+-- count belongs to that one operation. Only the writers that fired print.
+local trial = "(no trial)"
+
+local function resetCounts()
+    for k in pairs(counts) do counts[k], combatCounts[k] = 0, 0 end
+end
+
 local function printCounts()
     local keys = {}
     for k in pairs(counts) do keys[#keys + 1] = k end
     table.sort(keys)
-    for _, k in ipairs(keys) do log(("W: %-40s %5d  (in combat %d)"):format(k, counts[k], combatCounts[k])) end
+    local any = false
+    for _, k in ipairs(keys) do
+        if counts[k] > 0 then
+            any = true
+            log(("W[%s]: %-40s %5d  (in combat %d)"):format(trial, k, counts[k], combatCounts[k]))
+        end
+    end
+    if not any then log("W[" .. trial .. "]: no writer fired") end
 end
 
 --------------------------------------------------------------------------------
@@ -291,7 +307,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
 end)
 
 local function help()
-    for _, l in ipairs({ "regions [frame]", "levels", "counts [reset]", "secret", "alpha on/off", "hearth",
+    for _, l in ipairs({ "regions [frame]", "levels", "trial <label>", "counts [reset]", "secret", "alpha on/off", "hearth",
                          "driver (optional)", "log [n|clear]" }) do
         log("/gabprobe " .. l)
     end
@@ -307,9 +323,13 @@ SlashCmdList.GABPROBE = function(msg)
                 for _, n in ipairs({ "ActionButton1", "StanceButton1", "PetActionButton1" }) do regions(n) end
             end
         elseif cmd == "levels" then levels()
+        elseif cmd == "trial" then
+            trial = arg ~= "" and arg or "unnamed"
+            resetCounts()
+            log("trial: " .. trial .. " (counts zeroed; do the one operation, then /gabprobe counts)")
         elseif cmd == "counts" then
             if arg == "reset" then
-                for k in pairs(counts) do counts[k], combatCounts[k] = 0, 0 end
+                resetCounts()
                 log("counts reset")
             else printCounts() end
         elseif cmd == "secret" then sampleSecrets("now")

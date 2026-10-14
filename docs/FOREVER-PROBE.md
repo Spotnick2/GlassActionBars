@@ -11,13 +11,26 @@ to `C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md` instead.
 3. `/gabprobe regions` and `/gabprobe levels`.
 4. `/gabprobe alpha on`, `/gabprobe hearth` (use the Hearthstone first if it is ready, so its
    cooldown runs), and optionally `/gabprobe driver`.
-5. Out of combat: press a few action keybinds, click buttons, page the main bar (Shift+wheel or
-   the arrows), open and close Edit Mode, toggle "Hide Bar Art" on the main bar and back, summon a
-   pet (warlock / hunter) or change form or stance (druid / warrior / rogue stealth).
-6. Fight something for a few seconds; during the fight press keybinds and swap form or stance.
-7. After the fight the counts print; also `/gabprobe counts`.
-8. Exit the client fully. Send `WTF\Account\<account>\SavedVariables\GABProbe.lua` and
+5. One trial per operation, so each count belongs to one cause: `/gabprobe trial <label>`, do
+   that ONE thing, then `/gabprobe counts`. The trials:
+   - `trial key` - press one action keybind once
+   - `trial click` - click one action button once
+   - `trial page` - page the main bar once (Shift+wheel or the arrows)
+   - `trial editmode` - open Edit Mode, then close it
+   - `trial hideart` - toggle "Hide Bar Art" on the main bar (and back in a second trial)
+   - `trial form` - change form or stance once (druid / warrior / rogue stealth), if you can
+   - `trial pet` - summon or dismiss a pet (warlock / hunter), if you can
+   - `trial combat` - then fight something for a few seconds, pressing keybinds and swapping form
+     or stance; the counts print when the fight ends
+6. Exit the client fully. Send `WTF\Account\<account>\SavedVariables\GABProbe.lua` and
    `Logs\taint.log`.
+
+## Session 2: the skin itself
+
+Session 1 measures hook delivery and the probe's own experiments; it doesn't exercise the skin's
+own changes (the pushed texture, the fonts, the glass frames). With the skin branch deployed and
+enabled (`pwsh Tools\deploy.ps1 -Probe`), `/console taintLog 1`, repeat the trials above, then
+the checklist in docs/PLAN.md's Verification. Send a screenshot of the bars and `Logs\taint.log`.
 
 ## Results
 
