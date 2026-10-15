@@ -32,6 +32,10 @@ layouts, cooldowns, range and proc glows all stay the game's own, in and out of 
 
 **Three looks**, switched live: clear, smoked and class colour glass.
 
+**Bar fade** (next release): any bar can fade until you point at it, or only out of combat. It
+comes back while you drag something to it, open its flyout, use Edit Mode or have the spellbook
+open.
+
 ## Commands
 
 `/gab help` lists them; the same settings are on the options page (Esc > Options > AddOns >
@@ -42,6 +46,8 @@ Glass Action Bars).
 - `/gab gryphons on/off` - the main bar's end caps
 - `/gab skin on/off` - glass, or Blizzard's own art (after a `/reload`)
 - `/gab tune` - the glass's numbers (rim, empty slots, inner line, haze, body), live
+- `/gab fade 1-8|stance|pet|all off/mouseover/combat` - fade a bar until you point at it, or out
+  of combat; `/gab fade alpha 0..1` - how faded (also on the **Bar fade** options page)
 
 ## What's next
 

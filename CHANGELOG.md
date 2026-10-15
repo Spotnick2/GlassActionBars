@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Bar fade**: each action bar, the stance bar and the pet bar can fade until you point at it
+  (`mouseover`), or fade only out of combat (`combat`). A faded bar comes back while you drag a
+  spell or item to it, open its flyout, use Edit Mode or Quick Keybind mode, or have the spellbook
+  open. Choose how faded it is: hidden, faint or half. On the new **Bar fade** options page, or
+  `/gab fade`.
+
 ## v0.1.0
 
 - **The glass on Blizzard's own action bars**: the main bar, the seven extra bars, the stance

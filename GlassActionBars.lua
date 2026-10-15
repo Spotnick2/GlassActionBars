@@ -14,6 +14,7 @@ local DEFAULTS = {
     showHotkeys = true,     -- the key binding text on each button
     showMacroNames = true,  -- a macro's name on its button
     endCaps = false,        -- the main bar's gryphons
+    fadeAlpha = 0,          -- a faded bar's alpha (fade: { [bar frame name] = mode }, absent = no fade)
 }
 GAB.DEFAULTS = DEFAULTS
 
@@ -40,6 +41,18 @@ local function ensureDefaults()
             end
             if next(db.tune) == nil then db.tune = nil end
         end
+    end
+    -- Bar fade: only known bars with a mode that fades survive.
+    if db.fade ~= nil then
+        if type(db.fade) ~= "table" then db.fade = nil else
+            for k, v in pairs(db.fade) do
+                if not GAB.Fade.byName[k] or v == "off" or not GAB.Fade.IsMode(v) then db.fade[k] = nil end
+            end
+            if next(db.fade) == nil then db.fade = nil end
+        end
+    end
+    if db.fadeAlpha ~= nil and (type(db.fadeAlpha) ~= "number" or not (db.fadeAlpha >= 0 and db.fadeAlpha <= 1)) then
+        db.fadeAlpha = nil
     end
     setmetatable(db, { __index = DEFAULTS })
     return db
@@ -91,6 +104,25 @@ function Settings.SetTune(key, value)
     return true
 end
 
+-- A bar's fade (a Fade.BARS frame name, a Fade.MODES mode), live. False for
+-- an unknown bar or mode.
+function Settings.SetFade(name, mode)
+    if not GAB.Fade.byName[name] or not GAB.Fade.IsMode(mode) then return false end
+    local t = rawget(GAB.db, "fade") or {}
+    t[name] = mode ~= "off" and mode or nil
+    GAB.db.fade = next(t) ~= nil and t or nil
+    GAB.Fade.Apply()
+    return true
+end
+
+-- A faded bar's alpha, 0..1, live.
+function Settings.SetFadeAlpha(a)
+    if type(a) ~= "number" or not (a >= 0 and a <= 1) then return false end
+    GAB.db.fadeAlpha = a ~= DEFAULTS.fadeAlpha and a or nil
+    GAB.Fade.Apply()
+    return true
+end
+
 -- The skin can't be taken off live: Blizzard set the art we replaced, and
 -- only its own code puts it back. Takes effect at the next /reload.
 function Settings.SetSkin(on)
@@ -133,6 +165,8 @@ local function helpLines()
         "/gab gryphons on/off - the main bar's end caps (" .. onoff(db.endCaps) .. ")",
         "/gab skin on/off - glass, or Blizzard's own art after a /reload (" .. onoff(db.skin) .. ")",
         "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body)",
+        "/gab fade [1-8|stance|pet|all off/mouseover/combat] - fade bars until hovered, or out of combat",
+        ("/gab fade alpha 0..1 - how faded a faded bar is (%.2f)"):format(db.fadeAlpha),
         "/gab inspect [button|hide n|show n|restore] - what a button draws, layer by layer",
         "/gab layer <name> off/on - hide one layer on every button, for a look (a /reload undoes it)",
         "/gab options - open the options page",
@@ -179,6 +213,24 @@ local function slash(msg)
             say(("tune %s %.2f"):format(key, GAB.Buttons.Tune(key)))
         else
             say("/gab tune <" .. table.concat(GAB.Buttons.TUNE_ORDER, "|") .. "> <0..1>, or /gab tune reset")
+        end
+    elseif cmd == "fade" then
+        local key, value = arg:match("^(%S*)%s*(.-)$")
+        local Fade = GAB.Fade
+        if key == "" then
+            for _, b in ipairs(Fade.BARS) do
+                say(("fade %s (%s): %s"):format(b[2], b[3], Fade.LABELS[Fade.Mode(b[1])]))
+            end
+            say(("fade alpha %.2f"):format(GAB.db.fadeAlpha))
+        elseif key == "alpha" and tonumber(value) and Settings.SetFadeAlpha(tonumber(value)) then
+            say(("fade alpha %.2f"):format(GAB.db.fadeAlpha))
+        elseif (key == "all" or Fade.byKey[key]) and Fade.IsMode(value) then
+            for _, b in ipairs(Fade.BARS) do
+                if key == "all" or b[2] == key then Settings.SetFade(b[1], value) end
+            end
+            say("fade " .. key .. ": " .. Fade.LABELS[value])
+        else
+            say("/gab fade <1-8|stance|pet|all> <off|mouseover|combat>, or /gab fade alpha <0..1>")
         end
     elseif cmd == "inspect" then
         local sub, n = arg:match("^(%S*)%s*(.-)$")
@@ -229,6 +281,7 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         start("bars", GAB.Bars.Start)
         start("bags", GAB.Bags.Start)
         start("micro", GAB.Micro.Start)
+        start("fade", GAB.Fade.Start)
     elseif event == "PLAYER_ENTERING_WORLD" then
         GAB.Theme.Retry()
         -- arg1 = isInitialLogin. The build warning asks the developer to
