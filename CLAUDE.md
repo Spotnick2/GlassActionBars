@@ -18,7 +18,8 @@ Measured results go in `docs/FOREVER-PROBE.md`.
 
 **Status: v0.1.0 in progress.** The skin, the bag bar and the micro menu are on `main` and were
 checked in game (probe sessions 1-2, docs/FOREVER-PROBE.md); the release (#6) is next. Still
-open: stance secrets (needs a character with a form) and the per-operation hook trials.
+open: stance secrets (needs a character with a form), pet spell-slot secrets with an active pet,
+and the per-operation hook trials.
 
 ## The UI contract (non-negotiable)
 
