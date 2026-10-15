@@ -42,11 +42,11 @@ local function client(id, opts)
             if opts.hostedThrows and on then error("OnHosted broke") end
         end,
         Layout = function(g)
-            log[#log + 1] = "layout"
+            log[#log + 1] = g and "layout" or "layout(nil)"
             log.geom = g
             if opts.layoutThrows then error("Layout broke") end
             if opts.relayout then Dock.RequestLayout(id) end
-            f._width, f._height = g.size * 2 + g.padding, g.size
+            if g then f._width, f._height = g.size * 2 + g.padding, g.size end   -- nil: its own size
         end,
     }
     check(Dock.Register(def), "register " .. id)
@@ -145,11 +145,12 @@ check(close(x, 1070 / 2), "  placed in its own units")
 A._escale = nil
 MAIN._settings[0], MAIN._settings[1] = 0, 1
 
--- Match off: no Layout.
-local layouts = count(logA, "layout")
+-- Match off: Layout(nil), the client's own geometry (it still arranges its contents).
+local layouts, own = count(logA, "layout"), count(logA, "layout(nil)")
 Settings.SetDock("alpha", "match", false)
 WoW.tick()
-eq(count(logA, "layout"), layouts, "match off: Layout not called")
+eq(count(logA, "layout"), layouts, "match off: no matched geometry")
+eq(count(logA, "layout(nil)"), own + 1, "  Layout(nil) instead")
 Settings.SetDock("alpha", "match", true)
 WoW.tick()
 
@@ -255,7 +256,7 @@ Settings.SetDock("zeta", "match", false)
 Settings.SetDock("zeta", "bar", 1)
 WoW.tick()
 eq(logF[1], "hosted", "secret client width: OnHosted(true)")
-eq(logF[2], "released", "  then handed back")
+eq(logF[#logF], "released", "  then handed back")
 check(not Dock.IsHosted("zeta"), "  not hosted")
 eq(GAB.failures["dock:zeta"], nil, "  a skip, not a failure")
 -- A refused GetSettingValue: no Layout, still placed.
@@ -263,7 +264,8 @@ rawset(MAIN, "GetSettingValue", function() error("refused") end)
 layouts = count(logA, "layout")
 Dock.Request("alpha")
 WoW.tick()
-eq(count(logA, "layout"), layouts, "a refused GetSettingValue: no Layout")
+eq(count(logA, "layout"), layouts, "a refused GetSettingValue: no matched geometry")
+eq(logA[#logA], "layout(nil)", "  Layout(nil): its own geometry")
 rawset(MAIN, "GetSettingValue", nil)
 rawset(MAIN, "GetSettingValue", function(self, s) return self._settings[s] end)
 F._width = 100
@@ -281,7 +283,8 @@ MAIN._settings[3] = WoW.Secret("IconSize")
 layouts = count(logA, "layout")
 Dock.Request("alpha")
 WoW.tick()
-eq(count(logA, "layout"), layouts, "a secret setting: no Layout")
+eq(count(logA, "layout"), layouts, "a secret setting: no matched geometry")
+eq(logA[#logA], "layout(nil)", "  Layout(nil): its own geometry")
 MAIN._settings[3] = 100
 UIParent._escale = WoW.Secret("GetEffectiveScale")
 eq(Dock.TargetRect(1), nil, "a secret UIParent scale: unavailable")

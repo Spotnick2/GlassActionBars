@@ -11,6 +11,10 @@
 -- client's size, IsVisible) goes through API.Plain first: GetLeft & co. are
 -- SecretWhenAnchoringSecret, IsVisible SecretReturnsForAspect Shown.
 --
+-- Every pass calls the client's Layout: with the bar's geometry when
+-- matching, with nil ("your own geometry") otherwise. A hosted client gives
+-- up its position, never the arranging of its own contents.
+--
 -- A target that is missing, hidden or without a rect is unavailable: a
 -- docked client keeps its last placement, one never placed stays where its
 -- provider put it and is never told it is hosted. The first placement is a
@@ -199,13 +203,14 @@ local function pass(id)
     local first = not c.hosted
     local ok = true
     if first then ok = call(c, "OnHosted", true) end
-    if ok and Dock.Setting(id, "match") then
-        local g = geometry(n, c.def.frame)
-        if g then
-            c.inLayout = true
-            ok = call(c, "Layout", g)
-            c.inLayout = false
-        end
+    -- Every pass lays the client out: the bar's geometry when matching, nil
+    -- ("your own geometry") when not matching or unreadable. A hosted client
+    -- gives up its position, never the arranging of its own contents.
+    if ok then
+        local g = Dock.Setting(id, "match") and geometry(n, c.def.frame) or nil
+        c.inLayout = true
+        ok = call(c, "Layout", g)
+        c.inLayout = false
     end
     if ok then
         local placed, res = pcall(place, c, rect)
