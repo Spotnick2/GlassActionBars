@@ -165,6 +165,14 @@ function Methods.SetWidth(w, x) w._width = x end
 function Methods.SetHeight(w, y) w._height = y end
 function Methods.GetWidth(w) return w._width end
 function Methods.GetHeight(w) return w._height end
+-- Geometry as the client reports it: w._rect = { left, right, top, bottom }
+-- in the frame's own units (nil when it has no rect), w._escale its
+-- effective scale (1 by default). A test may put a secret in either.
+function Methods.GetLeft(w) return w._rect and w._rect[1] end
+function Methods.GetRight(w) return w._rect and w._rect[2] end
+function Methods.GetTop(w) return w._rect and w._rect[3] end
+function Methods.GetBottom(w) return w._rect and w._rect[4] end
+function Methods.GetEffectiveScale(w) return w._escale or 1 end
 function Methods.SetAlpha(w, a) if not w._gradient then w._alpha = a end end
 function Methods.GetAlpha(w) return w._alpha or 1 end
 function Methods.GetParent(w) return w._parent end
@@ -345,7 +353,13 @@ function print(...)
 end
 
 SlashCmdList = {}
-Enum = { UITextureSliceMode = { Stretched = 0, Tiled = 1 } }
+Enum = { UITextureSliceMode = { Stretched = 0, Tiled = 1 },
+    -- Measured by Apotheca on 70291 (its docs/FOREVER-PROBE.md).
+    EditModeActionBarSetting = { Orientation = 0, NumRows = 1, NumIcons = 2, IconSize = 3, IconPadding = 4,
+        VisibleSetting = 5, HideBarArt = 6, DeprecatedSnapToSide = 7, HideBarScrolling = 8, AlwaysShowButtons = 9 } }
+-- Errors handed to the client's error handler (a Lua error popup in game).
+WoW.errors = {}
+function geterrorhandler() return function(err) table.insert(WoW.errors, err) end end
 function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a } end
 date = os.date
 time = os.time
@@ -585,16 +599,52 @@ rawset(MainActionBar, "UpdateDividers", function(self)
 end)
 MainActionBar:UpdateDividers()
 
+-- Each action bar (ActionBar.lua:14): a container per button (button.container),
+-- the laid-out ones in bar.shownButtonContainers, spacers included; its
+-- Edit Mode settings through GetSettingValue (bar._settings, plain by
+-- default: 100%, padding 2, one horizontal row); UpdateGridLayout and
+-- UpdateShownButtons as methods to hook. WoW.layoutBar(bar, ...) gives the
+-- containers rects.
 local barOf = { ActionButton = MainActionBar }
 for _, prefix in ipairs(ActionButtonUtil.ActionBarButtonNames) do
     local parent = barOf[prefix] or bar((prefix:gsub("Button$", "")))
+    parent.shownButtonContainers = {}
+    parent._settings = { [0] = 0, [1] = 1, [2] = 12, [3] = 100, [4] = 2 }
+    rawset(parent, "GetSettingValue", function(self, setting) return self._settings[setting] end)
+    rawset(parent, "UpdateGridLayout", function() end)
+    rawset(parent, "UpdateShownButtons", function() end)
     for i = 1, NUM_ACTIONBAR_BUTTONS do
         local b = actionButton(prefix .. i, parent)
         b.action = i
         b.index = i
         b.bar = parent
+        b.container = CreateFrame("Frame", nil, parent)
+        table.insert(parent.shownButtonContainers, b.container)
         rawset(b, "Update", function(self) self._updates = (self._updates or 0) + 1 end)
     end
+end
+
+-- Lay a bar's containers out in a grid: `n` slots (the rest not laid out),
+-- `stride` per row, 45 + pad each, the first slot's top-left at (x, y),
+-- growing right and down (or `up`), in the bar's units at `escale`.
+function WoW.layoutBar(b, x, y, opts)
+    opts = opts or {}
+    local n, stride, pad = opts.n or 12, opts.stride or 12, opts.pad or 2
+    local list = {}
+    for i, c in ipairs(b.shownButtonContainers._all or b.shownButtonContainers) do
+        c._escale = opts.escale or 1
+        if i <= n then
+            local col, row = (i - 1) % stride, math.floor((i - 1) / stride)
+            local l = x + col * (45 + pad)
+            local t = opts.up and (y + row * (45 + pad)) or (y - row * (45 + pad))
+            c._rect = { l, l + 45, t, t - 45 }
+            list[#list + 1] = c
+        else
+            c._rect = nil
+        end
+    end
+    list._all = b.shownButtonContainers._all or b.shownButtonContainers
+    b.shownButtonContainers = list
 end
 
 StanceBar = bar("StanceBar")
@@ -603,6 +653,12 @@ for i = 1, 10 do actionButton("StanceButton" .. i, StanceBar, true).index = i en
 PetActionBar = bar("PetActionBar")
 rawset(PetActionBar, "Update", function() end)
 for i = 1, NUM_PET_ACTION_SLOTS do actionButton("PetActionButton" .. i, PetActionBar, true).index = i end
+
+-- Edit Mode's manager: it re-stacks the default-position bars when one shows
+-- or hides (EditModeManager.lua:598,641), without a grid update.
+EditModeManagerFrame = CreateFrame("Frame", "EditModeManagerFrame", UIParent)
+rawset(EditModeManagerFrame, "UpdateBottomActionBarPositions", function() end)
+rawset(EditModeManagerFrame, "UpdateRightActionBarPositions", function() end)
 
 -- The spell flyout (SpellFlyout.xml): hidden until a flyout button opens it;
 -- FlyoutPopupMixin:AttachToButton reparents it to that button (Flyout.lua:218).

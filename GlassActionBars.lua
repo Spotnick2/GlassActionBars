@@ -51,6 +51,20 @@ local function ensureDefaults()
             if next(db.fade) == nil then db.fade = nil end
         end
     end
+    -- Dock: per client id (kept for a provider that loads later), only valid keys.
+    if db.dock ~= nil then
+        if type(db.dock) ~= "table" then db.dock = nil else
+            for id, s in pairs(db.dock) do
+                if type(id) ~= "string" or type(s) ~= "table" then db.dock[id] = nil else
+                    for k, v in pairs(s) do
+                        if not GAB.Dock.Valid(k, v) then s[k] = nil end
+                    end
+                    if next(s) == nil then db.dock[id] = nil end
+                end
+            end
+            if next(db.dock) == nil then db.dock = nil end
+        end
+    end
     if db.fadeAlpha ~= nil and (type(db.fadeAlpha) ~= "number" or not (db.fadeAlpha >= 0 and db.fadeAlpha <= 1)) then
         db.fadeAlpha = nil
     end
@@ -123,6 +137,18 @@ function Settings.SetFadeAlpha(a)
     return true
 end
 
+-- One dock setting of a client (Dock.Valid's keys), applied at the next pass
+-- out of combat. False for a bad key or value.
+function Settings.SetDock(id, key, value)
+    if type(id) ~= "string" or not GAB.Dock.Valid(key, value) then return false end
+    local t = rawget(GAB.db, "dock") or {}
+    t[id] = t[id] or {}
+    t[id][key] = value
+    GAB.db.dock = t
+    GAB.Dock.Request(id)
+    return true
+end
+
 -- The skin can't be taken off live: Blizzard set the art we replaced, and
 -- only its own code puts it back. Takes effect at the next /reload.
 function Settings.SetSkin(on)
@@ -167,6 +193,7 @@ local function helpLines()
         "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body)",
         "/gab fade [1-8|stance|pet|all off/mouseover/combat] - fade bars until hovered, or out of combat",
         ("/gab fade alpha 0..1 - how faded a faded bar is (%.2f)"):format(db.fadeAlpha),
+        "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match on/off] - dock a smart bar to an action bar",
         "/gab inspect [button|hide n|show n|restore] - what a button draws, layer by layer",
         "/gab layer <name> off/on - hide one layer on every button, for a look (a /reload undoes it)",
         "/gab options - open the options page",
@@ -232,6 +259,48 @@ local function slash(msg)
         else
             say("/gab fade <1-8|stance|pet|all> <off|mouseover|combat>, or /gab fade alpha <0..1>")
         end
+    elseif cmd == "dock" then
+        local Dock = GAB.Dock
+        local key, a, b, c = arg:match("^(%S*)%s*(%S*)%s*(%S*)%s*(%S*)")
+        local id
+        for _, cl in ipairs(Dock.Clients()) do
+            if cl.id:lower() == key then id = cl.id end
+        end
+        local usage = "/gab dock <bar> <1-8|off> [left|right|top|bottom] [start|center|end], "
+            .. "/gab dock <bar> gap <0-32>, /gab dock <bar> match on/off"
+        if key == "" then
+            local list = Dock.Clients()
+            if #list == 0 then return say("dock: no smart bars yet") end
+            for _, cl in ipairs(list) do
+                local S = function(k) return Dock.Setting(cl.id, k) end
+                if S("bar") then
+                    say(("dock %s (%s): bar %d, %s, %s, gap %g, match %s%s"):format(cl.id, cl.label, S("bar"),
+                        S("side"):lower(), S("align"):lower(), S("gap"), onoff(S("match")),
+                        Dock.IsHosted(cl.id) and "" or " (not placed yet)"))
+                else
+                    say(("dock %s (%s): not docked"):format(cl.id, cl.label))
+                end
+            end
+        elseif not id then
+            say(usage)
+        elseif a == "off" then
+            Settings.SetDock(id, "bar", false)
+            say("dock " .. id .. ": not docked")
+        elseif a == "gap" and tonumber(b) and Settings.SetDock(id, "gap", tonumber(b)) then
+            say(("dock %s: gap %g"):format(id, tonumber(b)))
+        elseif a == "match" and ONOFF[b] ~= nil then
+            Settings.SetDock(id, "match", ONOFF[b])
+            say("dock " .. id .. ": match " .. b)
+        elseif tonumber(a) and Dock.Valid("bar", tonumber(a))
+            and (b == "" or Dock.Valid("side", b:upper())) and (c == "" or Dock.Valid("align", c:upper())) then
+            Settings.SetDock(id, "bar", tonumber(a))
+            if b ~= "" then Settings.SetDock(id, "side", b:upper()) end
+            if c ~= "" then Settings.SetDock(id, "align", c:upper()) end
+            say(("dock %s: bar %d, %s, %s"):format(id, tonumber(a), Dock.Setting(id, "side"):lower(),
+                Dock.Setting(id, "align"):lower()))
+        else
+            say(usage)
+        end
     elseif cmd == "inspect" then
         local sub, n = arg:match("^(%S*)%s*(.-)$")
         if sub == "hide" and tonumber(n) then GAB.Inspect.Hide(tonumber(n))
@@ -282,6 +351,7 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         start("bags", GAB.Bags.Start)
         start("micro", GAB.Micro.Start)
         start("fade", GAB.Fade.Start)
+        start("dock", GAB.Dock.Start)
     elseif event == "PLAYER_ENTERING_WORLD" then
         GAB.Theme.Retry()
         -- arg1 = isInitialLogin. The build warning asks the developer to

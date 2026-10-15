@@ -134,9 +134,9 @@ function Options.AddPage(name, build)
     page.frame.name = name
     page.frame:Hide()
     page.frame:SetScript("OnShow", function()
+        building = page.refreshers   -- a refresher may build controls (the Dock page's new sections)
         if not page.built then
             page.built = true
-            building = page.refreshers
             local title = label(page.frame, name, "GameFontNormalHuge")
             title:SetPoint("TOPLEFT", page.frame, "TOPLEFT", 16, -16)
             API.Try("options:page", build, page.frame, title)
@@ -197,6 +197,74 @@ Options.fadePage = Options.AddPage("Bar fade", function(page, title)
     local _, group = Options.radios(page, how, Options.FADE_ALPHAS, function() return GAB.db.fadeAlpha end,
         GAB.Settings.SetFadeAlpha)
     Options._test.fadeAlpha = group
+end)
+
+-- Dock (#7): a section per registered smart bar, added on the first show
+-- after it registers (a provider may load after the page was first opened).
+local SIDE_LABELS = { LEFT = "Left", RIGHT = "Right", TOP = "Top", BOTTOM = "Bottom" }
+local ALIGN_LABELS = { START = "Start", CENTER = "Center", END = "End" }
+Options.dockPage = Options.AddPage("Dock", function(page, title)
+    local Dock = GAB.Dock
+    local note = label(page, "A smart bar docks beside one of Edit Mode's Action Bars 1-8 and follows it when the "
+        .. "bar moves or changes size. Changes made in combat apply when the fight ends.", "GameFontHighlightSmall")
+    note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
+    note:SetJustifyH("LEFT")
+    local empty = label(page, "No smart bars yet: the Utility bar and addons that dock their bars appear here.",
+        "GameFontDisable")
+    empty:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
+    local sections, last = {}, note
+    Options._test.dockSections = sections
+
+    local function row(parent, anchor, text, choices, id, key, across)
+        local name = label(parent, text)
+        name:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -10)
+        local _, group = Options.radios(parent, name, choices, function() return Dock.Setting(id, key) end,
+            function(v) GAB.Settings.SetDock(id, key, v) end, across)
+        return name, group
+    end
+
+    local function section(cl)
+        local id = cl.id
+        local f = CreateFrame("Frame", nil, page)
+        f:SetSize(1, 1)
+        f:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -16)
+        local head = label(f, cl.label, "GameFontNormal")
+        head:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+        local s = { frame = f }
+        local bars = { { false, "Off" } }
+        for i = 1, #Dock.BARS do bars[#bars + 1] = { i, tostring(i) } end
+        local r1; r1, s.bar = row(f, head, "Docked to", bars, id, "bar", { 100, 50 })
+        local sides = {}
+        for _, v in ipairs(Dock.SIDES) do sides[#sides + 1] = { v, SIDE_LABELS[v] } end
+        local r2; r2, s.side = row(f, r1, "Side", sides, id, "side", { 100, 80 })
+        local aligns = {}
+        for _, v in ipairs(Dock.ALIGNS) do aligns[#aligns + 1] = { v, ALIGN_LABELS[v] } end
+        local r3; r3, s.align = row(f, r2, "Alignment", aligns, id, "align", { 100, 80 })
+        local gaps = {}
+        for _, v in ipairs(Dock.GAPS) do gaps[#gaps + 1] = { v, tostring(v) } end
+        local r4; r4, s.gap = row(f, r3, "Gap", gaps, id, "gap", { 100, 50 })
+        s.gapText = label(f, "", "GameFontHighlightSmall")
+        s.gapText:SetPoint("LEFT", r4, "LEFT", 100 + #gaps * 50 + 10, 0)
+        building[#building + 1] = function() s.gapText:SetText(("now %g"):format(Dock.Setting(id, "gap"))) end
+        s.match = Options.checkbox(f, r4, "Match the bar's button size, spacing and rows",
+            function() return Dock.Setting(id, "match") end, function(on) GAB.Settings.SetDock(id, "match", on) end)
+        last = s.match
+        return s
+    end
+
+    building[#building + 1] = function()
+        local list, seen = Dock.Clients(), {}
+        for _, cl in ipairs(list) do
+            seen[cl.id] = true
+            sections[cl.id] = sections[cl.id] or section(cl)
+            sections[cl.id].frame:Show()
+        end
+        for id, s in pairs(sections) do
+            if not seen[id] then s.frame:Hide() end
+        end
+        empty:SetShown(#list == 0)
+    end
 end)
 
 -- Called once at PLAYER_LOGIN by GlassActionBars.lua.

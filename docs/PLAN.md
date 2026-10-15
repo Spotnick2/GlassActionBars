@@ -140,11 +140,11 @@ Release v0.1.0 following `References/RELEASING.md`: an alpha tag first, then `To
 - **Position:** computed out of combat from the **union rectangle of the target bar's slot containers**. Empty slots are kept as spacers, so this also covers multi-row and reversed bars.
   - The result is converted to UIParent absolute coordinates (`effectiveScale / UIParent:GetEffectiveScale()`), so our protected frames are never anchored to Blizzard's.
   - If the target is unavailable (hidden, replaced or without a rectangle), the bar keeps its last docked position. If it never had one, it stays in the provider's standalone placement.
-  - `OnHosted(true)` is sent only after the **first valid placement**, so a provider never stops positioning itself before GAB has placed its bar.
+  - `OnHosted(true)` is sent only once a **valid target** is found, and the first placement is a transaction: `OnHosted(true)`, `Layout`, place, then hosted. Anything short of that (a callback throwing, an unreadable size) is followed by `OnHosted(false)`, so a provider never stops positioning a bar GAB didn't place. (Codex review of #7.)
 - **When it recomputes:** at world entry, on `EDIT_MODE_LAYOUTS_UPDATED`, on UI-scale changes, after deferred hooks on the bar's grid and shown-button updates, and from `RequestLayout`.
   - A light geometry poll runs while Edit Mode is open, because its sliders fire no events, plus one final refresh when it closes.
   - All of it is coalesced to one pass per frame, and deferred to after combat when needed.
-- **Geometry match:** icon size and padding from the target bar's Edit Mode settings. Port `API.ActionBarLayout(n)` and `ACTION_BARS` from `Apotheca/ApothecaCompat.lua`. Geometry is passed in UIParent-scale pixels.
+- **Geometry match:** icon size and padding from the target bar's Edit Mode settings. Port `API.ActionBarLayout(n)` and `ACTION_BARS` from `Apotheca/ApothecaCompat.lua`. Geometry is passed in the **client frame's own units**: `size` and `padding` scaled by `UIParent:GetEffectiveScale() / frame:GetEffectiveScale()`; `rows` (a count) and `orientation` (`Enum.ActionBarOrientation`) raw.
 
 **`API.lua`** (`GlassActionBars.API_VERSION = 1`; same rules as AltStable `PublicAPI.lua`)
 - **`RegisterBar{ id, label, frame, Layout(geom), Buttons(), OnHosted(isHosted) }`.**

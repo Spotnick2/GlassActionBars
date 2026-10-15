@@ -44,8 +44,8 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 ## Layout
 
 TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Theme.lua` ->
-`Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Fade.lua` -> `Inspect.lua` ->
-`Options.lua` -> `GlassActionBars.lua`. Feature files load between
+`Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Fade.lua` -> `Dock.lua` ->
+`Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
 `Glass.lua` and `Options.lua`.
 
 - **`Compat.lua`**: `GlassActionBars.API`, the only route to client APIs that moved or may be
@@ -79,6 +79,14 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   the main bar's page arrows, its flyout, the action and pet drag grids, Edit Mode, Quick Keybind,
   the spellbook / professions book, a fight) every 0.1 s; a reveal snaps to 1, fade-out starts
   0.25 s later and runs 0.2 s. `SetAlpha` on the bar frame only; a bar set back to off gets 1 once.
+- **`Dock.lua`**: smart bars docked to Action Bar 1-8 (#7). `Dock.Register{ id, label, frame,
+  Layout(geom), OnHosted(isHosted), default }` (internal; #8's `RegisterBar` and #9's Utility bar
+  call it). Target = the union of the bar's `shownButtonContainers`; the client anchored to
+  UIParent in its own units; geometry lengths scaled, counts raw; the first placement a
+  transaction (`OnHosted(true)`, Layout, place, else `OnHosted(false)`). Passes coalesced, out of
+  combat only; re-run on grid/shown-button hooks, Edit Mode's re-stacking, target `OnShow`, scale
+  and layout events, and a 0.2 s poll while Edit Mode is open. Every geometry read through
+  `API.Plain`.
 - **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using
