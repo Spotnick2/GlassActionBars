@@ -344,6 +344,20 @@ check(sections.late ~= nil, "a client registered after the page was built: its s
 sections.late.bar[3]:GetScript("OnClick")(sections.late.bar[3])
 eq(Dock.Setting("late", "bar"), 2, "  a click docks it to bar 2")
 
+-- Many clients: every section in the scroll child, which grows to hold them all
+-- (the Settings canvas is fixed and doesn't scroll by itself).
+for i = 1, 5 do client("many" .. i) end
+GAB.Options.dockPage:Hide()
+GAB.Options.dockPage:Show()
+local content, n = GAB.Options._test.dockContent, 0
+for _, s in pairs(sections) do
+    n = n + 1
+    eq(s.frame:GetParent(), content, "  a section in the scroll child")
+end
+check(n >= 8, "eight or more sections built (" .. n .. ")")
+eq(content:GetParent():GetObjectType(), "ScrollFrame", "  the scroll child of a ScrollFrame")
+check(content:GetHeight() >= n * GAB.Options.DOCK_SECTION_HEIGHT, "  tall enough for every section: " .. tostring(content:GetHeight()))
+
 -- Saved settings are cleaned at load (unknown ids kept for a later provider).
 GlassActionBarsDB = { dock = { later = { bar = 4, side = "UP", gap = 99, match = "yes" }, junk = "x", empty = {} } }
 local db = GAB._test.ensureDefaults()
