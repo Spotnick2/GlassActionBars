@@ -143,6 +143,29 @@ prof:Hide()
 run(1)
 eq(BL._alpha, 0, "  both closed: faded")
 
+-- An unreadable IsShown / IsVisible (SecretReturnsForAspect Shown) counts as
+-- shown, and nothing truth-tests the secret itself.
+WoW.secretShown[book] = true
+poll()
+eq(BL._alpha, 1, "a secret IsShown on the spellbook counts as open")
+WoW.secretShown[book] = nil
+run(1)
+eq(BL._alpha, 0, "  plain again: faded")
+SpellFlyout:SetParent(MultiBarBottomLeftButton3)
+WoW.secretShown[SpellFlyout] = true
+poll()
+eq(BL._alpha, 1, "a secret IsShown on the flyout counts as open")
+WoW.secretShown[SpellFlyout] = nil
+run(1)
+WoW.secretShown[BL] = true
+WoW.hover[BL] = true
+poll()
+eq(BL._alpha, 1, "a secret IsVisible still lets the pointer show the bar")
+WoW.hover[BL] = nil
+run(1)
+eq(BL._alpha, 0, "  and fade it")
+WoW.secretShown[BL] = nil
+
 -- "combat": opaque in a fight, faded out of one unless hovered.
 Settings.SetFade("MultiBarBottomRight", "combat")
 run(1)
