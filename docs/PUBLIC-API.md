@@ -1,0 +1,147 @@
+# Glass Action Bars' public API
+
+For addons that want their bars or buttons on Glass Action Bars: dock a bar beside one of the
+action bars, put buttons in glass, or offer a button for the Utility bar. Build on these
+functions only: everything else in `GlassActionBars` is internal and changes without notice.
+
+```toc
+## OptionalDeps: GlassActionBars
+```
+
+Glass Action Bars is not load-on-demand, so with that line these functions exist by the time your
+addon's files run. The player may not have it installed, so check the version first:
+
+```lua
+local GAB = GlassActionBars
+if GAB and GAB.PUBLIC_API_VERSION == 1 then
+    -- register here (at PLAYER_LOGIN, or when your bar exists)
+end
+```
+
+## `GlassActionBars.PUBLIC_API_VERSION`
+
+`1`. It changes on **any incompatible change**: a function's arguments or return values, a
+field's meaning, a callback's timing or arguments, a removed function. Check it with `==`: a
+provider written for 1 must not run against an incompatible 2. **Adding** a function or an
+optional field does not change it: test for a newer function with `if GAB.SomeNewFunction then`.
+
+Not `GlassActionBars.API`: that is the addon's internal adapter for the client's API.
+
+## Rules for every function
+
+- **Arguments are checked before anything happens.** A refusal returns `false` and a reason
+  string; nothing is half done.
+- **Your tables are copied when accepted.** Changing your definition or region table afterwards
+  changes nothing; register again under a new id if you must.
+- **Your callbacks run protected.** An error in one goes to the game's error handler and to
+  `/gab failures`, and never stops Glass Action Bars or another provider.
+- **Nothing hands out a live internal table.**
+
+## `GlassActionBars.RegisterBar(def)` → `true` or `false, reason`
+
+Docks your bar frame beside one of Edit Mode's Action Bars 1-8. Where, and whether, is the
+player's choice: Esc > Options > AddOns > Glass Action Bars > **Dock**, or `/gab dock`.
+
+| Field | Type | |
+|---|---|---|
+| `id` | string | Required. Letters, digits and `_`; `utility` is reserved. The player's dock settings are saved under it, so keep it stable. |
+| `label` | string | The name in Options. Defaults to `id`. |
+| `frame` | frame | Required. The frame to place. |
+| `OnHosted(isHosted)` | function | Required. See below. |
+| `Layout(geom)` | function | Optional. See below. |
+| `default` | table | Optional dock settings for a player who hasn't chosen: `bar` (1-8, or `false`: not docked), `side` (`LEFT`, `RIGHT`, `TOP`, `BOTTOM`), `align` (`START`, `CENTER`, `END`), `gap` (0-32), `match` (boolean). Invalid keys are dropped. Without it, the bar is **not docked** until the player docks it. |
+
+You can register at any time: before Glass Action Bars has finished logging in, the bar is
+queued.
+
+**`OnHosted(true)`** comes once a target bar is available, **before** the first `Layout`. From
+then on the dock owns your frame's **position**: stop moving, dragging and scaling it, stop
+restoring a saved position, stop any polling of your own geometry. **`OnHosted(false)`** comes when
+the player undocks it, or when a first placement fails. Restore your own position and layout
+then. If the target bar is hidden or missing, your bar stays where it is: it keeps its last
+docked position, or, if it was never docked, it is never told it is hosted.
+
+**`Layout(geom)`** comes on every placement, always **out of combat**:
+- `geom = { size, padding, rows, orientation }` when the player chose to match the bar. `size`
+  (a button's width and height) and `padding` are in **your frame's own units**. `rows` is the
+  bar's row count, and `orientation` is 0 for horizontal or 1 for vertical (`Enum.ActionBarOrientation`).
+- `geom = nil` when not matching, or when the target's geometry can't be read: lay out with
+  **your own** geometry.
+
+Either way, size your frame to its contents before returning: the dock then places it by its
+size.
+
+**Your contents stay yours.** When your buttons change (one appears, one goes), arrange them
+yourself, using the last `geom` you got or your own geometry if it was `nil`. Then call
+`RequestLayout(id)` so the dock places the resized frame again.
+
+**Combat:** nothing is moved or laid out in combat. A change waits for the fight to end.
+
+## `GlassActionBars.RequestLayout(id)`
+
+Ask for your bar to be laid out and placed again. Calls are combined into one pass on the next
+frame, out of combat. A call from inside your own `Layout` is ignored, so it can't loop.
+
+## `GlassActionBars.SkinButton(button, regions)` → `true` or `false, reason`
+
+Puts one of your buttons in glass: the same body, rim and pressed look as the action buttons,
+with the hotkey and count in the glass font. `button` must be a Button or CheckButton. `regions`
+names its parts, and each one is checked against its type:
+
+| Key | Type | What happens to it |
+|---|---|---|
+| `icon` | Texture | Left as it is. |
+| `normal` | Texture | Faded. |
+| `pushed` | Texture | Becomes the bright rim. |
+| `highlight` | Texture | Dimmed to the glass highlight. |
+| `hotkey`, `count` | FontString | The glass font. The hotkey also follows the player's "Key bindings" setting. |
+| `name` | FontString | Follows the player's "Macro names" setting. |
+| `cooldown` | Cooldown | Left as it is. |
+
+Other keys are ignored. A button already in glass returns `true`. **In combat** the skin is applied
+when the fight ends. If the player turned the glass off (`/gab skin off`), it returns `false`.
+
+**The skin isn't undone** when your bar is undocked: it stays until a `/reload`. If your buttons
+need their standalone look back as soon as they are undocked, don't call `SkinButton` on them;
+their look is then yours.
+
+## `GlassActionBars.RegisterButton(def)` → `true` or `false, reason`
+
+A button for the player's **Utility bar** (Hearthstone, professions, and buttons like yours), in
+the order the player chooses. Glass Action Bars builds and shows it; it is an ordinary
+(insecure) button, so it can't cast spells or use items itself.
+
+| Field | Type | |
+|---|---|---|
+| `id` | string | Required. Letters, digits and `_`. |
+| `label` | string | The name in Options. Defaults to `id`. |
+| `icon` | number or string | Required. A file ID or a texture path. |
+| `OnClick(button, mouseButton)` | function | Required. |
+| `binding` | string | Your key binding's command name (from your `Bindings.xml`). Its key shows on the button. The binding stays yours. |
+| `tooltip` | string or function | A string, or `function(tooltip)` that fills the GameTooltip. |
+| `IsEnabled()` | function | `false` refuses clicks, and dims the button. |
+| `OnHosted(isHosted)` | function | `true` while the button is actually **shown** on the Utility bar, `false` when it isn't (the bar is off, or the player hid it). Hide your own launcher only while it is `true`. |
+
+## Example
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("PLAYER_LOGIN")
+f:SetScript("OnEvent", function()
+    local GAB = GlassActionBars
+    if not (GAB and GAB.PUBLIC_API_VERSION == 1) then return end
+    GAB.RegisterBar({
+        id = "mybar", label = "My bar", frame = MyBarFrame,
+        OnHosted = function(hosted)
+            MyBar.hosted = hosted
+            if not hosted then MyBar:RestorePosition() end
+        end,
+        Layout = function(geom)
+            MyBar:Arrange(geom and geom.size or MyBar.size, geom and geom.padding or MyBar.padding)
+        end,
+    })
+    for _, b in ipairs(MyBar.buttons) do
+        GAB.SkinButton(b, { icon = b.icon, cooldown = b.cooldown, hotkey = b.hotkey })
+    end
+end)
+```

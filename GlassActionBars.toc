@@ -17,6 +17,7 @@ Bags.lua
 MicroMenu.lua
 Fade.lua
 Dock.lua
+API.lua
 Inspect.lua
 Options.lua
 GlassActionBars.lua

@@ -45,7 +45,7 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 
 TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Theme.lua` ->
 `Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Fade.lua` -> `Dock.lua` ->
-`Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
+`API.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
 `Glass.lua` and `Options.lua`.
 
 - **`Compat.lua`**: `GlassActionBars.API`, the only route to client APIs that moved or may be
@@ -88,6 +88,12 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   combat only; re-run on grid/shown-button hooks, Edit Mode's re-stacking, target `OnShow`, scale
   and layout events, and a 0.2 s poll while Edit Mode is open. Every geometry read through
   `API.Plain`.
+- **`API.lua`**: the public provider API (#8); the contract is
+  [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (1, checked
+  with `==`; not `API_VERSION`: `GlassActionBars.API` is the client adapter), `RegisterBar` (wraps
+  `Dock.Register`), `RequestLayout`, `SkinButton` (regions checked by role, queued in combat),
+  `RegisterButton` (stored; the Utility bar hosts them). Inputs are copied on acceptance; refusals
+  return `false, reason`. Any incompatible change bumps the version and the doc.
 - **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using
