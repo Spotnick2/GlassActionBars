@@ -7,7 +7,8 @@ to `C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md` instead.
 ## How to run session 1
 
 1. `pwsh Tools\deploy.ps1 -Probe` (the addon itself may stay disabled; the probe stands alone).
-2. In game: `/console scriptErrors 1`, `/console taintLog 1`, `/reload`.
+2. In game: `/console scriptErrors 1`, `/console taintLog 1`, `/reload`. With taint logging on,
+   hovering a tooltip throws errors on this client whatever addons are loaded: ignore those.
 3. `/gabprobe regions` (every region of the action, stance and pet buttons, child frames
    included) and `/gabprobe levels`.
    The secret samples (question 3) read a slot that holds something: have at least one action on
@@ -43,12 +44,12 @@ the checklist in docs/PLAN.md's Verification. Send a screenshot of the bars and 
 | # | Question | Answer | Build |
 |---|---|---|---|
 | 1 | Regions of the action, stance and pet buttons (names, sizes, layers) | **As the forever FrameXML declares them** (session 1, below): the skin's keys all exist on every family. | 70374 |
-| 2 | Do the per-button hooks (`UpdateButtonArt`, `Update`, `SetButtonState`, `UpdateFlash`) fire on keybind presses, paging and form swaps? | Partly. A combat trial (00:32:27-00:33:07): `ActionButton1:Update`, `UpdateFlash`, `UpdateUsable` once each (out of combat); `MainActionBar:UpdateDividers` and `UpdateShownButtons` 13x (1 in combat): the dividers come and go often, so hooking `UpdateDividers` is right; `PetActionBar:Update` 7x (6 in combat), even with no pet; `StanceBar:Update` once. `UpdateButtonArt` and `SetButtonState` never fired in that trial. Per-operation trials (key, click, page) still to run. | 70374 |
-| 3 | Can `HasAction(btn.action)` (and the stance / pet readers) be secret in combat? | **Action: no.** In combat, `HasAction` and `C_ActionBar.HasAction` on an occupied slot (ActionButton1, slot 1) were plain. Stance and pet are still open and need a character with forms or a pet (the level 4 test character has neither). | 70374 |
+| 2 | Do the per-button hooks (`UpdateButtonArt`, `Update`, `SetButtonState`, `UpdateFlash`) fire on keybind presses, paging and form swaps? | Partly. A combat trial (00:32:27-00:33:07): `ActionButton1:Update`, `UpdateFlash`, `UpdateUsable` once each (out of combat); `MainActionBar:UpdateDividers` and `UpdateShownButtons` 13x (1 in combat): the dividers come and go often, so hooking `UpdateDividers` is right; `PetActionBar:Update` 7x (6 in combat), even with no pet; `StanceBar:Update` once. `UpdateButtonArt` and `SetButtonState` never fired in that trial, nor in session 2's two fights (below). Per-operation trials (key, click, page) still to run. | 70374 |
+| 3 | Can `HasAction(btn.action)` (and the stance / pet readers) be secret in combat? | **Action: no.** In combat, `HasAction` and `C_ActionBar.HasAction` on an occupied slot (ActionButton1, slot 1) were plain. **Pet: open.** In session 2's fight, `GetPetActionInfo(1)` was plain (`PET_ACTION_ATTACK`), on a level 5 druid with no pet out. That covers the default attack command only. Spell slots with an active pet in combat still need a character with a pet. Stance is open too: neither test character has a form yet. | 70374 |
 | 4 | Frame levels: the cooldowns (`useParentLevel`) against a child at button + 1 | **The rim sits over the cooldowns, under the text**: ActionButton1 at 52, its cooldowns at 52 (`useParentLevel`), our body at 51 and rim at 53, `TextOverlayContainer` at 500. Stance/pet: button 72, body 71, rim 73. | 70374 |
 | 5 | Does `SetAlpha` on a bar work in combat (bar fade)? | **Yes.** In combat (lockdown true), `MultiBarBottomLeft:SetAlpha(0.4)` worked and read back 0.4, and `SetAlpha(1)` 2 s later too. The bar fade (#10) can ship. | 70374 |
 | 6 | Hearthstone: does its use spell's `GetSpellCooldownDuration` give a clean swipe in combat? | **Yes.** `C_Item.GetItemSpell(6948)` is Hearthstone's spell 8690. In combat, `C_Spell.GetSpellCooldownDuration(8690)` returned a plain duration object (not secret), and `SetCooldownFromDurationObject` applied it without error. `C_Container.GetItemCooldown` was plain too (the GCD: 1.485 s). The Utility bar uses the duration object. | 70374 |
-| 7 | Taint: anything blamed on GABProbe in taint.log? | Not measured: `Logs\taint.log` is unchanged since 2026-09-28, so taint logging wasn't on for the session. Set `/console taintLog 1` and check that the file's date changes. | 70374 |
+| 7 | Taint: anything blamed on GABProbe or the skin in taint.log? | **Nothing found.** No line in `Logs\taint.log` names GlassActionBars or GABProbe. Its newest entries (2026-10-14 18:48) blame Apotheca. Session 2 (23:22-23:26) ran with taint logging on, but the file wasn't rewritten. The only errors in that session were the tooltip-hover errors that `taintLog` 1 or 2 causes on this client by itself (the owner's finding from another addon). | 70374 |
 | 8 | (optional) Do attribute and state drivers work? (porting guide vs Bartender4) | open | |
 
 ## Session 1 (2026-10-14, 70374): regions
@@ -77,4 +78,21 @@ The probe's saved log, read off disk: fight 00:32:39-00:33:07.
 - At 70374 (upstream `forever` 735496d, identical to 70338 for these files), line 151 is `StanceBar:Update()`.
 - Neither the skin nor the probe assigns `StanceBar` or its `Update`. The probe post-hooks `StanceBar.Update` with `hooksecurefunc`, and later counts show it called normally.
 - No installed addon writes either name; Leatrix Plus only reparents `StanceBar`.
-- Open: bisect it (GABProbe off, then GlassActionBars off, then Leatrix Plus off) and page with the binding.
+- Not reproduced in session 2 (below): everything was enabled, no error appeared, and `StanceBar:Update` ran normally 10-13 times. The bisect needs the error, so it wasn't run. If it comes back, bisect then: GABProbe off, then GlassActionBars off, then Leatrix Plus off, paging with the binding each time.
+
+## Session 2 (2026-10-14, 70374): the skin
+
+`main` at e3da420 (the skin, the bag bar and the micro menu) with GABProbe, on a level 5 druid; taint logging on.
+- **Screenshot (23:22):** as intended. Every action bar, the bag bar and the micro menu are on glass:
+  - filled slots have the bright rim, empty ones the faint rim;
+  - the hotkey and count text is in the glass font;
+  - the gryphons and frame art are gone;
+  - the micro buttons keep their icons and their disabled state;
+  - empty bag slots keep their silhouette;
+  - Apotheca's own bar is untouched.
+- **Secrets:** at rest and in combat (23:26:01 and 23:26:09), `HasAction` and `C_ActionBar.HasAction` were plain, and so was `GetPetActionInfo(1)`. That was the default attack command, with no pet out. Stance wasn't sampled: no form.
+- **Writer counts:**
+  - fight 23:26:00-23:26:14: `UpdateDividers` / `UpdateShownButtons` 22x (4 in combat), `PetActionBar:Update` 20x (10 in combat), `StanceBar:Update` 10x;
+  - fight 23:26:20-23:26:21: too short, so its samples were skipped;
+  - `UpdateButtonArt` and `SetButtonState` never fired.
+- **Errors:** only the tooltip-hover errors that `taintLog` causes by itself; none from the addon, and no paging error.
