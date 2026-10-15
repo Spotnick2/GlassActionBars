@@ -243,6 +243,17 @@ function Methods.CreateFontString(w, name)
 end
 function Methods.GetRegions(w) return unpack(w._regions or {}) end
 function Methods.GetObjectType(w) return w._type end
+-- The client's widget hierarchy, as far as the addon asks.
+local KIND_OF = { CheckButton = "Button", Button = "Frame", Cooldown = "Frame", StatusBar = "Frame",
+    Slider = "Frame", GameTooltip = "Frame", EditBox = "Frame", ScrollFrame = "Frame" }
+function Methods.IsObjectType(w, t)
+    local k = w._type
+    while k do
+        if k == t then return true end
+        k = KIND_OF[k]
+    end
+    return false
+end
 -- A button's state textures: Set*Texture(file) makes one, Get*Texture reads it.
 for _, state in ipairs({ "Normal", "Pushed", "Highlight", "Checked", "Disabled" }) do
     local key = "_" .. state:lower() .. "Texture"

@@ -146,19 +146,18 @@ Release v0.1.0 following `References/RELEASING.md`: an alpha tag first, then `To
   - All of it is coalesced to one pass per frame, and deferred to after combat when needed.
 - **Geometry match:** icon size and padding from the target bar's Edit Mode settings. Port `API.ActionBarLayout(n)` and `ACTION_BARS` from `Apotheca/ApothecaCompat.lua`. Geometry is passed in the **client frame's own units**: `size` and `padding` scaled by `UIParent:GetEffectiveScale() / frame:GetEffectiveScale()`; `rows` (a count) and `orientation` (`Enum.ActionBarOrientation`) raw.
 
-**`API.lua`** (`GlassActionBars.API_VERSION = 1`; same rules as AltStable `PublicAPI.lua`)
-- **`RegisterBar{ id, label, frame, Layout(geom), Buttons(), OnHosted(isHosted) }`.**
-  - `OnHosted(true)` is called before the host's first `Layout`. From then on the provider stops its own position, drag, scale and layout writers.
+**`API.lua`** (`GlassActionBars.PUBLIC_API_VERSION = 1`, checked with `==`; same rules as AltStable `PublicAPI.lua`, whose name it shares because `GlassActionBars.API` is the client adapter. The contract is `docs/PUBLIC-API.md`; Codex review of #8.)
+- **`RegisterBar{ id, label, frame, Layout(geom), OnHosted(isHosted), default }`.** No `Buttons()`: the provider calls `SkinButton` itself.
+  - `OnHosted(true)` is called before the host's first `Layout`. From then on the provider stops its own position, drag, scale and geometry polling, but keeps arranging its own contents (and calls `RequestLayout` when they change).
   - `OnHosted(false)` is called after the host lets go, when the bar is undocked in options or GAB is disabled. The provider then restores its own saved position and layout.
-  - `Layout({size, padding, orientation, rows})` is always called out of combat.
-  - The host skins whatever `Buttons()` returns through `SkinButton(btn, regions)`.
+  - `Layout(geom)` is called on every placement, always out of combat: `{size, padding, orientation, rows}` when matching, `nil` ("your own geometry") otherwise.
 - **`RegisterButton{ id, label, icon, OnClick, binding, tooltip, IsEnabled, OnHosted(isHosted) }`.**
   - The host creates an insecure button in the Utility bar, and the user orders it like a native action.
   - `OnHosted` reports whether the button is **actually shown**: it is false when the Utility bar is off or the button is hidden. Portal Roulette hides its own launcher only while it is true.
   - Clicks are refused in combat when `IsEnabled()` says so.
   - Hotkey text comes from `GetBindingKey(binding)`, refreshed on `UPDATE_BINDINGS`. The provider keeps owning the binding.
 - **`RequestLayout(id)`:** coalesced and non-recursive. A call from inside `Layout` is ignored.
-- **`SkinButton(btn, regions)`:** takes explicit regions `{icon, cooldown, count, hotkey}` and assumes no Blizzard fields.
+- **`SkinButton(btn, regions)`:** takes explicit regions (`icon, normal, pushed, highlight` Textures; `hotkey, count, name` FontStrings; `cooldown`), each checked against its type, and assumes no Blizzard fields. Queued in combat. Not undone on undock.
 - **Registration:** accepted at any time and queued until login. Duplicate ids are ignored, required fields are validated, and every provider callback runs under `xpcall(geterrorhandler)`.
 - **Deferred:** providers handing over their own secure frames, and a `THEME_CHANGED` callback.
 
@@ -202,7 +201,7 @@ Release v0.1.0 following `References/RELEASING.md`: an alpha tag first, then `To
 
 ## Phase 3: provider adoption (separate issue and PR in each repo)
 
-Each provider adds `## OptionalDeps: GlassActionBars` and runs `if GlassActionBars and (GlassActionBars.API_VERSION or 0) >= 1` at `PLAYER_LOGIN`.
+Each provider adds `## OptionalDeps: GlassActionBars` and runs `if GlassActionBars and GlassActionBars.PUBLIC_API_VERSION == 1` at `PLAYER_LOGIN`.
 
 - **Portal Roulette:**
   - `RegisterButton{ id="portalroulette", OnClick=PortalRoulette_Toggle, binding="PORTALROULETTE_TOGGLE", OnHosted=... }`.

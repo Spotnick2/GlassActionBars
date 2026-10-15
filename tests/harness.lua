@@ -98,6 +98,7 @@ function loadAddon(opts)
     end
     if opts.db then GlassActionBarsDB = opts.db end
     WoW.fire("ADDON_LOADED", "GlassActionBars")
+    if opts.beforeLogin then opts.beforeLogin(GlassActionBars) end   -- e.g. a provider's own files
     WoW.fire("PLAYER_LOGIN")
     WoW.fire("PLAYER_ENTERING_WORLD", opts.initialLogin ~= false, false)
     WoW.tick()
