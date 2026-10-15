@@ -56,8 +56,10 @@ end
 -- at the top), and on this client a gradient texture ignores SetAlpha:
 -- /gab inspect read the wash at alpha 1.00 right after SetAlpha(0) (owner's
 -- session, 2026-10-13), where every plain texture reads back what was set.
--- So the wash is repainted through its gradient, and the tint through its
--- colour; each is hidden outright at zero, so nothing is left to draw.
+-- So the wash goes through Glass.SetWash (LibGlass r7, from that finding:
+-- LibGlass#47), which paints its gradient and records the peak a disable
+-- dims from, and the tint through its colour; each is hidden outright at
+-- zero, so nothing is left to draw.
 local function paint(s, name, tint)
     local g, p = s.g, Theme.PRESETS[name]
     local wash, body = 1, 1
@@ -69,9 +71,7 @@ local function paint(s, name, tint)
     g.tint:SetShown(a > 0)
     if g.grain then g.grain:SetAlpha(0) end   -- no grain at button size (LibGlass Pill's rule)
     if g.wash then
-        local top = (Glass.STYLE.wash or 0) * (p.wash or 1) * wash
-        g.wash:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, top))
-        g.wash:SetShown(top > 0)
+        Glass.SetWash(g, math.min(1, (Glass.STYLE.wash or 0) * (p.wash or 1) * wash))
     end
 end
 

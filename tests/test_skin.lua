@@ -144,6 +144,13 @@ check(wash:IsShown(), "  shown while above zero")
 GAB.Settings.SetTune("wash", 0)
 check(not wash:IsShown(), "tune wash 0: the haze hidden outright")
 GAB.Settings.SetTune("wash", 0.5)
+-- Through Glass.SetWash (LibGlass r7): a disable dims the tuned wash, not the
+-- built one, and enabling gives the tuned wash back.
+local g1 = T.skins[ActionButton1].g
+Glass.SetSurfaceEnabled(g1, false)
+check(close(wash._gradient[3].a, Glass.STYLE.wash * 0.5 * Glass.STYLE.disabledAlpha), "a disable dims the tuned wash")
+Glass.SetSurfaceEnabled(g1, true)
+check(close(wash._gradient[3].a, Glass.STYLE.wash * 0.5), "  and enabling restores it")
 GAB.Settings.SetTune("body", 0.5)
 check(close(tint._color[4], Glass.STYLE.tint[4] * 0.5), "tune body: the tint's alpha, live")
 eq(GAB.Settings.SetTune("rim", 2), false, "out of range refused")
