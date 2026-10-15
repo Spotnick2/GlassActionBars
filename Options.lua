@@ -203,6 +203,9 @@ end)
 -- after it registers (a provider may load after the page was first opened).
 local SIDE_LABELS = { LEFT = "Left", RIGHT = "Right", TOP = "Top", BOTTOM = "Bottom" }
 local ALIGN_LABELS = { START = "Start", CENTER = "Center", END = "End" }
+-- A section's height: its heading, four rows of radios and the checkbox, with
+-- the space above the next one. Generous: a little slack only adds scroll.
+Options.DOCK_SECTION_HEIGHT = 190
 Options.dockPage = Options.AddPage("Dock", function(page, title)
     local Dock = GAB.Dock
     local note = label(page, "A smart bar docks beside one of Edit Mode's Action Bars 1-8 and follows it when the "
@@ -213,8 +216,37 @@ Options.dockPage = Options.AddPage("Dock", function(page, title)
     local empty = label(page, "No smart bars yet: the Utility bar and addons that dock their bars appear here.",
         "GameFontDisable")
     empty:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
-    local sections, last = {}, note
-    Options._test.dockSections = sections
+    -- The sections scroll: the Settings canvas is a fixed size and supplies no
+    -- scrolling, and any number of providers may register (Codex review of
+    -- #24). GlassUnitFrames' measured recipe: UIPanelScrollFrameTemplate, the
+    -- mouse wheel without it, the bar shown only when there is a range.
+    local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -8)
+    scroll:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -26, 8)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(560, 1)
+    scroll:SetScrollChild(content)
+    if not scroll.ScrollBar then
+        scroll:EnableMouseWheel(true)
+        scroll:SetScript("OnMouseWheel", function(self, delta)
+            local range = API.Plain(self:GetVerticalScrollRange()) or 0
+            local v = API.Plain(self:GetVerticalScroll()) or 0
+            self:SetVerticalScroll(math.max(0, math.min(range, v - delta * 40)))
+        end)
+    else
+        scroll:HookScript("OnScrollRangeChanged", function(self, _, yrange)
+            self.ScrollBar:SetShown((API.Plain(yrange) or API.Plain(self:GetVerticalScrollRange()) or 0) > 0)
+        end)
+    end
+    scroll:SetScript("OnSizeChanged", function(_, w)
+        w = API.Plain(w)
+        if type(w) == "number" and w > 0 then content:SetWidth(w) end
+    end)
+    local top = CreateFrame("Frame", nil, content)
+    top:SetSize(1, 1)
+    top:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+    local sections, last, built = {}, top, 0
+    Options._test.dockSections, Options._test.dockContent = sections, content
 
     local function row(parent, anchor, text, choices, id, key, across)
         local name = label(parent, text)
@@ -226,9 +258,9 @@ Options.dockPage = Options.AddPage("Dock", function(page, title)
 
     local function section(cl)
         local id = cl.id
-        local f = CreateFrame("Frame", nil, page)
+        local f = CreateFrame("Frame", nil, content)
         f:SetSize(1, 1)
-        f:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -16)
+        f:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, built == 0 and -4 or -16)
         local head = label(f, cl.label, "GameFontNormal")
         head:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
         local s = { frame = f }
@@ -250,6 +282,8 @@ Options.dockPage = Options.AddPage("Dock", function(page, title)
         s.match = Options.checkbox(f, r4, "Match the bar's button size, spacing and rows",
             function() return Dock.Setting(id, "match") end, function(on) GAB.Settings.SetDock(id, "match", on) end)
         last = s.match
+        built = built + 1
+        content:SetHeight(built * Options.DOCK_SECTION_HEIGHT + 16)   -- the scroll range follows
         return s
     end
 
