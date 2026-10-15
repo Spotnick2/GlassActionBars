@@ -174,6 +174,14 @@ function Methods.SetFrameLevel(w, l) w._level = l end
 function Methods.SetFrameStrata(w, s) w._strata = s end
 function Methods.GetFrameStrata(w) return w._strata or "MEDIUM" end
 function Methods.EnableMouse(w, v) w._mouse = v end
+-- The pointer: WoW.hover[frame] = true (or a secret, as IsMouseOver's
+-- SecretWhenAnchoringSecret allows) says it is over that frame.
+WoW.hover = {}
+function Methods.IsMouseOver(w)
+    local v = WoW.hover[w]
+    if v == nil then return false end
+    return v
+end
 -- A button's enabled state (enabled until told otherwise).
 function Methods.Enable(b) b._disabled = false end
 function Methods.Disable(b) b._disabled = true end
@@ -383,9 +391,29 @@ Settings = {
         table.insert(WoW.categories, c)
         return c
     end,
+    RegisterCanvasLayoutSubcategory = function(parent, frame, name)
+        local c = Settings.RegisterCanvasLayoutCategory(frame, name)
+        c.parent = parent
+        return c
+    end,
     RegisterAddOnCategory = function(c) c.registered = true end,
     OpenToCategory = function(id) WoW.openedCategory = id end,
 }
+
+-- EventRegistry (CallbackRegistryMixin): callbacks by event name, run by
+-- WoW.trigger as TriggerEvent runs them, with the owner first.
+WoW.callbacks = {}
+EventRegistry = {}
+function EventRegistry:RegisterCallback(event, fn, owner)
+    WoW.callbacks[event] = WoW.callbacks[event] or {}
+    table.insert(WoW.callbacks[event], { fn, owner })
+end
+function WoW.trigger(event, ...)
+    for _, c in ipairs(WoW.callbacks[event] or {}) do c[1](c[2], ...) end
+end
+
+-- Quick Keybind mode (Blizzard_QuickKeybind): WoW.quickKeybind.
+function KeybindFrames_InQuickKeybindMode() return WoW.quickKeybind == true end
 
 -- The client's secure hook replaces t[name] with a wrapper: the sanctioned way
 -- to hook a Blizzard method. WoW.hooked records it, so the "no field written"
@@ -576,6 +604,11 @@ PetActionBar = bar("PetActionBar")
 rawset(PetActionBar, "Update", function() end)
 for i = 1, NUM_PET_ACTION_SLOTS do actionButton("PetActionButton" .. i, PetActionBar, true).index = i end
 
+-- The spell flyout (SpellFlyout.xml): hidden until a flyout button opens it;
+-- FlyoutPopupMixin:AttachToButton reparents it to that button (Flyout.lua:218).
+SpellFlyout = CreateFrame("Frame", "SpellFlyout", UIParent)
+SpellFlyout._shown = false
+
 --------------------------------------------------------------------------------
 -- The bag bar (Blizzard_MainMenuBarBagButtons, Shared + Camelot): BagsBar with
 -- its BorderArt and divider pools, re-laid out by Layout; the slots are item
@@ -662,9 +695,11 @@ function WoW.fireAllRegistered()
     for e in pairs(seen) do WoW.fire(e) end
 end
 
--- One rendered frame: OnUpdate on every visible frame.
+-- One rendered frame: the clock (GetTime) moves on by `elapsed`, then OnUpdate
+-- runs on every visible frame.
 function WoW.tick(elapsed)
     elapsed = elapsed or 0.02
+    WoW.now = (WoW.now or 0) + elapsed
     local list = {}
     for _, w in ipairs(WoW.frames) do list[#list + 1] = w end
     for _, w in ipairs(list) do

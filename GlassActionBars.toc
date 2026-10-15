@@ -15,6 +15,7 @@ Buttons.lua
 Bars.lua
 Bags.lua
 MicroMenu.lua
+Fade.lua
 Inspect.lua
 Options.lua
 GlassActionBars.lua

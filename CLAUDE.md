@@ -16,10 +16,9 @@ them: a Utility bar ported from Apotheca's profession bar, and a public API so o
 [docs/PLAN.md](docs/PLAN.md); the mockup is [docs/mockups/action-bars.png](docs/mockups/action-bars.png).
 Measured results go in `docs/FOREVER-PROBE.md`.
 
-**Status: v0.1.0 in progress.** The skin, the bag bar and the micro menu are on `main` and were
-checked in game (probe sessions 1-2, docs/FOREVER-PROBE.md); the release (#6) is next. Still
-open: stance secrets (needs a character with a form), pet spell-slot secrets with an active pet,
-and the per-operation hook trials.
+**Status: v0.1.0 released (2026-10-15); v0.2.0 in progress**, starting with the bar fade (#10).
+Still open from the probe: stance secrets (needs a character with a form), pet spell-slot secrets
+with an active pet, and the per-operation hook trials.
 
 ## The UI contract (non-negotiable)
 
@@ -27,9 +26,11 @@ and the per-operation hook trials.
 secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs state drivers.
 - Keep `ActionButton1-12`, `MultiBar*Button1-12` (bars 1-7), `StanceButton*`, `PetActionButton*`.
 - Only `hooksecurefunc`, `HookScript`, method calls on regions (`SetAlpha`, `SetFont`, ...) and
-  addon-owned frames. Never reassign a Blizzard global, never replace a Blizzard method, never write
-  a field onto a Blizzard frame (ForeverUI's wrappers tainted `SetAttribute` in combat). Per-button
-  state lives in weak side tables. Reading a template's `parentKey` child is fine.
+  addon-owned frames; the one exception is the bar fade's `SetAlpha` on the ten bar frames (not
+  protected, measured in combat: docs/FOREVER-PROBE.md Q5). Never reassign a Blizzard global,
+  never replace a Blizzard method, never write a field onto a Blizzard frame (ForeverUI's wrappers
+  tainted `SetAttribute` in combat). Per-button state lives in weak side tables. Reading a
+  template's `parentKey` child is fine.
 - Stock art is faded with `SetAlpha(0)`, never `Hide()`n, never reparented, and re-faded after each
   Blizzard writer (`UpdateButtonArt` resets the pushed atlas; `MainActionBar:UpdateDividers`
   acquires pooled dividers).
@@ -43,8 +44,8 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 ## Layout
 
 TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Theme.lua` ->
-`Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Inspect.lua` -> `Options.lua` ->
-`GlassActionBars.lua`. Feature files load between
+`Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Fade.lua` -> `Inspect.lua` ->
+`Options.lua` -> `GlassActionBars.lua`. Feature files load between
 `Glass.lua` and `Options.lua`.
 
 - **`Compat.lua`**: `GlassActionBars.API`, the only route to client APIs that moved or may be
@@ -73,10 +74,16 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `BackgroundArt`. The micro buttons are left alone: their bronze frame is baked into each icon
   atlas. The panel is its own frame (MicroMenu flattens its children's render layers), one level
   under, rims at its own level, shown only while MicroMenu is home in `MicroMenuContainer`.
+- **`Fade.lua`**: the bar fade (#10), per bar off / mouseover / combat, one faded alpha. One
+  addon-owned driver (OnUpdate only while a bar fades) polls the reasons a bar is shown (pointer,
+  the main bar's page arrows, its flyout, the action and pet drag grids, Edit Mode, Quick Keybind,
+  the spellbook / professions book, a fight) every 0.1 s; a reveal snaps to 1, fade-out starts
+  0.25 s later and runs 0.2 s. `SetAlpha` on the bar frame only; a bar set back to off gets 1 once.
 - **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using
-  `Options.radios` (choices) and `Options.checkbox` (on/off).
+  `Options.radios` (choices, stacked or in a row) and `Options.checkbox` (on/off); a sub-page is
+  `Options.AddPage(name, function(page, title) ... end)` (the Bar fade page).
 - **`GlassActionBars.lua`**: bootstrap, saved settings (only what the player set is saved), the
   `Settings` helpers, `/gab`.
 - **`Tools/GABProbe/`**: the throwaway measurement addon (`/gabprobe help`), results in
