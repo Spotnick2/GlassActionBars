@@ -153,12 +153,16 @@ jobs:
           test -f "$zip" || { echo "no $zip"; exit 1; }
           echo "ZIP=$zip" >> "$GITHUB_ENV"
 
-      # From the tag's "## vX.Y.Z" heading up to the next "## " heading.
+      # From the tag's "## vX.Y.Z" heading up to the next "## " heading. A
+      # pre-release tag (vX.Y.Z-alpha1, the packaging trial) uses its own section
+      # if there is one, else the vX.Y.Z section it is a trial of.
       - name: Release notes from the tag's changelog section
         run: |
-          tr -d '\r' < CHANGELOG.md |
-            awk -v h="## $TAG" '$0 == h { on = 1; next } on && /^## / { exit } on' > notes.md
-          grep -q '[^[:space:]]' notes.md || { echo "CHANGELOG.md has no '## $TAG' section"; exit 1; }
+          section() { tr -d '\r' < CHANGELOG.md |
+            awk -v h="## $1" '$0 == h { on = 1; next } on && /^## / { exit } on'; }
+          section "$TAG" > notes.md
+          grep -q '[^[:space:]]' notes.md || section "${TAG%%-*}" > notes.md
+          grep -q '[^[:space:]]' notes.md || { echo "CHANGELOG.md has no '## $TAG' or '## ${TAG%%-*}' section"; exit 1; }
           cat notes.md
 
       - name: Create the GitHub Release
