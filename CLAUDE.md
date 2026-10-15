@@ -16,8 +16,9 @@ them: a Utility bar ported from Apotheca's profession bar, and a public API so o
 [docs/PLAN.md](docs/PLAN.md); the mockup is [docs/mockups/action-bars.png](docs/mockups/action-bars.png).
 Measured results go in `docs/FOREVER-PROBE.md`.
 
-**Status: v0.1.0 in progress.** The probe (`Tools/GABProbe`) and the skin are written; the skin
-awaits the probe's answers in game (docs/FOREVER-PROBE.md) before it ships.
+**Status: v0.1.0 in progress.** The skin, the bag bar and the micro menu are on `main` and were
+checked in game (probe sessions 1-2, docs/FOREVER-PROBE.md); the release (#6) is next. Still
+open: stance secrets (needs a character with a form) and the per-operation hook trials.
 
 ## The UI contract (non-negotiable)
 
