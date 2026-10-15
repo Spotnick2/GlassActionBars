@@ -72,8 +72,17 @@ function Fade.Mode(name)
     return (t and t[name]) or "off"
 end
 
+-- IsShown / IsVisible may be secret (SecretReturnsForAspect Shown): an
+-- unreadable answer counts as shown, so the bar stays opaque rather than
+-- vanishing under a pointer the fade can't see.
+local function shown(f, method)
+    local v = f[method](f)
+    if API.IsSecret(v) then return true end
+    return v == true
+end
+
 local function over(f)
-    if not f or not f:IsVisible() then return false end
+    if not f or not shown(f, "IsVisible") then return false end
     local v = f:IsMouseOver()
     if API.IsSecret(v) then return true end
     return v == true
@@ -89,7 +98,7 @@ local function everyBar()
     end
     for _, name in ipairs({ "PlayerSpellsFrame", "ProfessionsBookFrame" }) do
         local f = rawget(_G, name)   -- load on demand: nil until opened once
-        if f and f:IsShown() then return true end
+        if f and shown(f, "IsShown") then return true end
     end
     return false
 end
@@ -100,7 +109,7 @@ local function wanted(bar, s, all)
     if over(bar) then return true end
     if bar == rawget(_G, "MainActionBar") and over(bar.ActionBarPageNumber) then return true end
     local fly = rawget(_G, "SpellFlyout")
-    return fly ~= nil and fly:IsShown() and owner[fly:GetParent()] == bar
+    return fly ~= nil and shown(fly, "IsShown") and owner[fly:GetParent()] == bar
 end
 
 local function write(bar, s, a)

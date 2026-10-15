@@ -147,8 +147,15 @@ function Methods.Hide(w)
     if was and w._scripts.OnHide then w._scripts.OnHide(w) end
 end
 function Methods.SetShown(w, v) if v then Methods.Show(w) else Methods.Hide(w) end end
-function Methods.IsShown(w) return w._shown end
+-- WoW.secretShown[frame] = true: IsShown / IsVisible answer a secret
+-- (SecretReturnsForAspect Shown).
+WoW.secretShown = {}
+function Methods.IsShown(w)
+    if WoW.secretShown[w] then return WoW.Secret("IsShown") end
+    return w._shown
+end
 function Methods.IsVisible(w)
+    if WoW.secretShown[w] then return WoW.Secret("IsVisible") end
     local p = w
     while p do if not p._shown then return false end; p = p._parent end
     return true
