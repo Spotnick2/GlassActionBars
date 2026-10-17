@@ -104,6 +104,33 @@ function API.ClassColor()
     return r, g, b
 end
 
+-- Whether the player knows a spell: true, false, or nil when the client won't
+-- say (Apotheca's, measured on 70334: C_SpellBook.IsSpellKnown agrees with
+-- IsPlayerSpell on every profession spell; only the current rank is known).
+function API.SpellKnown(spellID)
+    local ok, known = pcall(C_SpellBook.IsSpellKnown, spellID)
+    known = ok and API.Plain(known)
+    if type(known) ~= "boolean" then return nil end
+    return known
+end
+
+-- How many of an item the bags hold; 0 when unreadable.
+function API.ItemCount(itemID)
+    local ok, n = pcall(C_Item.GetItemCount, itemID)
+    n = ok and API.Plain(n)
+    return type(n) == "number" and n or 0
+end
+
+-- Whether the player has an aura: true, false, or nil (unknown: the read
+-- threw, as aura reads have been measured to (Apotheca's probe), or the
+-- answer was secret). Nothing is compared before the secret check.
+function API.HasPlayerAura(spellID)
+    if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return nil end
+    local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellID)
+    if not ok or API.IsSecret(aura) then return nil end
+    return aura ~= nil
+end
+
 -- A frame from a template, and whether the template really applied: a missing
 -- template doesn't throw, it returns a bare frame, so `proof` names a field
 -- the template makes (GlassUnitFrames' API.SafeFrame).

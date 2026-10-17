@@ -308,6 +308,56 @@ Options.dockPage = Options.AddPage("Dock", function(page, title)
     end
 end)
 
+-- The Utility bar (#9): on or off, then each entry (the actions and the
+-- Camping group) with a show checkbox and up/down buttons, in the player's
+-- order. The rows are re-anchored on every show, so a move shows at once.
+Options.UTILITY_ROW = 26
+Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
+    local U = GAB.Utility
+    local enabled = Options.checkbox(page, title, "Show the Utility bar",
+        function() return U.Enabled() end, GAB.Settings.SetUtilityEnabled)
+    local note = label(page, "A button shows only when the character can use it: a profession it knows, an item in "
+        .. "its bags. Campfire kits show whenever carried, the other camping items only near a campfire. Key "
+        .. "bindings: Esc > Options > Keybindings > Glass Action Bars. Where the bar sits: the Dock page.",
+        "GameFontHighlightSmall")
+    note:SetPoint("TOPLEFT", enabled, "BOTTOMLEFT", 0, -8)
+    note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
+    note:SetJustifyH("LEFT")
+    local content, top = Options.scrollArea(page, note)
+    local rows, sync = {}, nil
+    for _, key in ipairs(U.ORDER_KEYS) do
+        local r = CreateFrame("Frame", nil, content)
+        r:SetSize(420, Options.UTILITY_ROW)
+        local cb = CreateFrame("CheckButton", nil, r, "UICheckButtonTemplate")
+        cb:SetSize(24, 24)
+        cb:SetPoint("LEFT", r, "LEFT", 0, 0)
+        local text = label(r, key == "camping" and "Camping items" or U.BY_KEY[key].label)
+        text:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+        cb:SetScript("OnClick", function() GAB.Settings.SetUtilityShown(key, cb:GetChecked() == true); sync() end)
+        local moves = {}
+        for i, m in ipairs({ { -1, "Up" }, { 1, "Down" } }) do
+            local b = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+            b:SetSize(52, 20)
+            b:SetText(m[2])
+            b:SetPoint("LEFT", r, "LEFT", 300 + (i - 1) * 56, 0)
+            b:SetScript("OnClick", function() GAB.Settings.MoveUtility(key, m[1]); sync() end)
+            moves[i] = b
+        end
+        rows[key] = { frame = r, check = cb, up = moves[1], down = moves[2] }
+    end
+    content:SetHeight(#U.ORDER_KEYS * Options.UTILITY_ROW + 16)
+    sync = function()
+        for i, key in ipairs(U.Order()) do
+            local row = rows[key]
+            row.frame:ClearAllPoints()
+            row.frame:SetPoint("TOPLEFT", top, "TOPLEFT", 0, -(i - 1) * Options.UTILITY_ROW)
+            row.check:SetChecked(U.IsShown(key))
+        end
+    end
+    building[#building + 1] = sync
+    Options._test.utilityRows = rows
+end)
+
 -- Called once at PLAYER_LOGIN by GlassActionBars.lua.
 function Options.Register()
     if category or not (Settings and Settings.RegisterCanvasLayoutCategory) then return end

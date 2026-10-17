@@ -49,7 +49,9 @@ function Deploy-Addon {
     # Our own textures ship too (Media\*.tga).
     $media = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot "Media") -Filter *.tga -File -ErrorAction SilentlyContinue |
         ForEach-Object { "Media\" + $_.Name })
-    $files = @("GlassActionBars.toc", "LICENSE") + $lua + $media
+    # Bindings.xml: the client reads it from the addon folder (the Utility
+    # bar's key bindings); the TOC doesn't list it.
+    $files = @("GlassActionBars.toc", "LICENSE", "Bindings.xml") + $lua + $media
     foreach ($f in $files) {
         $src = Join-Path $RepoRoot $f
         $to = Join-Path $dest $f
