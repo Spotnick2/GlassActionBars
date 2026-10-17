@@ -199,29 +199,14 @@ Options.fadePage = Options.AddPage("Bar fade", function(page, title)
     Options._test.fadeAlpha = group
 end)
 
--- Dock (#7): a section per registered smart bar, added on the first show
--- after it registers (a provider may load after the page was first opened).
-local SIDE_LABELS = { LEFT = "Left", RIGHT = "Right", TOP = "Top", BOTTOM = "Bottom" }
-local ALIGN_LABELS = { START = "Start", CENTER = "Center", END = "End" }
--- A section's height: its heading, four rows of radios and the checkbox, with
--- the space above the next one. Generous: a little slack only adds scroll.
-Options.DOCK_SECTION_HEIGHT = 190
-Options.dockPage = Options.AddPage("Dock", function(page, title)
-    local Dock = GAB.Dock
-    local note = label(page, "A smart bar docks beside one of Edit Mode's Action Bars 1-8 and follows it when the "
-        .. "bar moves or changes size. Changes made in combat apply when the fight ends.", "GameFontHighlightSmall")
-    note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-    note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
-    note:SetJustifyH("LEFT")
-    local empty = label(page, "No smart bars yet: the Utility bar and addons that dock their bars appear here.",
-        "GameFontDisable")
-    empty:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
-    -- The sections scroll: the Settings canvas is a fixed size and supplies no
-    -- scrolling, and any number of providers may register (Codex review of
-    -- #24). GlassUnitFrames' measured recipe: UIPanelScrollFrameTemplate, the
-    -- mouse wheel without it, the bar shown only when there is a range.
+-- A scrolling area filling a page below `anchor`: the Settings canvas is a
+-- fixed size and supplies no scrolling. GlassUnitFrames' measured recipe:
+-- UIPanelScrollFrameTemplate, the mouse wheel without it, the bar shown only
+-- when there is a range. Returns the scroll child (set its height as content
+-- is added) and a 1x1 frame at its top-left to anchor the first control to.
+function Options.scrollArea(page, anchor)
     local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -8)
+    scroll:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -8)
     scroll:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -26, 8)
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(560, 1)
@@ -245,6 +230,28 @@ Options.dockPage = Options.AddPage("Dock", function(page, title)
     local top = CreateFrame("Frame", nil, content)
     top:SetSize(1, 1)
     top:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+    return content, top
+end
+
+-- Dock (#7): a section per registered smart bar, added on the first show
+-- after it registers (a provider may load after the page was first opened).
+local SIDE_LABELS = { LEFT = "Left", RIGHT = "Right", TOP = "Top", BOTTOM = "Bottom" }
+local ALIGN_LABELS = { START = "Start", CENTER = "Center", END = "End" }
+-- A section's height: its heading, four rows of radios and the checkbox, with
+-- the space above the next one. Generous: a little slack only adds scroll.
+Options.DOCK_SECTION_HEIGHT = 190
+Options.dockPage = Options.AddPage("Dock", function(page, title)
+    local Dock = GAB.Dock
+    local note = label(page, "A smart bar docks beside one of Edit Mode's Action Bars 1-8 and follows it when the "
+        .. "bar moves or changes size. Changes made in combat apply when the fight ends.", "GameFontHighlightSmall")
+    note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
+    note:SetJustifyH("LEFT")
+    local empty = label(page, "No smart bars yet: the Utility bar and addons that dock their bars appear here.",
+        "GameFontDisable")
+    empty:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
+    -- The sections scroll: any number of providers may register (Codex review of #24).
+    local content, top = Options.scrollArea(page, note)
     local sections, last, built = {}, top, 0
     Options._test.dockSections, Options._test.dockContent = sections, content
 
