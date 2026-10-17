@@ -21,7 +21,8 @@ GlassActionBarsDB = "junk"
 check(type(GAB._test.ensureDefaults()) == "table", "a corrupt save starts over")
 
 -- The options page: registered once at login, built on first show.
-eq(#WoW.categories, 3, "the options page and its sub-pages")
+eq(#WoW.categories, 4, "the options page and its sub-pages")
+eq(WoW.categories[4].name, "Utility bar", "  the Utility bar sub-page")
 eq(WoW.categories[1].name, "Glass Action Bars", "  named after the addon")
 check(WoW.categories[1].registered, "  registered as an AddOn page")
 eq(WoW.categories[2].name, "Bar fade", "  the Bar fade sub-page")

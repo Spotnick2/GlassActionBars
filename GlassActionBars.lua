@@ -65,6 +65,31 @@ local function ensureDefaults()
             if next(db.dock) == nil then db.dock = nil end
         end
     end
+    -- Utility bar: a present table stays, even emptied (its absence marks a
+    -- profile Apotheca's settings may still be imported into); only valid
+    -- entries survive in it.
+    if db.utility ~= nil then
+        if type(db.utility) ~= "table" then db.utility = nil else
+            local u, U = db.utility, GAB.Utility
+            if u.enabled ~= nil and type(u.enabled) ~= "boolean" then u.enabled = nil end
+            if u.show ~= nil then
+                if type(u.show) ~= "table" then u.show = nil else
+                    for k, v in pairs(u.show) do
+                        if not U.ValidKey(k) or v ~= false then u.show[k] = nil end
+                    end
+                end
+            end
+            if u.order ~= nil then
+                if type(u.order) ~= "table" then u.order = nil else
+                    local clean, seen = {}, {}
+                    for _, k in ipairs(u.order) do
+                        if U.ValidKey(k) and not seen[k] then clean[#clean + 1] = k; seen[k] = true end
+                    end
+                    u.order = clean
+                end
+            end
+        end
+    end
     if db.fadeAlpha ~= nil and (type(db.fadeAlpha) ~= "number" or not (db.fadeAlpha >= 0 and db.fadeAlpha <= 1)) then
         db.fadeAlpha = nil
     end
@@ -149,6 +174,45 @@ function Settings.SetDock(id, key, value)
     return true
 end
 
+-- The Utility bar's settings table, created by the first change.
+local function utility()
+    local u = rawget(GAB.db, "utility")
+    if type(u) ~= "table" then
+        u = {}
+        GAB.db.utility = u
+    end
+    return u
+end
+
+function Settings.SetUtilityEnabled(on)
+    utility().enabled = on == true
+    GAB.Utility.Reconcile()
+    return true
+end
+
+-- Show or hide one entry of the bar (an action key, or "camping").
+function Settings.SetUtilityShown(key, on)
+    if not GAB.Utility.ValidKey(key) then return false end
+    local u = utility()
+    u.show = u.show or {}
+    if on == false then u.show[key] = false else u.show[key] = nil end   -- only false is stored
+    GAB.Utility.Reconcile()
+    return true
+end
+
+-- Move an entry one place up (-1) or down (1). False at an end.
+function Settings.MoveUtility(key, delta)
+    local order = GAB.Utility.Order()
+    local i
+    for n, k in ipairs(order) do if k == key then i = n end end
+    local j = i and i + delta
+    if not j or j < 1 or j > #order then return false end
+    order[i], order[j] = order[j], order[i]
+    utility().order = order
+    GAB.Utility.Reconcile()
+    return true
+end
+
 -- The skin can't be taken off live: Blizzard set the art we replaced, and
 -- only its own code puts it back. Takes effect at the next /reload.
 function Settings.SetSkin(on)
@@ -194,6 +258,7 @@ local function helpLines()
         "/gab fade [1-8|stance|pet|all off/mouseover/combat] - fade bars until hovered, or out of combat",
         ("/gab fade alpha 0..1 - how faded a faded bar is (%.2f)"):format(db.fadeAlpha),
         "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match on/off] - dock a smart bar to an action bar",
+        "/gab utility on/off - the Utility bar: Hearthstone, professions, camping (" .. onoff(GAB.Utility.Enabled()) .. ")",
         "/gab inspect [button|hide n|show n|restore] - what a button draws, layer by layer",
         "/gab layer <name> off/on - hide one layer on every button, for a look (a /reload undoes it)",
         "/gab options - open the options page",
@@ -301,6 +366,10 @@ local function slash(msg)
         else
             say(usage)
         end
+    elseif cmd == "utility" then
+        if ONOFF[arg] == nil then return say("/gab utility on/off") end
+        Settings.SetUtilityEnabled(ONOFF[arg])
+        say("Utility bar " .. arg .. (InCombatLockdown() and " (when the fight ends)" or ""))
     elseif cmd == "inspect" then
         local sub, n = arg:match("^(%S*)%s*(.-)$")
         if sub == "hide" and tonumber(n) then GAB.Inspect.Hide(tonumber(n))
@@ -352,6 +421,7 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         start("micro", GAB.Micro.Start)
         start("fade", GAB.Fade.Start)
         start("dock", GAB.Dock.Start)
+        start("utility", GAB.Utility.Start)
     elseif event == "PLAYER_ENTERING_WORLD" then
         GAB.Theme.Retry()
         -- arg1 = isInitialLogin. The build warning asks the developer to
