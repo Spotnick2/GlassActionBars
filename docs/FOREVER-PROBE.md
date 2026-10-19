@@ -27,8 +27,18 @@ again.
 - **Another addon anchored the pet bar:** before the owner's Edit Mode save it hung from
   `SwingTimerOffHandFrame` (a swing-timer addon's frame). Follow adopts whatever anchor it finds
   as the base, so it moved correctly from there too.
-- **Not measured:** the stance bar (a hunter has none; it was moved while hidden, harmlessly), and
-  the pet dismissed and summoned out of combat (Next pressed before the bar came back).
+- **The stance bar** (rev 2, the owner's paladin, its one aura on the stance bar, 23:53): moved
+  exactly +120 (`CENTER UIParent CENTER -461.9 -> -341.9`), owner: yes; back at its Edit Mode place
+  the moment Edit Mode opened (589.77 vs 589.77), re-pinned at +120 when it closed; +120 after a UI
+  scale change (effective 0.64 -> 0.80); a layout edited and saved: followed from the new place
+  (+120); edited and discarded: the saved place + 120 (495.3333 vs 495.3333); put back exactly
+  (375.33); after a `/reload` its anchor read back identical (`TOP UIParent TOP -463.0 -642.0`). No
+  blocked action in the three sessions. The fight step was skipped, so the stance bar wasn't
+  clicked in combat after a move; the pet bar's fight (same calls) was.
+- **Not measured:** the pet dismissed and summoned out of combat (Next pressed before the bar came
+  back), and the stance bar in combat (above).
+- Probe flaws in rev 2, fixed in rev 3: a bar hidden after Edit Mode (shown while it's open)
+  failed the place checks, and a step finished by hand while Edit Mode was still open read +0.
 - The probe recorded the start before the pet bar showed and needed the bar visible after the
   reload; rev 2 records at Move and compares anchors after the reload.
 

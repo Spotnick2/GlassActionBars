@@ -260,7 +260,9 @@ local function displacement()
 end
 
 -- Every shown bar MOVE from its place (a bar snapped to the other one is skipped).
+local editModeShown
 local function moved()
+    if editModeShown() then return false, "Edit Mode is still open: close it, then Retry" end
     local d, text = displacement()
     if not d then return false, text end
     local F, any = follow(), false
@@ -275,7 +277,7 @@ local function moved()
     return true, text
 end
 
-local function editModeShown()
+function editModeShown()
     local f = rawget(_G, "EditModeManagerFrame")
     local v = f and f:IsShown()
     return not secret(v) and v == true
@@ -283,10 +285,11 @@ end
 
 local L0, L1 = {}, {}   -- the bars' places at the start; the saved layout's
 local function near(a, b) return a ~= nil and b ~= nil and math.abs(a - b) <= 1 end
+-- (A bar hidden now is skipped: Edit Mode shows bars that are hidden outside it.)
 local function atPlaces(places)
     local now, parts, ok = lefts(), {}, true
     for _, name in ipairs(BARS) do
-        if places[name] then
+        if places[name] and now[name] then
             parts[#parts + 1] = ("%s %s vs %s"):format(name, Show(now[name]), Show(places[name]))
             ok = ok and near(now[name], places[name])
         end
@@ -324,7 +327,7 @@ end
 Probe:Command("bars", function() readBars() end, "the stance and pet bars: anchors, scale, GAB's follow state")
 
 Probe:Steps("barmove", {
-    rev = 2,
+    rev = 3,
     title = "The stance and pet bars follow Glass Unit Frames (#30)",
     { text = "Use a character with its pet out, and a stance bar if it has one. Turn off Glass Unit Frames' link "
         .. "(or don't load GUF). Type /console taintLog 1, then press Reload now.", reload = true },
