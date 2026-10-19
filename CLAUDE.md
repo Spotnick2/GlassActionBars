@@ -26,8 +26,11 @@ with an active pet, and the per-operation hook trials.
 secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs state drivers.
 - Keep `ActionButton1-12`, `MultiBar*Button1-12` (bars 1-7), `StanceButton*`, `PetActionButton*`.
 - Only `hooksecurefunc`, `HookScript`, method calls on regions (`SetAlpha`, `SetFont`, ...) and
-  addon-owned frames; the one exception is the bar fade's `SetAlpha` on the ten bar frames (not
-  protected, measured in combat: docs/FOREVER-PROBE.md Q5). Never reassign a Blizzard global,
+  addon-owned frames. Two exceptions: the bar fade's `SetAlpha` on the ten bar frames (not
+  protected, measured in combat: docs/FOREVER-PROBE.md Q5), and `Follow.lua`'s
+  `ClearAllPointsBase` / `SetPointBase` on `StanceBar` and `PetActionBar` (Edit Mode's saved
+  originals: out of combat with Edit Mode closed, plus putting an owned bar back as Edit Mode
+  opens; measured by GABProbe's `barmove`, #30). Never reassign a Blizzard global,
   never replace a Blizzard method, never write a field onto a Blizzard frame (ForeverUI's wrappers
   tainted `SetAttribute` in combat). Per-button state lives in weak side tables. Reading a
   template's `parentKey` child is fine.
@@ -45,7 +48,7 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 
 TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Theme.lua` ->
 `Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Fade.lua` -> `Dock.lua` ->
-`API.lua` -> `Utility.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
+`Follow.lua` -> `API.lua` -> `Utility.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
 `Glass.lua` and `Options.lua`.
 
 - **`Compat.lua`**: `GlassActionBars.API`, the only route to client APIs that moved or may be
@@ -88,6 +91,19 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   combat only; re-run on grid/shown-button hooks, Edit Mode's re-stacking, target `OnShow`, scale
   and layout events, and a 0.2 s poll while Edit Mode is open. Every geometry read through
   `API.Plain`.
+- **`Follow.lua`**: the stance and pet bars follow Glass Unit Frames (#30, GlassUI#28 5b). GUF's
+  EventRegistry `GlassUnitFrames.LayoutChanged` (linked, player and pet rects, `dx`, `petDx`) and
+  `GlassUF.LayoutState()` at world entry; no dependency. `StanceBar` moves by `dx`, `PetActionBar`
+  by `petDx`, horizontally from the anchor Blizzard gave it (the base, a side table; the layout is
+  never written). Ownership marker = the anchor read back after our write: after Blizzard's
+  passes (`UpdateBottomActionBarPositions`, `ApplySystemAnchor`, deferred a frame) a different
+  anchor is the new base. Edit Mode entry puts an owned bar back. Snaps: a hidden bar's
+  `BreakSnappedFrames` freezes its snapped bars where they are, copies that into the layout and
+  clears their default flag, and nothing can undo that without writing the layout; so a bar in any
+  snap stays put (bars snapped to it, snapped to another bar, or in its default place, which on
+  Forever is stacked on Action Bar 1). Moved once in Edit Mode it is screen-anchored and follows.
+  One plain anchor only; combat and Edit Mode wait; scale events re-apply.
+  Snap, no glide. `/gab follow [on/off]` shows each bar's state.
 - **`API.lua`**: the public provider API (#8); the contract is
   [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (1, checked
   with `==`; not `API_VERSION`: `GlassActionBars.API` is the client adapter), `RegisterBar` (wraps

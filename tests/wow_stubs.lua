@@ -166,6 +166,7 @@ function Methods.GetPoint(w, i)
     local p = w._points[i or 1]
     if p then return p[1], p[2], p[3], p[4], p[5] end
 end
+function Methods.GetNumPoints(w) return #w._points end
 function Methods.SetAllPoints(w, rel) table.insert(w._points, { "ALL", rel }) end
 function Methods.SetSize(w, x, y) w._width, w._height = x, y end
 function Methods.SetWidth(w, x) w._width = x end
@@ -722,6 +723,27 @@ for i = 1, 10 do actionButton("StanceButton" .. i, StanceBar, true).index = i en
 PetActionBar = bar("PetActionBar")
 rawset(PetActionBar, "Update", function() end)
 for i = 1, NUM_PET_ACTION_SLOTS do actionButton("PetActionButton" .. i, PetActionBar, true).index = i end
+-- Edit Mode systems (EditModeSystemMixin:OnSystemLoad): SetPoint and ClearAllPoints become
+-- overrides, the originals saved as the Base methods; ApplySystemAnchor re-anchors.
+for _, f in ipairs({ StanceBar, PetActionBar }) do
+    rawset(f, "SetPointBase", function(self, ...) Methods.SetPoint(self, ...) end)
+    rawset(f, "ClearAllPointsBase", function(self) Methods.ClearAllPoints(self) end)
+    rawset(f, "ApplySystemAnchor", function() end)
+    -- BreakFrameSnap (a snapped-to bar hid): as Blizzard's, frozen where it is as an
+    -- absolute TOPLEFT anchor (the stub keeps the x it had), the snap dropped, and
+    -- OnSystemPositionChange: the layout's anchor written (f._layout), the default flag
+    -- cleared. f._default: IsInDefaultPosition.
+    rawset(f, "BreakFrameSnap", function(self)
+        local x = self._points[1] and self._points[1][4] or 0
+        local to = rawget(self, "snappedToFrame")
+        if to and type(rawget(to, "snappedFrames")) == "table" then to.snappedFrames[self] = nil end
+        rawset(self, "snappedToFrame", nil)
+        Methods.ClearAllPoints(self)
+        Methods.SetPoint(self, "TOPLEFT", UIParent, "TOPLEFT", x, -500)
+        self._layout, self._default = { "TOPLEFT", x, -500 }, false
+    end)
+    rawset(f, "IsInDefaultPosition", function(self) return self._default == true end)
+end
 
 -- Edit Mode's manager: it re-stacks the default-position bars when one shows
 -- or hides (EditModeManager.lua:598,641), without a grid update.

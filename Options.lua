@@ -171,6 +171,16 @@ Options.AddSection(function(parent, anchor)
     return skin
 end)
 
+-- With Glass Unit Frames (#30): the stance and pet bars follow its frames.
+Options.AddSection(function(parent, anchor)
+    local head = label(parent, "With Glass Unit Frames", "GameFontNormal")
+    head:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -16)
+    local follow = Options.checkbox(parent, head, "Move the stance and pet bars with its player and pet frames",
+        function() return GAB.db.follow end, GAB.Settings.SetFollow)
+    Options._test.follow = follow
+    return follow
+end)
+
 -- Bar fade (#10): a row per bar, then how faded a faded bar is.
 Options.FADE_ALPHAS = { { 0, "Hidden" }, { 0.25, "Faint" }, { 0.5, "Half" } }
 Options.fadePage = Options.AddPage("Bar fade", function(page, title)

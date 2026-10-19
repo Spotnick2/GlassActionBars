@@ -183,9 +183,211 @@ Probe:Steps("campfire", {
     { text = "Press Reload now (or type /reload) to save the results.", reload = true },
 })
 
+-- ------------------------------------------------------------------
+-- barmove (#30): GAB's Follow.lua moves the stance and pet bars as Glass
+-- Unit Frames would (Follow.SetOffsets, a made-up move), and this measures
+-- where the bars really are, across Edit Mode, a pet summon, a fight, a UI
+-- scale change, an edited and a cancelled layout and a /reload. The host logs
+-- ADDON_ACTION_BLOCKED; Logs\taint.log is read from disk afterwards.
+-- ------------------------------------------------------------------
+
+local MOVE = 120
+local BARS = { "StanceBar", "PetActionBar" }
+local follow = function() local g = rawget(_G, "GlassActionBars"); return g and g.Follow end
+local fights, fightMark = 0, nil   -- fights ended; the count when the fight step began
+
+-- A bar's left edge in UIParent units, or nil (absent, hidden, secret).
+local function left(name)
+    local bar = rawget(_G, name)
+    if not bar then return nil end
+    local v = bar:IsVisible()
+    if secret(v) or v ~= true then return nil end
+    local l, s, ui = bar:GetLeft(), bar:GetEffectiveScale(), UIParent:GetEffectiveScale()
+    if secret(l) or secret(s) or secret(ui) or type(l) ~= "number" then return nil end
+    return l * s / ui
+end
+
+local function readBars()
+    local out = {}
+    for _, name in ipairs(BARS) do
+        local bar = rawget(_G, name)
+        if not bar then say(name .. ": absent") else
+            local _, base = Probe:Try(name .. ".IsShownBase", bar.IsShownBase, bar)
+            local _, default = Probe:Try(name .. ".IsInDefaultPosition", bar.IsInDefaultPosition, bar)
+            local n = bar:GetNumPoints()
+            local p, rel, rp, x, y = bar:GetPoint(1)
+            local relName = type(rel) == "table" and not secret(rel) and rel.GetName and rel:GetName() or rel
+            say(("%s: shown %s, shownBase %s, visible %s, default position %s, %s point(s): %s %s %s %s %s; "
+                .. "left %s, scale %s, effective %s"):format(name, Show(bar:IsShown()), Show(base),
+                Show(bar:IsVisible()), Show(default), Show(n), Show(p), Show(relName), Show(rp), Show(x), Show(y),
+                Show(left(name)), Show(bar:GetScale()), Show(bar:GetEffectiveScale())))
+            out[#out + 1] = name .. (left(name) and "" or " (not shown)")
+        end
+    end
+    local F = follow()
+    if F then
+        local s = F.Status()
+        say("GAB follow: stance bar " .. s.StanceBar .. "; pet bar " .. s.PetActionBar)
+    else
+        say("GAB's Follow isn't loaded")
+    end
+    return table.concat(out, ", ")
+end
+
+local function lefts()
+    local t = {}
+    for _, name in ipairs(BARS) do t[name] = left(name) end
+    return t
+end
+
+-- How far each shown bar really is from its Edit Mode position: read it,
+-- put the bars back, read again, move them again. Out of combat.
+local function displacement()
+    local F = follow()
+    if not F then return nil, "GAB's Follow isn't loaded" end
+    local cur = lefts()
+    F.SetOffsets(0, 0)
+    local back = lefts()
+    F.SetOffsets(MOVE, MOVE)
+    local d, parts = {}, {}
+    for _, name in ipairs(BARS) do
+        if cur[name] and back[name] then
+            d[name] = cur[name] - back[name]
+            parts[#parts + 1] = ("%s %+.1f"):format(name, d[name])
+        end
+    end
+    return d, table.concat(parts, ", ")
+end
+
+-- Every shown bar MOVE from its place (a bar snapped to the other one is skipped).
+local editModeShown
+local function moved()
+    if editModeShown() then return false, "Edit Mode is still open: close it, then Retry" end
+    local d, text = displacement()
+    if not d then return false, text end
+    local F, any = follow(), false
+    for _, name in ipairs(BARS) do
+        if d[name] then
+            any = true
+            local snapped = F.Status()[name]:find("anchored to", 1, true)
+            if not snapped and math.abs(d[name] - MOVE) > 1 then return false, text end
+        end
+    end
+    if not any then return false, "no bar shown" end
+    return true, text
+end
+
+function editModeShown()
+    local f = rawget(_G, "EditModeManagerFrame")
+    local v = f and f:IsShown()
+    return not secret(v) and v == true
+end
+
+local L0, L1 = {}, {}   -- the bars' places at the start; the saved layout's
+local function near(a, b) return a ~= nil and b ~= nil and math.abs(a - b) <= 1 end
+-- (A bar hidden now is skipped: Edit Mode shows bars that are hidden outside it.)
+local function atPlaces(places)
+    local now, parts, ok = lefts(), {}, true
+    for _, name in ipairs(BARS) do
+        if places[name] and now[name] then
+            parts[#parts + 1] = ("%s %s vs %s"):format(name, Show(now[name]), Show(places[name]))
+            ok = ok and near(now[name], places[name])
+        end
+    end
+    return ok, table.concat(parts, ", ")
+end
+
+-- Each bar's one anchor as text (shown or not), to compare across a /reload.
+local function anchors()
+    local t = {}
+    for _, name in ipairs(BARS) do
+        local bar = rawget(_G, name)
+        local n = bar and bar:GetNumPoints()
+        if n ~= nil and not secret(n) and n == 1 then
+            local p, rel, rp, x, y = bar:GetPoint(1)
+            if not (secret(p) or secret(rel) or secret(rp) or secret(x) or secret(y)) then
+                local relName = type(rel) == "table" and rel.GetName and rel:GetName() or tostring(rel)
+                t[name] = ("%s %s %s %.1f %.1f"):format(tostring(p), tostring(relName), tostring(rp), x, y)
+            end
+        end
+    end
+    return t
+end
+
+local function sameAnchors(saved)
+    local now, parts, ok, any = anchors(), {}, true, false
+    for name, a in pairs(saved) do
+        any = true
+        parts[#parts + 1] = name .. ": " .. tostring(now[name]) .. " vs " .. a
+        ok = ok and now[name] == a
+    end
+    return ok and any, table.concat(parts, "; ")
+end
+
+Probe:Command("bars", function() readBars() end, "the stance and pet bars: anchors, scale, GAB's follow state")
+
+Probe:Steps("barmove", {
+    rev = 3,
+    title = "The stance and pet bars follow Glass Unit Frames (#30)",
+    { text = "Use a character with its pet out, and a stance bar if it has one. Turn off Glass Unit Frames' link "
+        .. "(or don't load GUF). Type /console taintLog 1, then press Reload now.", reload = true },
+    { text = "Reading both bars.", auto = true,
+      run = readBars,
+      check = function() return follow() ~= nil, "GAB's Follow loaded" end },
+    { text = "Press Move: GAB moves the stance and pet bars " .. MOVE .. " to the right, as Glass Unit Frames would.",
+      button = "Move", run = function() L0 = lefts(); follow().SetOffsets(MOVE, MOVE); return readBars() end,
+      screenshot = "bars moved" },
+    { text = "Did the bars move right, buttons and glass together, nothing left behind?", ask = true },
+    { text = "Open Edit Mode (Esc > Edit Mode).", wait = function() return editModeShown(), "Edit Mode not open" end,
+      timeout = 300, check = function() return atPlaces(L0) end },
+    { text = "Close Edit Mode without changing anything.",
+      wait = function() return not editModeShown(), "Edit Mode still open" end, timeout = 300, check = moved },
+    { text = "Dismiss your pet, then summon it again (out of combat). Press Next once it's back.", check = moved },
+    { text = "Fight something. In the fight, click pet bar buttons and a stance, press their key bindings, and "
+        .. "dismiss and summon the pet if you can. This step completes when the fight is over.",
+      wait = function()
+          fightMark = fightMark or fights
+          return fights > fightMark and not InCombatLockdown(), "waiting for a fight to start and end"
+      end,
+      timeout = 900, check = moved },
+    { text = "During the fight, did anything say an action was blocked, or did a pet or stance button not work?",
+      ask = true },
+    { text = "Change the UI scale a little (Esc > Options > Graphics > UI Scale), then press Next.", check = moved,
+      screenshot = "after a UI scale change" },
+    { text = "Open Edit Mode again.", wait = function() return editModeShown(), "Edit Mode not open" end,
+      timeout = 300 },
+    { text = "Move the pet bar (or the stance bar) somewhere else, press Save, and close Edit Mode.",
+      wait = function() return not editModeShown(), "Edit Mode still open" end, timeout = 600, check = moved },
+    { text = "Open Edit Mode once more.", wait = function() return editModeShown(), "Edit Mode not open" end,
+      timeout = 300,
+      check = function() L1 = lefts(); return next(L1) ~= nil, "the saved places recorded" end },
+    { text = "Move the bar again, then close Edit Mode WITHOUT saving (discard the change).",
+      wait = function() return not editModeShown(), "Edit Mode still open" end, timeout = 600,
+      check = function()
+          local ok, text = moved()
+          local places = {}
+          for name, l in pairs(L1) do places[name] = l + MOVE end
+          local at, where = atPlaces(places)
+          return ok and at, text .. "; " .. where
+      end },
+    { text = "Press Put back: the bars return to their Edit Mode places.", button = "Put back",
+      run = function() follow().SetOffsets(0, 0); return readBars() end,
+      check = function()
+          local ok, text = atPlaces(L1)
+          GABProbeDB.barmoveSaved = anchors()
+          return ok, text
+      end },
+    { text = "Press Reload now.", reload = true },
+    { text = "Reading the bars after the reload: they should be at the saved layout's places.", auto = true,
+      run = readBars,
+      check = function() return sameAnchors(type(GABProbeDB.barmoveSaved) == "table" and GABProbeDB.barmoveSaved or {}) end },
+    { text = "Type /reload (or press Reload now) to save the results.", reload = true },
+})
+
 local boot = CreateFrame("Frame")
-Probe:RegisterEvents(boot, { "ADDON_LOADED" })
-boot:SetScript("OnEvent", function(_, _, name)
+Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
+boot:SetScript("OnEvent", function(_, event, name)
+    if event == "PLAYER_REGEN_ENABLED" then fights = fights + 1 return end
     if name ~= ADDON then return end
     Probe:Ready()
     -- The standalone probe's saved table had another shape: start afresh.
