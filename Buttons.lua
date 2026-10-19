@@ -73,11 +73,11 @@ Buttons.PRESETS = {
     minimal = { hover = "off", press = "flash", emptySlots = "hidden" },
 }
 Buttons.PRESET_ORDER = { "glass", "soft", "minimal" }
-Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1, frosted = 0.6 }   -- an empty slot's glass
+Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1, frosted = 0.35 }   -- an empty slot's glass
 -- Frosted (the reference's empty slots, owner 2026-10-19): a pale neutral fill
 -- in place of the theme's tint, so the slot reads as a light tile over any
 -- background, its rim softer (the factor above).
-Buttons.FROST = { 0.9, 0.91, 0.94, 0.16 }
+Buttons.FROST = { 0.9, 0.91, 0.94, 0.08 }   -- halved after the owner's first look (too strong)
 -- The halo: Media/ButtonHalo (Tools/make_rim.py), 16 px of padding round the
 -- button's boundary, 9-sliced at 24; a warm white; the reference's ~0.1 s in.
 Buttons.HALO = { file = "ButtonHalo", pad = 16, margin = 24, color = { 1, 0.94, 0.8 }, fadeIn = 0.1, fadeOut = 0.15 }

@@ -105,7 +105,7 @@ eq(own, nil, "frosted, on a filled slot: the theme's own glass")
 B.SetOccupied(b, false)
 wash, body, own = scale()
 check(own == B.FROST and body == 1, "frosted, empty: the pale neutral fill in place of the theme's tint")
-check(close(s.g.rim:GetAlpha(), B.Tune("rim") * B.Tune("empty") * 0.6), "  a softer rim")
+check(close(s.g.rim:GetAlpha(), B.Tune("rim") * B.Tune("empty") * B.EMPTY.frosted), "  a softer rim")
 check(s.g.tint:IsShown(), "  the fill shown")
 local c = s.g.tint._color
 check(c and close(c[1], B.FROST[1]) and close(c[3], B.FROST[3]) and close(c[4], B.FROST[4]), "  painted in that pale fill")

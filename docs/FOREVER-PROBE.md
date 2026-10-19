@@ -21,7 +21,8 @@ decides a detail of the skin. Facts that hold for every addon go to
   size) are gone; the key text stays where Blizzard puts it.
 - **Empty slots:** faint showed as faint squares, but next to the reference (owner, 2026-10-19) the
   reference's empty slot is a pale neutral tile, ours a near-clear body with a rim. A new choice,
-  **frosted** (a light grey fill at 16% in place of the theme's tint, the rim at 0.6), is Soft's.
+  **frosted** (a light grey fill in place of the theme's tint, a softer rim), is Soft's: first 16% and
+  0.6, too strong next to the reference (owner), now 8% and 0.35.
 - **A fight** with the halo, ripple and flash: nothing blocked (owner: yes; no `ADDON_ACTION_BLOCKED`
   in ForeverProbe's log for the run).
 ## Session 4: moving the stance and pet bars (#30), 2026-10-18, build 70450
