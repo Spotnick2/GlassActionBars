@@ -30,7 +30,8 @@
   **Utility bar** options page; `/gab utility on/off`.
 - **Dock**: smart bars dock beside one of Edit Mode's Action Bars 1-8 and follow it (the new
   **Dock** options page, `/gab dock`), matching its button size and spacing, its rows and
-  direction, or both (`/gab dock <bar> match on/off`, `/gab dock <bar> rows on/off`).
+  direction, or both (`/gab dock <bar> match on/off`, `/gab dock <bar> rows on/off`). Their buttons,
+  and the Utility bar's, wear the same glass, with rounded icons like the action bars'.
 - **With Glass Unit Frames**: when it slides your player and pet frames beside the raid grid, the
   stance bar and the pet bar move with them, and come back when it lets go. Your Edit Mode layout
   is never changed. A bar still in Edit Mode's default place (stacked on Action Bar 1), or snapped

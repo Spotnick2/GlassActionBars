@@ -106,7 +106,7 @@ its glass (before its `PLAYER_LOGIN`) waits, its regions and owner kept, and is 
 
 | Key | Type | What happens to it |
 |---|---|---|
-| `icon` | Texture | Left as it is. |
+| `icon` | Texture | Rounded to the glass's shape: a mask added on it, made on the icon's own frame (so that frame must be yours). Your own masks stay; its art, texture coordinates and anchors stay yours. Only the icon is rounded: a cooldown the size of the button keeps its square swipe. |
 | `normal` | Texture | Faded. |
 | `pushed` | Texture | Becomes the bright rim. |
 | `highlight` | Texture | Dimmed to the glass highlight. |
