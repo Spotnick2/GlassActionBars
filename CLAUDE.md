@@ -66,7 +66,7 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `UpdateButtonArt` / `Update` / `UpdateHotkeys`; stance and pet hook their bar's
   `UpdateState` / `Update`. A login in combat waits for the fight to end.
   Feedback (#34): `Buttons.LOOK` (hover off/glow/halo, press off/flash/ripple, emptySlots),
-  `Buttons.PRESETS` (glass = defaults, soft, minimal), `Buttons.Preset()`
+  `Buttons.PRESETS` (glass = defaults: glow, flash, frosted; soft; minimal), `Buttons.Preset()`
   ("custom" when none). The halo (Media/ButtonHalo, 16 px padding, sliced at 24) and the ripple
   (ButtonRipple, masked by ButtonMask) are our textures on `g.top`, driven by one OnUpdate only
   while one moves, from `HookScript` OnEnter/OnLeave/OnHide/OnMouseDown (a click only: key presses

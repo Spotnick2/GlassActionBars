@@ -17,8 +17,9 @@ local function scale()
     for _, x in ipairs(GAB.Theme._test.surfaces) do if x.g == s.g then return x.scale() end end
 end
 
--- The Glass preset: today's look.
+-- The Glass preset, the default: Blizzard's glow, the flash, frosted empty slots (owner).
 eq(B.Preset(), "glass", "defaults: the Glass preset")
+eq(B.Look("emptySlots"), "frosted", "  empty slots frosted by default")
 check(close(b.HighlightTexture:GetAlpha(), B.HIGHLIGHT), "  Blizzard's highlight softened (glow)")
 eq(s.halo:GetAlpha(), 0, "  the halo made, at rest")
 eq(b.PushedTexture:GetAlpha(), 1, "  the pushed rim shown (flash)")
@@ -86,6 +87,7 @@ check(not s.ripple:IsShown(), "  press changed: cleared")
 b._rect = nil
 
 -- Empty slots: the glass of an empty slot, through the theme and the rim (once).
+Settings.SetLook("emptySlots", "full")           -- frosted is the default; full is the old look
 B.SetOccupied(b, false)
 local wash, body = scale()
 check(close(wash, B.Tune("wash")) and close(body, B.Tune("body")), "empty, full: the glass as today")

@@ -74,17 +74,19 @@ eq(T.skins[ActionButton1].small, false, "action buttons are not")
 -- The rim: bright with an action, faint without, kept when unreadable.
 local function rim(b) return T.skins[b].g.rim:GetAlpha() end
 local full = GAB.Buttons.Tune("rim")
+-- An empty slot's rim: the tune's fraction, times the empty-slots setting's factor (#34).
+local emptyF = GAB.Buttons.Tune("empty") * GAB.Buttons.EMPTY[GAB.Buttons.Look("emptySlots")]
 check(close(rim(ActionButton1), full), "a slot with an action: full rim")
-check(close(rim(ActionButton2), full * GAB.Buttons.Tune("empty")), "an empty slot: faint rim")
+check(close(rim(ActionButton2), full * emptyF), "an empty slot: faint rim")
 WoW.actions[2] = true
 ActionButton2:Update()
 check(close(rim(ActionButton2), full), "Blizzard's Update: the rim follows the slot")
 WoW.actions[2] = nil
 ActionButton2:Update()
-check(close(rim(ActionButton2), full * GAB.Buttons.Tune("empty")), "  and back")
+check(close(rim(ActionButton2), full * emptyF), "  and back")
 WoW.actions[2] = WoW.Secret("HasAction")
 ActionButton2:Update()
-check(close(rim(ActionButton2), full * GAB.Buttons.Tune("empty")), "a secret answer keeps the last state")
+check(close(rim(ActionButton2), full * emptyF), "a secret answer keeps the last state")
 WoW.actions[2] = nil
 
 -- UpdateButtonArt sets Blizzard's atlases again: the skin follows it.
@@ -98,11 +100,11 @@ eq(ActionButton3.PushedTexture._blend, "ADD", "  added light again")
 WoW.forms[1] = true
 StanceBar:UpdateState()
 check(close(rim(StanceButton1), full), "a known form: full rim")
-check(close(rim(StanceButton2), full * GAB.Buttons.Tune("empty")), "no second form: faint rim")
+check(close(rim(StanceButton2), full * emptyF), "no second form: faint rim")
 WoW.petActions[3] = true
 PetActionBar:Update()
 check(close(rim(PetActionButton3), full), "a pet action: full rim")
-check(close(rim(PetActionButton4), full * GAB.Buttons.Tune("empty")), "an empty pet slot: faint rim")
+check(close(rim(PetActionButton4), full * emptyF), "an empty pet slot: faint rim")
 
 -- Text: the glass font, outlined; hotkeys and macro names can be turned off.
 local file = Glass.FONTS[Glass.fontKey].file
@@ -133,7 +135,7 @@ eq(GAB.db.theme, "clear", "  and changes nothing")
 local dark = T.skins[ActionButton1].g.dark
 eq(GAB.Settings.SetTune("rim", 0.5), true, "tune rim 0.5")
 check(close(rim(ActionButton1), 0.5), "  the rim repainted live")
-check(close(rim(ActionButton2), 0.5 * GAB.Buttons.Tune("empty")), "  empty slots too")
+check(close(rim(ActionButton2), 0.5 * GAB.Buttons.EMPTY[GAB.Buttons.Look("emptySlots")] * GAB.Buttons.Tune("empty")), "  empty slots too")
 eq(GlassActionBarsDB.tune.rim, 0.5, "  saved")
 GAB.Settings.SetTune("dark", 0.2)
 check(close(dark:GetAlpha(), 0.2), "tune dark: the inner line")

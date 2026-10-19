@@ -59,7 +59,7 @@ end
 -- Button feedback (#34, from the owner's Final Fantasy XIV reference): how a
 -- button answers the pointer and a press, and how an empty slot shows. Each
 -- is a setting (GlassActionBarsDB, the keys below); a preset sets all three.
--- Glass is today's look. (Key text moved above the buttons was tried and
+-- Glass is the default: Blizzard's glow, the flash, frosted empty slots. (Key text moved above the buttons was tried and
 -- taken out: on stacked bars it sat on the row above, session 5.)
 Buttons.LOOK = {
     hover = { "off", "glow", "halo" },             -- glow: Blizzard's highlight, softened
@@ -68,7 +68,7 @@ Buttons.LOOK = {
 }
 Buttons.LOOK_ORDER = { "hover", "press", "emptySlots" }
 Buttons.PRESETS = {
-    glass = { hover = "glow", press = "flash", emptySlots = "full" },
+    glass = { hover = "glow", press = "flash", emptySlots = "frosted" },
     soft = { hover = "halo", press = "ripple", emptySlots = "frosted" },
     minimal = { hover = "off", press = "flash", emptySlots = "hidden" },
 }

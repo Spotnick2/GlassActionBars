@@ -17,7 +17,7 @@ local DEFAULTS = {
     fadeAlpha = 0,          -- a faded bar's alpha (fade: { [bar frame name] = mode }, absent = no fade)
     follow = true,          -- the stance and pet bars move with Glass Unit Frames' player and pet frames
     -- Button feedback (#34; Buttons.LOOK, Buttons.PRESETS): the Glass preset.
-    hover = "glow", press = "flash", emptySlots = "full",
+    hover = "glow", press = "flash", emptySlots = "frosted",
 }
 GAB.DEFAULTS = DEFAULTS
 

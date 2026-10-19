@@ -32,6 +32,8 @@ for _, b in ipairs({ ActionButton1, ActionButton5, MultiBarBottomLeftButton3, St
 end
 
 -- The body of every button, the refused ones included, follows /gab tune to zero.
+-- The tune reaches the paint (a frosted empty slot paints its own fill: #34).
+GAB.Settings.SetLook("emptySlots", "full")
 GAB.Settings.SetTune("wash", 0)
 GAB.Settings.SetTune("body", 0)
 for _, b in ipairs({ ActionButton1, ActionButton5, MultiBarBottomLeftButton3, StanceButton1 }) do
