@@ -625,9 +625,10 @@ function Utility.Start()
         Layout = Utility.Layout, OnHosted = Utility.OnHosted })
     Utility.LocalizeBindingNames()
     Utility.ReadCampfire()
-    -- Undocked: the saved spot (a /reload in combat waits for the fight's end).
+    -- The saved spot until a dock pass places the bar (its target may be
+    -- unavailable on this character); a /reload in combat waits for the fight.
     local posPending = false
-    if GAB.Dock.Setting("utility", "bar") == false then
+    if savedPos() then
         if InCombatLockdown() then posPending = true else restorePos() end
     end
     driver:SetScript("OnEvent", function(_, event, unit)
@@ -636,7 +637,7 @@ function Utility.Start()
             updateMover()
             if posPending then
                 posPending = false
-                if GAB.Dock.Setting("utility", "bar") == false then restorePos() end
+                if not hosted then restorePos() end
             end
             skin()
             -- A combat read may have been unknown: a change found now rebuilds too.
