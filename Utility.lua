@@ -326,7 +326,7 @@ local function arrange()
     if n == 0 then frame:SetSize(size, size) return end
     local cols
     if g and g.orientation == 1 then
-        cols = rows
+        cols = math.min(rows, n)
         rows = math.ceil(n / cols)
     else
         cols = math.ceil(n / rows)
@@ -476,8 +476,8 @@ function Utility.Start()
     driver:SetScript("OnEvent", function(_, event, unit)
         if event == "PLAYER_REGEN_ENABLED" then
             skin()
-            Utility.ReadCampfire()
-            if pending then Utility.Reconcile() end
+            -- A combat read may have been unknown: a change found now rebuilds too.
+            if Utility.ReadCampfire() or pending then Utility.Reconcile() end
         elseif event == "UNIT_AURA" then
             if unit == "player" and Utility.ReadCampfire() then Utility.Refresh() end
         elseif event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN" or event == "UPDATE_BINDINGS" then

@@ -105,6 +105,22 @@ eq(select(2, attrs("cooking")), 18260, "  the fight over: the new rank")
 eq((attrs("hearthstone")), nil, "  the Hearthstone gone")
 WoW.items[6948] = 1
 
+-- Reaching a campfire in combat with the aura unreadable: the plain read at
+-- the fight's end rebuilds, though nothing was pending.
+WoW.combat = true
+WoW.fire("PLAYER_REGEN_DISABLED")
+WoW.auras[U.CAMPFIRE_AURA] = WoW.Secret("aura")
+WoW.fire("UNIT_AURA", "player")
+WoW.tick()
+check(not U.IsPending(), "an unknown aura read in combat: nothing pending")
+WoW.auras[U.CAMPFIRE_AURA] = true
+WoW.combat = false
+WoW.fire("PLAYER_REGEN_ENABLED")
+eq(shownKeys(), "hearthstone,cooking,camp_basic,camp_skinning1", "  the fight over: the campfire read, the Camp Chair shown")
+WoW.auras[U.CAMPFIRE_AURA] = nil
+WoW.fire("UNIT_AURA", "player")
+WoW.tick()
+
 -- Placement: docked right of bar 1 by default, matched to it.
 rebuild()
 WoW.tick()
@@ -124,6 +140,18 @@ check(not GAB.Dock.IsHosted("utility"), "undocked")
 check(close(B.cooking:GetWidth(), U.SIZE), "  its own geometry again")
 eq(U._test.geom(), nil, "  the cached geometry dropped")
 Settings.SetDock("utility", "bar", 1)
+WoW.tick()
+
+-- A vertical target: as many columns as its setting, no more than the buttons.
+eq(#U._test.shown(), 3, "three buttons shown")
+U.Layout({ size = 40, padding = 2, orientation = 1, rows = 6 })
+check(close(U.frame:GetWidth(), 3 * 40 + 2 * 2) and close(U.frame:GetHeight(), 40),
+    "vertical, 6 columns, 3 buttons: 3 wide, 1 high")
+U.Layout({ size = 40, padding = 2, orientation = 1, rows = 2 })
+check(close(U.frame:GetWidth(), 82) and close(U.frame:GetHeight(), 82), "vertical, 2 columns: 2 wide, 2 high")
+local p3 = B.camp_basic._points[#B.camp_basic._points]
+check(close(p3[4], 0) and close(p3[5], -42), "  the third button starts row 2")
+GAB.Dock.RequestLayout("utility")
 WoW.tick()
 
 -- Cooldowns: spells and the Hearthstone by duration object; other items by GetItemCooldown.
