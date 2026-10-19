@@ -113,8 +113,11 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `Options.AddPage(name, function(page, title) ... end)` (the Bar fade page).
 - **`GlassActionBars.lua`**: bootstrap, saved settings (only what the player set is saved), the
   `Settings` helpers, `/gab`.
-- **`Tools/GABProbe/`**: the throwaway measurement addon (`/gabprobe help`), results in
-  `docs/FOREVER-PROBE.md`.
+- **`Tools/GABProbe/`**: the throwaway measurement module on ForeverProbe (`/fp gab`;
+  `References\Docs\PROBES.md`), results in `docs/FOREVER-PROBE.md`. In-game experiments are
+  procedures (`/fp steps gab <name>`; `campfire` for #9). The standalone v0.1.0 probe
+  (`/gabprobe`) is in git history before #32; port its open checks when an issue needs them. Its
+  test (`tests/test_probe.lua`) needs `..\ForeverProbe` and runs locally only.
 
 ## Action bar facts for this client
 

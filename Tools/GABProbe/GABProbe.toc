@@ -1,8 +1,10 @@
 ## Interface: 16001
 ## Title: GABProbe
-## Notes: Throwaway probe for Glass Action Bars: button regions, Blizzard's writers, secrets, levels, bar alpha in combat, Hearthstone cooldown. /gabprobe help
+## Notes: Throwaway probe for Glass Action Bars: the campfire buff and camping cooldowns (#9). A ForeverProbe module: /fp gab
 ## Author: Spotnick
 ## Version: dev
+## Dependencies: ForeverProbe
+## OptionalDeps: GlassActionBars
 ## SavedVariables: GABProbeDB
 
 GABProbe.lua

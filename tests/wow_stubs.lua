@@ -420,7 +420,9 @@ C_UnitAuras = { GetPlayerAuraBySpellID = function(id)
     if a == "throw" then error("aura read refused") end
     if a == true then return { spellId = id } end
     return a
-end }
+end,
+    -- The player's helpful auras in order: WoW.helpful[i] = { spellId, name, duration }.
+    GetAuraDataByIndex = function(unit, i, filter) return (WoW.helpful or {})[i] end }
 function GetBindingKey(action) return WoW.bindings[action] end
 function IsAltKeyDown() return WoW.altDown == true end
 
@@ -835,7 +837,7 @@ end
 -- Strict globals: any read of an undefined global is an error, except the
 -- addon's own globals that are legitimately nil before first assignment.
 local allowNil = { GlassActionBars = true, GlassActionBarsDB = true, GABProbeDB = true,
-    LibStub = true }
+    LibStub = true, ForeverProbe = true, ForeverProbeDB = true }
 -- Client string alias (in the dump's _G walk); LibStub's version check uses it.
 strmatch = string.match
 setmetatable(_G, { __index = function(_, k)

@@ -76,13 +76,28 @@ function Deploy-Addon {
         }
 }
 
+$ForeverProbe = if ($env:FOREVERPROBE) { $env:FOREVERPROBE } else { Join-Path (Split-Path -Parent $RepoRoot) "ForeverProbe" }
+
+# GABProbe is a ForeverProbe module: the host goes first, and a refusal leaves
+# the probe as it was (ForeverProbe docs/GUIDE.md, section 6).
 function Deploy-Probe {
+    if (-not (Test-Path -LiteralPath (Join-Path $ForeverProbe "Tools\deploy.ps1"))) {
+        Write-Error "ForeverProbe checkout not found at $ForeverProbe (or set `$env:FOREVERPROBE)"; exit 1
+    }
+    & pwsh -NoProfile -File (Join-Path $ForeverProbe "Tools\deploy.ps1") -AddOnsPath $AddOnsPath
+    if ($LASTEXITCODE -ne 0) { Write-Error "ForeverProbe deploy refused; GABProbe was not touched"; exit 1 }
     $dest = Join-Path $AddOnsPath "GABProbe"
     Write-Host "Deploying GABProbe -> $dest" -ForegroundColor Cyan
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    Get-ChildItem -LiteralPath (Join-Path $RepoRoot "Tools\GABProbe") -File | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dest $_.Name) -Force
-        Write-Host "  $($_.Name)"
+    $files = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot "Tools\GABProbe") -File -Include *.toc, *.lua -Recurse)
+    foreach ($f in $files) {
+        Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $dest $f.Name) -Force
+        Write-Host "  $($f.Name)"
+    }
+    $keep = $files | ForEach-Object Name
+    Get-ChildItem -LiteralPath $dest -File | Where-Object { $keep -notcontains $_.Name } | ForEach-Object {
+        Write-Host "  removing stale $($_.Name)" -ForegroundColor DarkYellow
+        Remove-Item -LiteralPath $_.FullName -Force
     }
 }
 
@@ -91,4 +106,4 @@ if ($Probe -or $ProbeOnly) { Deploy-Probe }
 
 Write-Host ""
 Write-Host "/reload is enough, a brand-new addon folder included; restart the client only for new textures." -ForegroundColor Yellow
-Write-Host "In game:  /console scriptErrors 1   then   /gab help   (probe: /gabprobe help)" -ForegroundColor Green
+Write-Host "In game:  /console scriptErrors 1   then   /gab help   (probe: /fp gab, /fp steps gab campfire)" -ForegroundColor Green
