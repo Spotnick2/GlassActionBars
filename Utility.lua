@@ -384,6 +384,7 @@ end
 local function placeAt(x, y)
     frame:ClearAllPoints()
     frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
+    GAB.Edges.Request()   -- placed by hand: the screen edges may have moved
 end
 local function restorePos()
     local p = savedPos()

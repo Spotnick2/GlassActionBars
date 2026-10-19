@@ -98,7 +98,9 @@ local function call(c, name, ...)
 end
 
 -- The target's rectangle in UIParent units, or nil when unavailable.
-local function targetRect(n)
+-- `strict`: nil as well when any one container is unreadable (Edges.lua
+-- must not report a bar's edge short); the dock places by what it can read.
+local function targetRect(n, strict)
     local b = Dock.BARS[n]
     local bar = b and rawget(_G, b[1])
     if not bar or API.Plain(bar:IsVisible()) ~= true then return nil end
@@ -116,6 +118,8 @@ local function targetRect(n)
                 r.left, r.right = math.min(r.left, cl), math.max(r.right, cr)
                 r.top, r.bottom = math.max(r.top, ct), math.min(r.bottom, cb)
             end
+        elseif strict then
+            return nil
         end
     end
     return r
@@ -229,6 +233,8 @@ local function flush()
     for k in pairs(dirty) do dirty[k] = nil end
     table.sort(ids)
     for _, id in ipairs(ids) do pass(id) end
+    -- A pass may have moved or resized a bar: the screen edges are measured again (Edges.lua).
+    if #ids > 0 and GAB.Edges then GAB.Edges.Request() end
     return true
 end
 
@@ -278,6 +284,7 @@ function Dock.Register(def)
     end
     clients[def.id] = { def = def }
     order[#order + 1] = def.id
+    if GAB.Edges then GAB.Edges.Watch(def.frame) end   -- its showing and hiding move the edges
     Dock.Request(def.id)
     return true
 end
@@ -303,6 +310,16 @@ function Dock.Clients()
 end
 
 function Dock.IsHosted(id) return clients[id] ~= nil and clients[id].hosted == true end
+
+-- Every registered client's frame, docked or not (Edges.lua reads them).
+function Dock.Frames()
+    local out = {}
+    for _, id in ipairs(order) do
+        local c = clients[id]
+        if c and not c.removed then out[#out + 1] = c.def.frame end
+    end
+    return out
+end
 
 local started = false
 function Dock.Start()

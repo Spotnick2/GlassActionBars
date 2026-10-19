@@ -507,6 +507,7 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         start("dock", GAB.Dock.Start)
         start("follow", GAB.Follow.Start)
         start("utility", GAB.Utility.Start)
+        start("edges", GAB.Edges.Start)
     elseif event == "PLAYER_ENTERING_WORLD" then
         GAB.Theme.Retry()
         -- arg1 = isInitialLogin. The build warning asks the developer to

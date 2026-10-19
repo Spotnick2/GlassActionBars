@@ -499,6 +499,12 @@ end
 function WoW.trigger(event, ...)
     for _, c in ipairs(WoW.callbacks[event] or {}) do c[1](c[2], ...) end
 end
+-- An addon's own event: recorded in WoW.triggered, then run like Blizzard's.
+WoW.triggered = {}
+function EventRegistry:TriggerEvent(event, ...)
+    table.insert(WoW.triggered, { event, ... })
+    WoW.trigger(event, ...)
+end
 
 -- Quick Keybind mode (Blizzard_QuickKeybind): WoW.quickKeybind.
 function KeybindFrames_InQuickKeybindMode() return WoW.quickKeybind == true end

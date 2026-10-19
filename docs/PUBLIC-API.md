@@ -122,6 +122,36 @@ the order the player chooses. Glass Action Bars builds and shows it; it is an or
 | `IsEnabled()` | function | `false` refuses clicks, and dims the button. |
 | `OnHosted(isHosted)` | function | `true` while the button is actually **shown** on the Utility bar, `false` when it isn't (the bar is off, or the player hid it). Hide your own launcher only while it is `true`. |
 
+## `GlassActionBars.EdgeState()` → `{ left, right, width }` or `nil`
+
+Where the bars at the screen's sides end, so a frame you place along a side can keep clear of
+them (Glass Raid Frames' grid, Glass UI's docs/GROUP-LAYOUT.md section 5c). UIParent units from
+its bottom-left, in a fresh table each call; `nil` before Glass Action Bars has measured.
+
+- `left`: the right edge of the bars at the screen's left (`0` when there are none).
+- `right`: the left edge of the bars at its right (`width` when there are none).
+- `width`: UIParent's width.
+
+**Which bars count:** Action Bars 1-8 and every bar registered with `RegisterBar` (docked or
+not), the Utility bar included, when they are visible and taller than wide. On each side, a bar
+counts when it starts within 40 units of the screen's edge or of the bars already counted there,
+so a stack of side bars counts as one. A bar any of whose edges can't be read is skipped.
+
+**The event** `GlassActionBars.EdgesChanged` (`left`, `right`, `width`) fires on Blizzard's
+`EventRegistry`, out of combat, whenever a value moved more than half a unit from the last one
+announced (Edit Mode, a bar shown or hidden, a scale change). The same values may come again:
+apply the latest each time.
+
+```lua
+EventRegistry:RegisterCallback("GlassActionBars.EdgesChanged", function(_, left, right, width)
+    -- keep your frame between left and right
+end, MyAddon)
+local e = GlassActionBars and GlassActionBars.EdgeState and GlassActionBars.EdgeState()
+```
+
+If you move a bar you registered without a dock pass (your own drag, a scale change), call
+`RequestLayout(id)` afterwards so the edges are measured again.
+
 ## Example
 
 ```lua
