@@ -95,6 +95,17 @@ SlashCmdList.FOREVERPROBE("steps gab campfire")
 local rec = ForeverProbeDB.steps and ForeverProbeDB.steps.records and ForeverProbeDB.steps.records["GABProbe/campfire"]
 check(rec and rec.status == "active", "/fp steps gab campfire starts")
 SlashCmdList.FOREVERPROBE("steps stop")
+
+-- barmove (#30): the bars read, GAB's follow state logged; the procedure starts.
+StanceBar:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", -300, 120)
+StanceBar._rect = { 600, 700, 160, 120 }
+SlashCmdList.FOREVERPROBE("gab bars")
+check(logHas("StanceBar: shown true") and logHas("left 600"), "/fp gab bars: the stance bar's state and place")
+check(logHas("PetActionBar: shown") and logHas("GAB follow: stance bar"), "  the pet bar, and GAB's follow state")
+SlashCmdList.FOREVERPROBE("steps gab barmove")
+rec = ForeverProbeDB.steps.records["GABProbe/barmove"]
+check(rec and rec.status == "active", "/fp steps gab barmove starts")
+SlashCmdList.FOREVERPROBE("steps stop")
 SlashCmdList.FOREVERPROBE("gab clear")
 eq(#GABProbeDB.log, 1, "/fp gab clear empties the log in place (one line left: 'log cleared')")
 

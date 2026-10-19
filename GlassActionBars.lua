@@ -15,6 +15,7 @@ local DEFAULTS = {
     showMacroNames = true,  -- a macro's name on its button
     endCaps = false,        -- the main bar's gryphons
     fadeAlpha = 0,          -- a faded bar's alpha (fade: { [bar frame name] = mode }, absent = no fade)
+    follow = true,          -- the stance and pet bars move with Glass Unit Frames' player and pet frames
 }
 GAB.DEFAULTS = DEFAULTS
 
@@ -128,6 +129,14 @@ end
 function Settings.SetEndCaps(on)
     GAB.db.endCaps = on == true
     GAB.Bars.Refresh()
+    return true
+end
+
+-- The stance and pet bars follow Glass Unit Frames (off: back to Edit Mode's
+-- positions, after combat if in one).
+function Settings.SetFollow(on)
+    GAB.db.follow = on == true
+    GAB.Follow.Reconcile()
     return true
 end
 
@@ -280,6 +289,7 @@ local function helpLines()
         ("/gab fade alpha 0..1 - how faded a faded bar is (%.2f)"):format(db.fadeAlpha),
         "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match on/off] - dock a smart bar to an action bar",
         "/gab utility on/off - the Utility bar: Hearthstone, professions, camping (" .. onoff(GAB.Utility.Enabled()) .. ")",
+        "/gab follow [on/off] - the stance and pet bars move with Glass Unit Frames (" .. onoff(db.follow) .. ")",
         "/gab inspect [button|hide n|show n|restore] - what a button draws, layer by layer",
         "/gab layer <name> off/on - hide one layer on every button, for a look (a /reload undoes it)",
         "/gab options - open the options page",
@@ -391,6 +401,16 @@ local function slash(msg)
         if ONOFF[arg] == nil then return say("/gab utility on/off") end
         Settings.SetUtilityEnabled(ONOFF[arg])
         say("Utility bar " .. arg .. (InCombatLockdown() and " (when the fight ends)" or ""))
+    elseif cmd == "follow" then
+        if arg == "" then
+            local s = GAB.Follow.Status()
+            say("follow " .. onoff(GAB.db.follow) .. ": stance bar " .. s.StanceBar .. "; pet bar " .. s.PetActionBar)
+        elseif ONOFF[arg] == nil then
+            say("/gab follow on/off")
+        else
+            Settings.SetFollow(ONOFF[arg])
+            say("follow " .. arg .. (InCombatLockdown() and " (when the fight ends)" or ""))
+        end
     elseif cmd == "inspect" then
         local sub, n = arg:match("^(%S*)%s*(.-)$")
         if sub == "hide" and tonumber(n) then GAB.Inspect.Hide(tonumber(n))
@@ -442,6 +462,7 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         start("micro", GAB.Micro.Start)
         start("fade", GAB.Fade.Start)
         start("dock", GAB.Dock.Start)
+        start("follow", GAB.Follow.Start)
         start("utility", GAB.Utility.Start)
     elseif event == "PLAYER_ENTERING_WORLD" then
         GAB.Theme.Retry()

@@ -6,6 +6,15 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
+## Session 4: moving the stance and pet bars (#30, pending)
+
+`pwsh Tools\deploy.ps1 -Probe`, then `/fp steps gab barmove` on a character with a pet out (and a
+stance bar if it has one), GUF's link off. GAB's own `Follow.lua` moves the bars (a made-up move
+of 120) and the probe measures where they really are: after Edit Mode opens and closes, a pet
+dismissed and summoned, a fight with pet and stance clicks and key presses, a UI scale change, a
+layout edited and saved, one edited and discarded, and a `/reload` (the saved layout untouched).
+Read afterwards: GABProbe's log, ForeverProbe's host log (blocked actions) and `Logs\taint.log`.
+
 ## Session 3: the campfire buff and camping cooldowns (#9, pending)
 
 `pwsh Tools\deploy.ps1 -Probe`, `/reload`, then `/fp steps gab campfire` and follow the panel.

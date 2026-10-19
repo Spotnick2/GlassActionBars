@@ -166,6 +166,7 @@ function Methods.GetPoint(w, i)
     local p = w._points[i or 1]
     if p then return p[1], p[2], p[3], p[4], p[5] end
 end
+function Methods.GetNumPoints(w) return #w._points end
 function Methods.SetAllPoints(w, rel) table.insert(w._points, { "ALL", rel }) end
 function Methods.SetSize(w, x, y) w._width, w._height = x, y end
 function Methods.SetWidth(w, x) w._width = x end
@@ -722,6 +723,13 @@ for i = 1, 10 do actionButton("StanceButton" .. i, StanceBar, true).index = i en
 PetActionBar = bar("PetActionBar")
 rawset(PetActionBar, "Update", function() end)
 for i = 1, NUM_PET_ACTION_SLOTS do actionButton("PetActionButton" .. i, PetActionBar, true).index = i end
+-- Edit Mode systems (EditModeSystemMixin:OnSystemLoad): SetPoint and ClearAllPoints become
+-- overrides, the originals saved as the Base methods; ApplySystemAnchor re-anchors.
+for _, f in ipairs({ StanceBar, PetActionBar }) do
+    rawset(f, "SetPointBase", function(self, ...) Methods.SetPoint(self, ...) end)
+    rawset(f, "ClearAllPointsBase", function(self) Methods.ClearAllPoints(self) end)
+    rawset(f, "ApplySystemAnchor", function() end)
+end
 
 -- Edit Mode's manager: it re-stacks the default-position bars when one shows
 -- or hides (EditModeManager.lua:598,641), without a grid update.
