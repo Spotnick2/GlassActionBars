@@ -64,16 +64,20 @@ end
 Buttons.LOOK = {
     hover = { "off", "glow", "halo" },             -- glow: Blizzard's highlight, softened
     press = { "off", "flash", "ripple" },          -- flash: the pushed rim; ripple: plus a ripple on a click
-    emptySlots = { "hidden", "faint", "half", "full" },
+    emptySlots = { "hidden", "faint", "half", "full", "frosted" },
 }
 Buttons.LOOK_ORDER = { "hover", "press", "emptySlots" }
 Buttons.PRESETS = {
     glass = { hover = "glow", press = "flash", emptySlots = "full" },
-    soft = { hover = "halo", press = "ripple", emptySlots = "faint" },
+    soft = { hover = "halo", press = "ripple", emptySlots = "frosted" },
     minimal = { hover = "off", press = "flash", emptySlots = "hidden" },
 }
 Buttons.PRESET_ORDER = { "glass", "soft", "minimal" }
-Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1 }   -- an empty slot's glass
+Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1, frosted = 0.6 }   -- an empty slot's glass
+-- Frosted (the reference's empty slots, owner 2026-10-19): a pale neutral fill
+-- in place of the theme's tint, so the slot reads as a light tile over any
+-- background, its rim softer (the factor above).
+Buttons.FROST = { 0.9, 0.91, 0.94, 0.16 }
 -- The halo: Media/ButtonHalo (Tools/make_rim.py), 16 px of padding round the
 -- button's boundary, 9-sliced at 24; a warm white; the reference's ~0.1 s in.
 Buttons.HALO = { file = "ButtonHalo", pad = 16, margin = 24, color = { 1, 0.94, 0.8 }, fadeIn = 0.1, fadeOut = 0.15 }
@@ -313,6 +317,9 @@ function Buttons.Build(button, regions, opts)
     -- 2026-10-13, turned out to be the wash's gradient ignoring SetAlpha: see
     -- Theme.lua's paint.)
     GAB.Theme.Register(g, function()
+        if not s.occupied and not s.keepEmpty and look("emptySlots") == "frosted" then
+            return Buttons.Tune("wash"), 1, Buttons.FROST   -- the fill's own alpha, unscaled
+        end
         local f = emptyFactor(s)
         return Buttons.Tune("wash") * f, Buttons.Tune("body") * f
     end)

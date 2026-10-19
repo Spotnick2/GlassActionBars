@@ -224,7 +224,8 @@ end)
 Options.LOOK_ROWS = {
     { "hover", "When pointed at", { { "off", "Off" }, { "glow", "Glow" }, { "halo", "Halo" } } },
     { "press", "When clicked", { { "off", "Off" }, { "flash", "Flash" }, { "ripple", "Ripple (on a click)" } } },
-    { "emptySlots", "Empty slots", { { "hidden", "Hidden" }, { "faint", "Faint" }, { "half", "Half" }, { "full", "Full" } } },
+    { "emptySlots", "Empty slots", { { "hidden", "Hidden" }, { "faint", "Faint" }, { "half", "Half" }, { "full", "Full" },
+        { "frosted", "Frosted" } } },
 }
 Options.LOOK_PRESETS = { { "glass", "Glass" }, { "soft", "Soft" }, { "minimal", "Minimal" } }
 Options.lookPage = Options.AddPage("Buttons", function(page, title)

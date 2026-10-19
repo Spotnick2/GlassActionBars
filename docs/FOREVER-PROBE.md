@@ -19,7 +19,9 @@ decides a detail of the skin. Facts that hold for every addon go to
   on the edge of the row above (the pet bar's over the pet frame's power bar), and long labels
   ("Mouse Button 4") ran into each other. The owner: revert it. The key-text settings (position,
   size) are gone; the key text stays where Blizzard puts it.
-- **Empty slots faint:** the owner was unsure; the screenshot shows faint frosted squares, as meant.
+- **Empty slots:** faint showed as faint squares, but next to the reference (owner, 2026-10-19) the
+  reference's empty slot is a pale neutral tile, ours a near-clear body with a rim. A new choice,
+  **frosted** (a light grey fill at 16% in place of the theme's tint, the rim at 0.6), is Soft's.
 - **A fight** with the halo, ripple and flash: nothing blocked (owner: yes; no `ADDON_ACTION_BLOCKED`
   in ForeverProbe's log for the run).
 ## Session 4: moving the stance and pet bars (#30), 2026-10-18, build 70450

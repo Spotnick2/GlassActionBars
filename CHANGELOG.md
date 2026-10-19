@@ -9,8 +9,8 @@
   `/gab fade`.
 - **Button feedback**, on a new **Buttons** options page (`/gab look`): how a button answers the
   pointer (off, Blizzard's glow, or a warm **halo** that fades in), a click (off, the flash, or a
-  **ripple** from the pointer), and how empty slots show (hidden, faint, half, full). Three presets
-  set them all: **Glass** (the look so far), **Soft** (halo, ripple, faint empty slots) and
+  **ripple** from the pointer), and how empty slots show (hidden, faint, half, full, or **frosted**: a pale tile). Three presets
+  set them all: **Glass** (the look so far), **Soft** (halo, ripple, frosted empty slots) and
   **Minimal**.
 - **The Utility bar**: your Hearthstone, Cooking, First Aid, Fishing, your professions and their
   actions (Disenchant, Smelting, Find Herbs, Pick Lock...), and your **camping** items: a campfire

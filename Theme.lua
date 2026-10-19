@@ -63,10 +63,10 @@ end
 -- zero, so nothing is left to draw.
 local function paint(s, name, tint)
     local g, p = s.g, Theme.PRESETS[name]
-    local wash, body = 1, 1
-    if s.scale then wash, body = s.scale() end
+    local wash, body, own = 1, 1, nil
+    if s.scale then wash, body, own = s.scale() end
     local built = g.tint.glassColor or Glass.STYLE.tint
-    local c = tint or built
+    local c = own or tint or built   -- own: the surface's own fill for now (a frosted empty slot)
     local a = (c[4] or built[4]) * body
     Glass.SetSurfaceTint(g, c[1], c[2], c[3], a)
     g.tint:SetShown(a > 0)
@@ -77,7 +77,8 @@ local function paint(s, name, tint)
 end
 
 -- Add a surface and paint it with the current theme. `scale`, optional:
--- a function returning the surface's wash and body factors.
+-- a function returning the surface's wash and body factors, and optionally
+-- its own fill { r, g, b, a } in place of the theme's tint.
 function Theme.Register(g, scale)
     if type(g) ~= "table" or not g.tint then return end
     local s = { g = g, scale = scale }
