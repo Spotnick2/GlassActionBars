@@ -6,14 +6,31 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
-## Session 4: moving the stance and pet bars (#30, pending)
+## Session 4: moving the stance and pet bars (#30), 2026-10-18, build 70450
 
-`pwsh Tools\deploy.ps1 -Probe`, then `/fp steps gab barmove` on a character with a pet out (and a
-stance bar if it has one), GUF's link off. GAB's own `Follow.lua` moves the bars (a made-up move
-of 120) and the probe measures where they really are: after Edit Mode opens and closes, a pet
-dismissed and summoned, a fight with pet and stance clicks and key presses, a UI scale change, a
-layout edited and saved, one edited and discarded, and a `/reload` (the saved layout untouched).
-Read afterwards: GABProbe's log, ForeverProbe's host log (blocked actions) and `Logs\taint.log`.
+`/fp steps gab barmove` (procedure rev 1) on the owner's hunter, pet out, GUF's link off. GAB's
+own `Follow.lua` moved the bars by a made-up 120 with `ClearAllPointsBase` / `SetPointBase`; the
+probe measured the bars' real left edges (UIParent units) by putting them back and moving them
+again.
+
+- **The pet bar moved cleanly.** Exactly +120.0, buttons and glass together (owner: yes).
+- **No blocked action, no taint.** ForeverProbe's host log has no `ADDON_ACTION_BLOCKED` /
+  `_FORBIDDEN` in the three sessions, and `taint.log` gained no line. In a fight the owner clicked
+  pet buttons and pressed their key bindings: nothing blocked (owner: no), still +120 after it.
+- **Edit Mode:** a layout edited and saved while following: the new place became the base and the
+  bar followed from there (+120). Edited and discarded: back at the saved place + 120 (342.9588 vs
+  342.9588). The first close was inconclusive (Done pressed 2.5 s after opening, likely before Edit
+  Mode had closed); the two later closes take the same path and passed.
+- **UI scale** changed (effective 0.64 -> 1.05): still +120.
+- **Put back** landed exactly on the saved place, and after a `/reload` the pet bar's anchor was
+  identical (`TOP UIParent TOP -300 -307.7`): the saved layout untouched.
+- **Another addon anchored the pet bar:** before the owner's Edit Mode save it hung from
+  `SwingTimerOffHandFrame` (a swing-timer addon's frame). Follow adopts whatever anchor it finds
+  as the base, so it moved correctly from there too.
+- **Not measured:** the stance bar (a hunter has none; it was moved while hidden, harmlessly), and
+  the pet dismissed and summoned out of combat (Next pressed before the bar came back).
+- The probe recorded the start before the pet bar showed and needed the bar visible after the
+  reload; rev 2 records at Move and compares anchors after the reload.
 
 ## Session 3: the campfire buff and camping cooldowns (#9, pending)
 

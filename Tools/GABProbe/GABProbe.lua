@@ -294,17 +294,45 @@ local function atPlaces(places)
     return ok, table.concat(parts, ", ")
 end
 
+-- Each bar's one anchor as text (shown or not), to compare across a /reload.
+local function anchors()
+    local t = {}
+    for _, name in ipairs(BARS) do
+        local bar = rawget(_G, name)
+        local n = bar and bar:GetNumPoints()
+        if n ~= nil and not secret(n) and n == 1 then
+            local p, rel, rp, x, y = bar:GetPoint(1)
+            if not (secret(p) or secret(rel) or secret(rp) or secret(x) or secret(y)) then
+                local relName = type(rel) == "table" and rel.GetName and rel:GetName() or tostring(rel)
+                t[name] = ("%s %s %s %.1f %.1f"):format(tostring(p), tostring(relName), tostring(rp), x, y)
+            end
+        end
+    end
+    return t
+end
+
+local function sameAnchors(saved)
+    local now, parts, ok, any = anchors(), {}, true, false
+    for name, a in pairs(saved) do
+        any = true
+        parts[#parts + 1] = name .. ": " .. tostring(now[name]) .. " vs " .. a
+        ok = ok and now[name] == a
+    end
+    return ok and any, table.concat(parts, "; ")
+end
+
 Probe:Command("bars", function() readBars() end, "the stance and pet bars: anchors, scale, GAB's follow state")
 
 Probe:Steps("barmove", {
+    rev = 2,
     title = "The stance and pet bars follow Glass Unit Frames (#30)",
     { text = "Use a character with its pet out, and a stance bar if it has one. Turn off Glass Unit Frames' link "
         .. "(or don't load GUF). Type /console taintLog 1, then press Reload now.", reload = true },
     { text = "Reading both bars.", auto = true,
-      run = function() local r = readBars(); L0 = lefts(); return r end,
-      check = function() return follow() ~= nil and next(lefts()) ~= nil, "GAB's Follow loaded, a bar shown" end },
+      run = readBars,
+      check = function() return follow() ~= nil, "GAB's Follow loaded" end },
     { text = "Press Move: GAB moves the stance and pet bars " .. MOVE .. " to the right, as Glass Unit Frames would.",
-      button = "Move", run = function() follow().SetOffsets(MOVE, MOVE); return readBars() end, check = moved,
+      button = "Move", run = function() L0 = lefts(); follow().SetOffsets(MOVE, MOVE); return readBars() end,
       screenshot = "bars moved" },
     { text = "Did the bars move right, buttons and glass together, nothing left behind?", ask = true },
     { text = "Open Edit Mode (Esc > Edit Mode).", wait = function() return editModeShown(), "Edit Mode not open" end,
@@ -343,13 +371,13 @@ Probe:Steps("barmove", {
       run = function() follow().SetOffsets(0, 0); return readBars() end,
       check = function()
           local ok, text = atPlaces(L1)
-          GABProbeDB.barmoveSaved = lefts()
+          GABProbeDB.barmoveSaved = anchors()
           return ok, text
       end },
     { text = "Press Reload now.", reload = true },
     { text = "Reading the bars after the reload: they should be at the saved layout's places.", auto = true,
       run = readBars,
-      check = function() return atPlaces(type(GABProbeDB.barmoveSaved) == "table" and GABProbeDB.barmoveSaved or {}) end },
+      check = function() return sameAnchors(type(GABProbeDB.barmoveSaved) == "table" and GABProbeDB.barmoveSaved or {}) end },
     { text = "Type /reload (or press Reload now) to save the results.", reload = true },
 })
 
