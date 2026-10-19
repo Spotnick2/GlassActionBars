@@ -421,8 +421,6 @@ Probe:Steps("look", {
     { text = "Click an action button with the mouse (out of combat). Did a soft circle swell from the pointer and fade?",
       ask = true },
     { text = "Press one of your action bar key bindings. Did that button flash?", ask = true },
-    { text = "Are the key texts still readable?",
-      ask = true },
     { text = "Are the empty slots faint, and the bag slots unchanged?", ask = true },
     { text = "Do the stance or pet buttons and the Utility bar show the same halo and ripple?", ask = true },
     { text = "Fight something: point at buttons, click them and press their keys in the fight. This step completes "

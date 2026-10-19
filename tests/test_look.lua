@@ -1,9 +1,8 @@
 -- Button feedback (#34): the hover halo (fading in and out, from where it is),
 -- Blizzard's highlight per mode, the press off / flash / ripple (from the
 -- pointer, the centre when its place can't be read), the empty-slot glass, the
--- key text above or inside (kept through Blizzard's UpdateHotkeys, after a
--- fight in combat), presets and "custom", the Buttons page, /gab look, saved
--- values cleaned.
+-- key text left to Blizzard, presets and "custom", the Buttons page, /gab
+-- look, saved values cleaned.
 dofile("tests/wow_stubs.lua")
 dofile("tests/harness.lua")
 
@@ -105,44 +104,16 @@ B.SetOccupied(CharacterBag0Slot, false)
 check(close(bag.g.rim:GetAlpha(), B.Tune("rim") * B.Tune("empty")), "a bag slot keeps its own empty look")
 Settings.SetLook("emptySlots", "full")
 
--- Key text: above the button's top-left corner, or where Blizzard put it.
+-- Key text stays Blizzard's (moving it above was tried and taken out, session 5).
 local hk = b.HotKey
-Settings.SetLook("keyPosition", "above")
 p = hk._points
-check(#p == 1 and p[1][1] == "BOTTOMLEFT" and p[1][2] == b and p[1][3] == "TOPLEFT", "above: over the top-left corner")
-check(hk._width == 45 and hk._height == 14 and hk._justifyH == "LEFT", "  a left-justified box as wide as the button (a long label shortens)")
-b:UpdateHotkeys()
-check(#hk._points == 1 and hk._points[1][1] == "BOTTOMLEFT" and hk._width == 45, "  kept through Blizzard's UpdateHotkeys")
-Settings.SetLook("keySize", "large")
-check(hk._height == 18 and hk._font[2] == 12 + 4 + select(2, (function()
-    local f = GAB.Glass.FONTS[GAB.Glass.fontKey] or GAB.Glass.FONTS.arial
-    return f.file, f.bump
-end)()), "large: a taller box, the font 4 larger")
-Settings.SetLook("keyPosition", "inside")
-p = hk._points
-check(#p == 1 and p[1][1] == "TOPRIGHT" and p[1][4] == -2 and hk._justifyH == "RIGHT" and hk._width == 37,
-    "inside: Blizzard's anchor, size and justification put back")
-Settings.SetLook("keySize", "normal")
-local util = GAB.Utility.buttons.cooking
-local uhk = GAB.Utility._test.regions[util].hotkey
-Settings.SetLook("keyPosition", "above")
-eq(uhk._points[1][1], "BOTTOMLEFT", "a Utility bar button's key text too")
-Settings.SetLook("keyPosition", "inside")
-eq(uhk._points[1][1], "TOPRIGHT", "  and back")
-WoW.combat = true
-Settings.SetLook("keyPosition", "above")
-eq(hk._points[1][1], "TOPRIGHT", "in combat: not moved")
-check(B._test.pendingKeys(), "  waiting for the fight's end")
-WoW.combat = false
-WoW.fire("PLAYER_REGEN_ENABLED")
-eq(hk._points[1][1], "BOTTOMLEFT", "  moved when it ends")
-Settings.SetLook("keyPosition", "inside")
+check(#p == 1 and p[1][1] == "TOPRIGHT" and hk._justifyH == "RIGHT", "the key text where Blizzard put it")
+eq(Settings.SetLook("keyPosition", "above"), false, "  no setting moves it")
 
 -- Presets.
 check(Settings.SetLookPreset("soft"), "the Soft preset")
 eq(B.Preset(), "soft", "  matches")
-check(B.Look("hover") == "halo" and B.Look("press") == "ripple" and B.Look("emptySlots") == "faint"
-    and B.Look("keyPosition") == "inside" and B.Look("keySize") == "normal", "  all five set (key text inside: the owner's choice)")
+check(B.Look("hover") == "halo" and B.Look("press") == "ripple" and B.Look("emptySlots") == "faint", "  all three set")
 eq(Settings.SetLookPreset("loud"), false, "an unknown preset refused")
 eq(Settings.SetLook("hover", "sparkle"), false, "an unknown choice refused")
 eq(Settings.SetLook("glitter", "on"), false, "an unknown key refused")
@@ -170,9 +141,9 @@ SlashCmdList.GLASSACTIONBARS("look")
 check(chatHas("look: custom"), "/gab look: the current mix")
 
 -- Saved values: an unknown choice dropped.
-GlassActionBarsDB = { hover = "sparkle", press = "ripple", keySize = 3 }
+GlassActionBarsDB = { hover = "sparkle", press = "ripple", emptySlots = 3 }
 local db = GAB._test.ensureDefaults()
-check(rawget(db, "hover") == nil and rawget(db, "keySize") == nil and db.press == "ripple", "load: bad choices dropped")
+check(rawget(db, "hover") == nil and rawget(db, "emptySlots") == nil and db.press == "ripple", "load: bad choices dropped")
 eq(next(GAB.failures), nil, "nothing failed")
 
 done("test_look")

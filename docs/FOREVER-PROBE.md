@@ -15,10 +15,10 @@ decides a detail of the skin. Facts that hold for every addon go to
 - **The flash on a key press:** seen on a spell with a cast time, not sure on an instant one. It is
   Blizzard's pushed state, shown only while the key is held, as without GAB; a key press has no
   signal an addon can hook here (session 1), so it stays as it is.
-- **Key text above:** works, but on the owner's tightly stacked bars each row's numbers sit on the
-  edge of the row above, and long labels ("Mouse Button 4") ran into each other in a box twice the
-  button's width. The owner prefers it inside: Soft keeps the key text inside, and "above" now
-  uses a box as wide as the button, so a long label shortens.
+- **Key text above:** it worked, but on the owner's tightly stacked bars each row's numbers sat
+  on the edge of the row above (the pet bar's over the pet frame's power bar), and long labels
+  ("Mouse Button 4") ran into each other. The owner: revert it. The key-text settings (position,
+  size) are gone; the key text stays where Blizzard puts it.
 - **Empty slots faint:** the owner was unsure; the screenshot shows faint frosted squares, as meant.
 - **A fight** with the halo, ripple and flash: nothing blocked (owner: yes; no `ADDON_ACTION_BLOCKED`
   in ForeverProbe's log for the run).

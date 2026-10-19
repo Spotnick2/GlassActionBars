@@ -17,7 +17,7 @@ local DEFAULTS = {
     fadeAlpha = 0,          -- a faded bar's alpha (fade: { [bar frame name] = mode }, absent = no fade)
     follow = true,          -- the stance and pet bars move with Glass Unit Frames' player and pet frames
     -- Button feedback (#34; Buttons.LOOK, Buttons.PRESETS): the Glass preset.
-    hover = "glow", press = "flash", emptySlots = "full", keyPosition = "inside", keySize = "normal",
+    hover = "glow", press = "flash", emptySlots = "full",
 }
 GAB.DEFAULTS = DEFAULTS
 
@@ -147,7 +147,7 @@ function Settings.SetLook(key, value)
     return true
 end
 
--- A preset (Buttons.PRESETS): all five at once. False for an unknown one.
+-- A preset (Buttons.PRESETS): all three at once. False for an unknown one.
 function Settings.SetLookPreset(name)
     local p = GAB.Buttons.PRESETS[name]
     if not p then return false end
@@ -314,7 +314,7 @@ local function helpLines()
         "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match on/off] - dock a smart bar to an action bar",
         "/gab utility on/off - the Utility bar: Hearthstone, professions, camping (" .. onoff(GAB.Utility.Enabled()) .. ")",
         "/gab follow [on/off] - the stance and pet bars move with Glass Unit Frames (" .. onoff(db.follow) .. ")",
-        "/gab look [glass|soft|minimal | hover|press|empty|keys|keysize <choice>] - button feedback ("
+        "/gab look [glass|soft|minimal | hover|press|empty <choice>] - button feedback ("
             .. GAB.Buttons.Preset() .. ")",
         "/gab inspect [button|hide n|show n|restore] - what a button draws, layer by layer",
         "/gab layer <name> off/on - hide one layer on every button, for a look (a /reload undoes it)",
@@ -430,7 +430,7 @@ local function slash(msg)
     elseif cmd == "look" then
         local B = GAB.Buttons
         local key, value = arg:match("^(%S*)%s*(%S*)$")
-        local alias = { empty = "emptySlots", keys = "keyPosition", keysize = "keySize", hover = "hover", press = "press" }
+        local alias = { empty = "emptySlots", hover = "hover", press = "press" }
         if key == "" then
             local parts = {}
             for _, k in ipairs(B.LOOK_ORDER) do parts[#parts + 1] = k .. " " .. B.Look(k) end
@@ -442,7 +442,7 @@ local function slash(msg)
             say("look: " .. alias[key] .. " " .. value)
         else
             say("/gab look glass|soft|minimal, or /gab look hover off|glow|halo, press off|flash|ripple, "
-                .. "empty hidden|faint|half|full, keys inside|above, keysize normal|large")
+                .. "empty hidden|faint|half|full")
         end
     elseif cmd == "follow" then
         if arg == "" then

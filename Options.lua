@@ -218,21 +218,19 @@ Options.fadePage = Options.AddPage("Bar fade", function(page, title)
     Options._test.fadeAlpha = group
 end)
 
--- Buttons (#34): how a button answers the pointer and a click, how an empty
--- slot shows, where its key text sits; a preset sets all five, and the page
--- says when they match none.
+-- Buttons (#34): how a button answers the pointer and a click, and how an
+-- empty slot shows; a preset sets all three, and the page says when they
+-- match none.
 Options.LOOK_ROWS = {
     { "hover", "When pointed at", { { "off", "Off" }, { "glow", "Glow" }, { "halo", "Halo" } } },
     { "press", "When clicked", { { "off", "Off" }, { "flash", "Flash" }, { "ripple", "Ripple (on a click)" } } },
     { "emptySlots", "Empty slots", { { "hidden", "Hidden" }, { "faint", "Faint" }, { "half", "Half" }, { "full", "Full" } } },
-    { "keyPosition", "Key text", { { "inside", "Inside" }, { "above", "Above" } } },
-    { "keySize", "Key text size", { { "normal", "Normal" }, { "large", "Large" } } },
 }
 Options.LOOK_PRESETS = { { "glass", "Glass" }, { "soft", "Soft" }, { "minimal", "Minimal" } }
 Options.lookPage = Options.AddPage("Buttons", function(page, title)
     local B = GAB.Buttons
-    local note = label(page, "How the buttons answer the pointer and a click, how empty slots show, and where "
-        .. "the key text sits. A preset sets them all. The ripple answers a mouse click; a key press flashes.",
+    local note = label(page, "How the buttons answer the pointer and a click, and how empty slots show. A preset "
+        .. "sets them all. The ripple answers a mouse click; a key press flashes.",
         "GameFontHighlightSmall")
     note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
     note:SetPoint("RIGHT", page, "RIGHT", -16, 0)

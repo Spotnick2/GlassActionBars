@@ -57,21 +57,20 @@ function Buttons.Tune(key)
 end
 
 -- Button feedback (#34, from the owner's Final Fantasy XIV reference): how a
--- button answers the pointer and a press, how an empty slot shows, where its
--- key text sits. Each is a setting (GlassActionBarsDB, the keys below); a
--- preset sets all five. Glass is today's look.
+-- button answers the pointer and a press, and how an empty slot shows. Each
+-- is a setting (GlassActionBarsDB, the keys below); a preset sets all three.
+-- Glass is today's look. (Key text moved above the buttons was tried and
+-- taken out: on stacked bars it sat on the row above, session 5.)
 Buttons.LOOK = {
     hover = { "off", "glow", "halo" },             -- glow: Blizzard's highlight, softened
     press = { "off", "flash", "ripple" },          -- flash: the pushed rim; ripple: plus a ripple on a click
     emptySlots = { "hidden", "faint", "half", "full" },
-    keyPosition = { "inside", "above" },
-    keySize = { "normal", "large" },
 }
-Buttons.LOOK_ORDER = { "hover", "press", "emptySlots", "keyPosition", "keySize" }
+Buttons.LOOK_ORDER = { "hover", "press", "emptySlots" }
 Buttons.PRESETS = {
-    glass = { hover = "glow", press = "flash", emptySlots = "full", keyPosition = "inside", keySize = "normal" },
-    soft = { hover = "halo", press = "ripple", emptySlots = "faint", keyPosition = "inside", keySize = "normal" },
-    minimal = { hover = "off", press = "flash", emptySlots = "hidden", keyPosition = "inside", keySize = "normal" },
+    glass = { hover = "glow", press = "flash", emptySlots = "full" },
+    soft = { hover = "halo", press = "ripple", emptySlots = "faint" },
+    minimal = { hover = "off", press = "flash", emptySlots = "hidden" },
 }
 Buttons.PRESET_ORDER = { "glass", "soft", "minimal" }
 Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1 }   -- an empty slot's glass
@@ -94,7 +93,7 @@ local function look(key)
 end
 Buttons.Look = look
 
--- The preset the five settings match, or "custom".
+-- The preset the three settings match, or "custom".
 function Buttons.Preset()
     for _, name in ipairs(Buttons.PRESET_ORDER) do
         local all = true
@@ -124,7 +123,7 @@ local function styleText(s)
     local r = s.regions
     local file, bump = font()
     if r.hotkey then
-        r.hotkey:SetFont(file, (s.small and 10 or 12) + bump + (look("keySize") == "large" and 4 or 0), "OUTLINE")
+        r.hotkey:SetFont(file, (s.small and 10 or 12) + bump, "OUTLINE")
         r.hotkey:SetAlpha(GAB.db.showHotkeys and 1 or 0)
     end
     if r.count then r.count:SetFont(file, (s.small and 11 or 14) + bump, "OUTLINE") end
@@ -135,46 +134,6 @@ local function paintRim(s)
     local f = s.occupied and 1 or Buttons.Tune("empty") * emptyFactor(s)
     s.g.rim:SetAlpha(Buttons.Tune("rim") * f)
     s.g.dark:SetAlpha(Buttons.Tune("dark") * f)
-end
-
--- The key text above the button's top-left corner, outside it (the
--- reference's), or where Blizzard put it. Its anchor, size and justification
--- as built are kept (read) to put back. A protected button's region: never
--- moved in combat, the fight's end does it.
-local pendingKeys = false
-local function recordHotkey(s)
-    local hk = s.regions.hotkey
-    if not hk or s.hkOrig then return end
-    local o = { points = {} }
-    local n = API.Plain(hk:GetNumPoints())
-    for i = 1, type(n) == "number" and n or 0 do
-        local p = { hk:GetPoint(i) }
-        for j = 1, 5 do if API.IsSecret(p[j]) then return end end
-        o.points[i] = p
-    end
-    o.w, o.h, o.justify = API.Plain(hk:GetWidth()), API.Plain(hk:GetHeight()), API.Plain(hk:GetJustifyH())
-    s.hkOrig = o
-end
-
-local function placeHotkey(s)
-    local hk = s.regions.hotkey
-    if not hk then return end
-    if InCombatLockdown() then pendingKeys = true return end
-    if look("keyPosition") == "above" then
-        local w = API.Plain(s.button:GetWidth())
-        hk:ClearAllPoints()
-        hk:SetPoint("BOTTOMLEFT", s.button, "TOPLEFT", 0, 1)
-        hk:SetSize(type(w) == "number" and w or 45, look("keySize") == "large" and 18 or 14)
-        hk:SetJustifyH("LEFT")
-        s.hkMoved = true
-    elseif s.hkMoved and s.hkOrig then
-        local o = s.hkOrig
-        hk:ClearAllPoints()
-        for _, p in ipairs(o.points) do hk:SetPoint(unpack(p, 1, 5)) end
-        if type(o.w) == "number" and type(o.h) == "number" then hk:SetSize(o.w, o.h) end
-        if type(o.justify) == "string" then hk:SetJustifyH(o.justify) end
-        s.hkMoved = false
-    end
 end
 
 -- Hover and press effects run on one driver, its OnUpdate set only while a
@@ -364,7 +323,6 @@ function Buttons.Build(button, regions, opts)
     API.Try("skin:text:" .. name, styleText, s)
     API.Try("skin:highlight:" .. name, applyHighlight, s)
     API.Try("skin:halo:" .. name, makeHalo, s)
-    API.Try("skin:hotkey:" .. name, function() recordHotkey(s); placeHotkey(s) end)
     API.Try("skin:feedback:" .. name, hookFeedback, s)
     return s
 end
@@ -395,7 +353,7 @@ function Buttons.SetOccupied(button, occupied)
 end
 
 -- The feedback settings changed: every button's highlight, halo, pressed
--- look, empty glass and key text, at once (the key text after a fight).
+-- look and empty glass, at once.
 function Buttons.RefreshFeedback()
     for _, s in pairs(skins) do
         API.Try("skin:feedback", function()
@@ -414,18 +372,9 @@ function Buttons.RefreshFeedback()
             paintRim(s)
             if not s.keepEmpty then GAB.Theme.Repaint(s.g) end
             styleText(s)
-            placeHotkey(s)
         end)
     end
 end
-
-driver:SetScript("OnEvent", function()
-    if pendingKeys then
-        pendingKeys = false
-        for _, s in pairs(skins) do API.Try("skin:hotkey", placeHotkey, s) end
-    end
-end)
-API.RegisterEvents(driver, { "PLAYER_REGEN_ENABLED" }, "skin")
 
 -- Settings changed: hotkeys and macro names shown or not.
 function Buttons.RefreshText()
@@ -471,13 +420,6 @@ local function skinStock(button)
         hooksecurefunc(button, "UpdateButtonArt", function(self)
             local st = skins[self]
             if st then API.Try("skin:art", function() styleArt(st); relevel(st) end) end
-        end)
-    end
-    -- Blizzard re-anchors and resizes the key text here: put ours back.
-    if type(button.UpdateHotkeys) == "function" then
-        hooksecurefunc(button, "UpdateHotkeys", function(self)
-            local st = skins[self]
-            if st and look("keyPosition") == "above" then API.Try("skin:hotkey", placeHotkey, st) end
         end)
     end
     return s
@@ -545,5 +487,4 @@ function Buttons.Start()
     API.RegisterEvents(waiter, { "PLAYER_REGEN_ENABLED" }, "skin")
 end
 
-Buttons._test = { skins = skins, styleArt = styleArt, fading = fading, rippling = rippling,
-    pendingKeys = function() return pendingKeys end }
+Buttons._test = { skins = skins, styleArt = styleArt, fading = fading, rippling = rippling }
