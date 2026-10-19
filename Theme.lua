@@ -32,10 +32,13 @@ Theme.pending = false
 
 function Theme.IsValid(name) return Theme.PRESETS[name] ~= nil end
 
-local function current()
+-- The theme in use.
+function Theme.Current()
     local name = GAB.db and GAB.db.theme
     return Theme.PRESETS[name] and name or "clear"
 end
+
+local current = Theme.Current
 
 -- The tint for this theme as r, g, b, a (a nil: the surface's own), or
 -- nothing for "as built". Second return: false while the class colour is

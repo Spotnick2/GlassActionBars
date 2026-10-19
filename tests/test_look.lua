@@ -111,6 +111,13 @@ check(close(s.g.rim:GetAlpha(), B.Tune("rim") * B.Tune("empty") * B.EMPTY.froste
 check(s.g.tint:IsShown(), "  the fill shown")
 local c = s.g.tint._color
 check(c and close(c[1], B.FROST[1]) and close(c[3], B.FROST[3]) and close(c[4], B.FROST[4]), "  painted in that pale fill")
+check(Settings.SetTheme("smoked"), "smoked glass")
+_, body, own = scale()
+eq(own, nil, "  a frosted empty slot keeps the smoked tint (the theme shows)")
+check(close(s.g.tint._color[1], 0.05), "  painted smoked")
+Settings.SetTheme("clear")
+_, _, own = scale()
+eq(own, B.FROST, "clear again: the pale fill")
 B.SetOccupied(b, true)
 _, _, own = scale()
 eq(own, nil, "  filled again: the theme's glass")

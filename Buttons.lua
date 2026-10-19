@@ -317,7 +317,9 @@ function Buttons.Build(button, regions, opts)
     -- 2026-10-13, turned out to be the wash's gradient ignoring SetAlpha: see
     -- Theme.lua's paint.)
     GAB.Theme.Register(g, function()
-        if not s.occupied and not s.keepEmpty and look("emptySlots") == "frosted" then
+        -- Frosted replaces only the clear glass's colour: smoked and class
+        -- glass keep their tint, so the theme still shows (owner, 2026-10-19).
+        if not s.occupied and not s.keepEmpty and look("emptySlots") == "frosted" and GAB.Theme.Current() == "clear" then
             return Buttons.Tune("wash"), 1, Buttons.FROST   -- the fill's own alpha, unscaled
         end
         local f = emptyFactor(s)
