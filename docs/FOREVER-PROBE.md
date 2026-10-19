@@ -6,6 +6,25 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
+## Session 5: button feedback (#34), 2026-10-19, build 70450
+
+`/fp steps gab look` on the owner's character, the Soft preset.
+- **The halo:** its alpha reached 1 under the pointer (measured), a warm glow round the button in the
+  screenshot; it faded in and out (owner: yes). Also on the stance/pet buttons and the Utility bar.
+- **The ripple** on a mouse click: yes, out of combat and in a fight.
+- **The flash on a key press:** seen on a spell with a cast time, not sure on an instant one. It is
+  Blizzard's pushed state, shown only while the key is held, as without GAB; a key press has no
+  signal an addon can hook here (session 1), so it stays as it is.
+- **Key text above:** it worked, but on the owner's tightly stacked bars each row's numbers sat
+  on the edge of the row above (the pet bar's over the pet frame's power bar), and long labels
+  ("Mouse Button 4") ran into each other. The owner: revert it. The key-text settings (position,
+  size) are gone; the key text stays where Blizzard puts it.
+- **Empty slots:** faint showed as faint squares, but next to the reference (owner, 2026-10-19) the
+  reference's empty slot is a pale neutral tile, ours a near-clear body with a rim. A new choice,
+  **frosted** (a light grey fill in place of the theme's tint, a softer rim), is Soft's: first 16% and
+  0.6, too strong next to the reference (owner), now 8% and 0.35.
+- **A fight** with the halo, ripple and flash: nothing blocked (owner: yes; no `ADDON_ACTION_BLOCKED`
+  in ForeverProbe's log for the run).
 ## Session 4: moving the stance and pet bars (#30), 2026-10-18, build 70450
 
 `/fp steps gab barmove` (procedure rev 1) on the owner's hunter, pet out, GUF's link off. GAB's

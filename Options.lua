@@ -147,6 +147,15 @@ function Options.AddPage(name, build)
     return page.frame
 end
 
+-- Every control on a page re-read (a change in one moves others: a preset).
+function Options.RefreshPage(frame)
+    for _, page in ipairs(pages) do
+        if page.frame == frame then
+            for _, refresh in ipairs(page.refreshers) do refresh() end
+        end
+    end
+end
+
 -- The look: the glass, the text on the buttons, the gryphons, and glass or
 -- Blizzard's own art.
 Options.AddSection(function(parent, anchor)
@@ -207,6 +216,51 @@ Options.fadePage = Options.AddPage("Bar fade", function(page, title)
     local _, group = Options.radios(page, how, Options.FADE_ALPHAS, function() return GAB.db.fadeAlpha end,
         GAB.Settings.SetFadeAlpha)
     Options._test.fadeAlpha = group
+end)
+
+-- Buttons (#34): how a button answers the pointer and a click, and how an
+-- empty slot shows; a preset sets all three, and the page says when they
+-- match none.
+Options.LOOK_ROWS = {
+    { "hover", "When pointed at", { { "off", "Off" }, { "glow", "Glow" }, { "halo", "Halo" } } },
+    { "press", "When clicked", { { "off", "Off" }, { "flash", "Flash" }, { "ripple", "Ripple (on a click)" } } },
+    { "emptySlots", "Empty slots", { { "hidden", "Hidden" }, { "faint", "Faint" }, { "half", "Half" }, { "full", "Full" },
+        { "frosted", "Frosted" } } },
+}
+Options.LOOK_PRESETS = { { "glass", "Glass" }, { "soft", "Soft" }, { "minimal", "Minimal" } }
+-- The radio columns: five choices fit the page (Frosted overflowed at 150/110).
+Options.LOOK_ACROSS = { 130, 90 }
+Options.lookPage = Options.AddPage("Buttons", function(page, title)
+    local B = GAB.Buttons
+    local note = label(page, "How the buttons answer the pointer and a click, and how empty slots show. A preset "
+        .. "sets them all. The ripple answers a mouse click; a key press flashes.",
+        "GameFontHighlightSmall")
+    note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
+    note:SetJustifyH("LEFT")
+    local head = label(page, "Preset")
+    head:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
+    local _, presets = Options.radios(page, head, Options.LOOK_PRESETS, B.Preset, function(name)
+        GAB.Settings.SetLookPreset(name)
+        Options.RefreshPage(page)
+    end, Options.LOOK_ACROSS)
+    local now = label(page, "", "GameFontHighlightSmall")
+    now:SetPoint("LEFT", head, "LEFT", Options.LOOK_ACROSS[1] + #Options.LOOK_PRESETS * Options.LOOK_ACROSS[2], 0)
+    building[#building + 1] = function()
+        now:SetText(B.Preset() == "custom" and "now: your own mix" or "")
+    end
+    Options._test.lookPresets, Options._test.lookNow, Options._test.lookRows = presets, now, {}
+    local last = head
+    for i, r in ipairs(Options.LOOK_ROWS) do
+        local name = label(page, r[2])
+        name:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, i == 1 and -20 or -12)
+        local _, group = Options.radios(page, name, r[3], function() return B.Look(r[1]) end, function(v)
+            GAB.Settings.SetLook(r[1], v)
+            Options.RefreshPage(page)
+        end, Options.LOOK_ACROSS)
+        Options._test.lookRows[r[1]] = group
+        last = name
+    end
 end)
 
 -- A scrolling area filling a page below `anchor`: the Settings canvas is a

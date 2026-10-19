@@ -65,6 +65,15 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `SetOccupied` makes the rim bright or faint. Family adapters: action buttons hook their own
   `UpdateButtonArt` / `Update` / `UpdateHotkeys`; stance and pet hook their bar's
   `UpdateState` / `Update`. A login in combat waits for the fight to end.
+  Feedback (#34): `Buttons.LOOK` (hover off/glow/halo, press off/flash/ripple, emptySlots),
+  `Buttons.PRESETS` (glass = defaults: glow, flash, frosted; soft; minimal), `Buttons.Preset()`
+  ("custom" when none). The halo (Media/ButtonHalo, 16 px padding, sliced at 24) and the ripple
+  (ButtonRipple, masked by ButtonMask) are our textures on `g.top`, driven by one OnUpdate only
+  while one moves, from `HookScript` OnEnter/OnLeave/OnHide/OnMouseDown (a click only: key presses
+  have no hookable signal, they flash). The empty factor goes through the theme's scale callback
+  and the rim once (`Theme.Repaint` per surface); `Build(..., { keepEmpty = true })` opts a family
+  out (bags). The key text stays where Blizzard puts it: moving it above the buttons was tried and
+  taken out (docs/FOREVER-PROBE.md session 5). Textures from `Tools/make_rim.py`.
 - **`Bars.lua`**: the main bar's `BorderArt`, its pooled dividers (re-faded after
   `UpdateDividers`) and the end caps' textures (`/gab gryphons`), re-applied on
   `EDIT_MODE_LAYOUTS_UPDATED`.

@@ -27,14 +27,18 @@ Theme.PRESETS = {
 }
 
 local surfaces = {}
+local byG = setmetatable({}, { __mode = "k" })   -- a surface by its glass
 Theme.pending = false
 
 function Theme.IsValid(name) return Theme.PRESETS[name] ~= nil end
 
-local function current()
+-- The theme in use.
+function Theme.Current()
     local name = GAB.db and GAB.db.theme
     return Theme.PRESETS[name] and name or "clear"
 end
+
+local current = Theme.Current
 
 -- The tint for this theme as r, g, b, a (a nil: the surface's own), or
 -- nothing for "as built". Second return: false while the class colour is
@@ -62,10 +66,10 @@ end
 -- zero, so nothing is left to draw.
 local function paint(s, name, tint)
     local g, p = s.g, Theme.PRESETS[name]
-    local wash, body = 1, 1
-    if s.scale then wash, body = s.scale() end
+    local wash, body, own = 1, 1, nil
+    if s.scale then wash, body, own = s.scale() end
     local built = g.tint.glassColor or Glass.STYLE.tint
-    local c = tint or built
+    local c = own or tint or built   -- own: the surface's own fill for now (a frosted empty slot)
     local a = (c[4] or built[4]) * body
     Glass.SetSurfaceTint(g, c[1], c[2], c[3], a)
     g.tint:SetShown(a > 0)
@@ -76,15 +80,23 @@ local function paint(s, name, tint)
 end
 
 -- Add a surface and paint it with the current theme. `scale`, optional:
--- a function returning the surface's wash and body factors.
+-- a function returning the surface's wash and body factors, and optionally
+-- its own fill { r, g, b, a } in place of the theme's tint.
 function Theme.Register(g, scale)
     if type(g) ~= "table" or not g.tint then return end
     local s = { g = g, scale = scale }
     surfaces[#surfaces + 1] = s
+    byG[g] = s
     local name = current()
     local tint, known = tintFor(name)
     if not known then Theme.pending = true end
     API.Try("theme:paint", paint, s, name, tint)
+end
+
+-- Repaint one surface (its scale changed: a button's slot emptied or filled).
+function Theme.Repaint(g)
+    local s = byG[g]
+    if s then API.Try("theme:paint", paint, s, current(), (tintFor(current()))) end
 end
 
 -- Repaint every surface. Returns false while the class colour is unreadable.

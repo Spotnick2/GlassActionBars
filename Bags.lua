@@ -68,7 +68,8 @@ function Bags.Start()
         local b = _G[name]
         if b and not GAB.Buttons.IsSkinned(b) then
             API.Try("bags:" .. name, function()
-                GAB.Buttons.Build(b, regionsOf(b))
+                -- The bag slots keep their own empty look (an empty slot's quieter rim).
+                GAB.Buttons.Build(b, regionsOf(b), { keepEmpty = true })
                 if type(b.UpdateTextures) == "function" then
                     hooksecurefunc(b, "UpdateTextures", function(self)
                         GAB.Buttons.Restyle(self)
