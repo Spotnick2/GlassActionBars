@@ -57,7 +57,7 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `ClassColor`, `SafeFrame`; `MEASURED_ON_BUILD`.
 - **`Glass.lua`**: the LibGlass instance, built once at PLAYER_LOGIN by `GAB.BuildGlass(preset)` (Look.lua
   picks the preset); `GAB.Glass` is a stand-in that reaches it once built (nothing reads it
-  before login). Pearl (r11, the default on trial), Clean or Classic; an unknown preset builds Clean
+  before login). Pearl (r11, the default; the owner kept it after the trial, 2026-10-19), Clean or Classic; an unknown preset builds Clean
   and says why. `GlassActionBars.MEDIA` for our own textures. Material changes are LibGlass PRs.
 - **`Look.lua`**: the look (#39; Glass UI's SUITE.md, SUITE-LOOK.md). At PLAYER_LOGIN, before any
   glass: asks `GlassUI.Suite.Theme` (API 1 exactly; no TOC line) once per session. Following: the

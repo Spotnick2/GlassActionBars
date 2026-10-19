@@ -10,7 +10,7 @@
 --
 -- Built at PLAYER_LOGIN, not at load (#39): Glass UI's suite theme is asked
 -- first (Look.lua), and every addon's ADDON_LOADED has run by then, so the
--- TOC names no other addon. The material: Pearl (r11, the default on trial,
+-- TOC names no other addon. The material: Pearl (r11, the default: kept after the trial,
 -- owner 2026-10-19), Clean or Classic. GAB.Glass is a stand-in that reaches
 -- the instance once built; nothing reads it before PLAYER_LOGIN.
 
