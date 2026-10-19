@@ -48,7 +48,7 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 
 TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Theme.lua` ->
 `Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Fade.lua` -> `Dock.lua` ->
-`Follow.lua` -> `API.lua` -> `Utility.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
+`Follow.lua` -> `Edges.lua` -> `API.lua` -> `Utility.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
 `Glass.lua` and `Options.lua`.
 
 - **`Compat.lua`**: `GlassActionBars.API`, the only route to client APIs that moved or may be
@@ -113,6 +113,14 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   Forever is stacked on Action Bar 1). Moved once in Edit Mode it is screen-anchored and follows.
   One plain anchor only; combat and Edit Mode wait; scale events re-apply.
   Snap, no glide. `/gab follow [on/off]` shows each bar's state.
+- **`Edges.lua`**: the bars at the screen's sides for the suite (#37; Glass UI's GROUP-LAYOUT.md
+  5c): `GlassActionBars.EdgeState()` -> `{ left, right, width }` (UIParent units) and EventRegistry
+  `GlassActionBars.EdgesChanged`, out of combat, past 0.5 units from the last announced. Counted:
+  Action Bars 1-8 (`Dock.TargetRect(n, true)`, strict: one unreadable container skips the bar) and
+  every dock client (`Dock.Frames()`), visible and taller than wide; per side a stack from the
+  edge (each within 40 of the edge or the bars counted), the inner edge only grows. Measured a
+  frame after a request: a Dock pass, a watched bar's or client's OnShow/OnHide, Edit Mode exit,
+  layout/scale/display events, the Utility bar placed by hand.
 - **`API.lua`**: the public provider API (#8); the contract is
   [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (1, checked
   with `==`; not `API_VERSION`: `GlassActionBars.API` is the client adapter), `RegisterBar` (wraps

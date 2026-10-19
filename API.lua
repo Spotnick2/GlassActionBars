@@ -139,6 +139,13 @@ function GAB.RegisterButton(def)
     return true
 end
 
+-- Where the bars at the screen's sides end (#37, Edges.lua): { left, right,
+-- width } in UIParent units, a fresh table; nil before the first measure.
+-- Changes are announced on EventRegistry as "GlassActionBars.EdgesChanged".
+function GAB.EdgeState()
+    return GAB.Edges.State()
+end
+
 -- Internal, for the Utility bar: the registered buttons, in order, as copies.
 function GAB.ProvidedButtons()
     local out = {}

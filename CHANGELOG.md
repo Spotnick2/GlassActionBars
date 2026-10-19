@@ -26,7 +26,8 @@
   stance bar and the pet bar move with them, and come back when it lets go. Your Edit Mode layout
   is never changed. A bar still in Edit Mode's default place (stacked on Action Bar 1), or snapped
   to another bar, stays where it is: move it once in Edit Mode to let it follow (`/gab follow`
-  says why a bar stays). On by default; `/gab follow on/off`.
+  says why a bar stays). On by default; `/gab follow on/off`. Glass Raid Frames' grid keeps clear
+  of the bars along the screen's sides.
 
 ## v0.1.0
 
