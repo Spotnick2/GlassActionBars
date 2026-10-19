@@ -165,23 +165,26 @@ def button_socket_shade():
 
 
 def button_gloss():
-    """Pearl's reflection on a filled button (#44): a band over the upper third.
+    """Pearl's reflection on a filled button (#44): a soft highlight at the top.
 
-    FFXIV's (the owner's references): an even band, brightest at the top, that
-    ends in a soft but definite lower edge; that edge is what reads as a glass
-    face. The first version, a bell peaking at 12% that faded out by 43%, had
-    no edge and read as a faint grey haze. The edge bows down a little in the
-    middle (a curved face) and is gone before the middle of the button; the
-    mask at runtime rounds the corners. A static bitmap (not SetGradient, so
+    It supports the rim's bevel, which gives most of the glass look: brightest
+    just under the top edge in the middle, tapering to the sides, its lower
+    edge an arc (the sides fade sooner, a curved face), fading smoothly into the
+    icon by about a quarter of the way down, no plateau and no edge. Tried and
+    rejected: a bell fading out from 12% evenly across (a faint grey haze), and
+    an even band down to 30% with a definite edge (a grey cap that lifted dark
+    icons into a slab and washed out bright ones; owner, 2026-10-19). The mask
+    at runtime rounds the corners. A static bitmap (not SetGradient, so
     SetAlpha works on Forever), BLEND white, its strength the gloss tune.
     """
     n = 64
     y = (np.arange(n, dtype=np.float64) + 0.5)[:, None] / n
-    x = (np.arange(n, dtype=np.float64) + 0.5)[None, :] / n
-    edge = 0.30 + 0.03 * (1 - (2 * x - 1) ** 2)          # 0.30 at the sides, 0.33 in the middle
-    band = 1 - smoothstep(edge - 0.035, edge + 0.035, y)   # ~4.5 px soft edge at 64 px
+    u = (np.arange(n, dtype=np.float64) + 0.5)[None, :] / n * 2 - 1   # -1 left .. 1 right
+    arc = y + 0.10 * u ** 2                                           # the sides fade sooner
+    down = (1 - smoothstep(0.0, 0.27, arc)) ** 1.5                    # concentrated at the top
+    across = 0.35 + 0.65 * (1 - smoothstep(0.2, 1.0, np.abs(u)))      # tapering to the sides
     rgba = np.ones((n, n, 4))
-    rgba[..., 3] = band * (1 - 0.3 * np.clip(y / 0.33, 0, 1))   # brightest at the top
+    rgba[..., 3] = down * across
     return rgba
 
 

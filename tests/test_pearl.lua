@@ -71,23 +71,34 @@ for _, material in ipairs({ "clean", "classic" }) do
     check(close(frost[1], 0.9) and close(frost[2], 0.91) and close(frost[3], 0.94), material .. ": old tint")
 end
 
--- The reflection's shape (Media/ButtonGloss, Tools/make_rim.py): an even band
--- over the upper third with a definite lower edge, gone before the middle.
--- (The first one, a bell fading out from 12%, read as a grey haze in game.)
+-- The reflection's shape (Media/ButtonGloss, Tools/make_rim.py): a soft
+-- highlight under the top edge, strongest in the middle, fading smoothly. Not
+-- the rejected band (an even cap down to 30% with a sharp edge: a grey slab on
+-- dark icons, owner 2026-10-19), nor a haze across the whole width.
 local f = io.open("Media/ButtonGloss.tga", "rb")
 local tga = f and f:read("*a")
 if f then f:close() end
 check(tga ~= nil, "ButtonGloss ships")
 if tga then
     local n = tga:byte(13) + 256 * tga:byte(14)
-    local function alpha(y, x)   -- 0..1 at y (0 top) and x, of the bottom-up BGRA rows
-        local row, col = math.floor(y * n), math.floor(x * n)
+    local function alpha(row, col)   -- 0..1 at pixel row (0 top) and col, of the bottom-up BGRA rows
         return tga:byte(18 + ((n - 1 - row) * n + col) * 4 + 4) / 255
     end
-    check(alpha(0.05, 0.5) > 0.9 and alpha(0.25, 0.5) > 0.7, "  the band: strong down to a quarter")
-    check(alpha(0.25, 0.5) - alpha(0.40, 0.5) > 0.6, "  a definite lower edge, not a long fade")
-    check(alpha(0.45, 0.5) == 0 and alpha(0.6, 0.2) == 0, "  nothing from just before the middle down")
-    check(alpha(0.32, 0.5) > alpha(0.32, 0.05), "  the edge bows down in the middle (a curved face)")
+    local mid, strong, steepest, lowest = math.floor(n / 2), 0, 0, 0
+    for row = 0, n - 1 do
+        for col = 0, n - 1 do
+            local a = alpha(row, col)
+            if a > 0.5 then strong = strong + 1 end
+            if a > 0 then lowest = row end
+        end
+        if row > 0 then steepest = math.max(steepest, math.abs(alpha(row, mid) - alpha(row - 1, mid))) end
+    end
+    check(alpha(2, mid) > 0.8, "  strongest under the top edge, in the middle")
+    check(strong / (n * n) < 0.12, "  near-white over a small area only (no cap)")
+    check(steepest < 0.15, "  a smooth fade, no horizontal edge")
+    check(lowest < n * 0.35, "  gone well before the middle")
+    check(alpha(math.floor(n * 0.15), math.floor(n * 0.15)) < alpha(math.floor(n * 0.15), mid) / 2,
+        "  tapering to the sides along an arc (a curved face)")
 end
 
 done("test_pearl")
