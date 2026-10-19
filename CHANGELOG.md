@@ -12,8 +12,9 @@
   kit whenever you carry one, the camp features (Camp Chair, Mana Well, Fish Bowl...) when you are
   near a campfire. Each button shows only what this character can use. It docks right of the main
   action bar and matches its buttons; every action and campfire kit has a key binding (Esc >
-  Options > Keybindings > Glass Action Bars). Choose and order its buttons on the new **Utility
-  bar** options page; `/gab utility on/off`.
+  Options > Keybindings > Glass Action Bars). Hold **Alt and drag** it to put it anywhere instead,
+  and choose its direction, rows, button size and spacing. Choose and order its buttons on the new
+  **Utility bar** options page; `/gab utility on/off`.
 - **Dock**: smart bars dock beside one of Edit Mode's Action Bars 1-8 and follow it (the new
   **Dock** options page, `/gab dock`).
 

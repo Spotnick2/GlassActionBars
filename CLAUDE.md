@@ -100,7 +100,9 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   group in the order. Secure buttons `GlassActionBarsUtil_<key>` made at load with their own
   regions, skinned at login; `Bindings.xml` (shipped by deploy.ps1 and the package allowlist) has a
   CLICK binding per action and kit. Reconcile coalesced, deferred in combat. The dock client
-  `utility` (default right of bar 1); `Layout(geom|nil)`, own geometry on undock. Cooldowns: the
+  `utility` (default right of bar 1); `Layout(geom|nil)`, nil = its own layout (`LAYOUT`, Apotheca's
+  keys: orientation, rows, iconSize, iconPadding). Alt-drag (Apotheca's overlay and combat handling)
+  undocks at the drag's start and saves `utility.pos` at the drop; undocked, the bar sits there. Cooldowns: the
   Hearthstone by its use spell's duration object, other items by `GetItemCooldown`. Settings in
   `GlassActionBarsDB.utility`, created by the first change only (Apotheca's import marker);
   provider buttons will be `provider:<id>` keys.

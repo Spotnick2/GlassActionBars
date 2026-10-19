@@ -88,6 +88,10 @@ local function ensureDefaults()
                     u.order = clean
                 end
             end
+            for k in pairs(U.LAYOUT) do
+                if u[k] ~= nil and not U.ValidLayout(k, u[k]) then u[k] = nil end
+            end
+            if u.pos ~= nil and not U.ValidPos(u.pos) then u.pos = nil end
         end
     end
     if db.fadeAlpha ~= nil and (type(db.fadeAlpha) ~= "number" or not (db.fadeAlpha >= 0 and db.fadeAlpha <= 1)) then
@@ -197,6 +201,23 @@ function Settings.SetUtilityShown(key, on)
     u.show = u.show or {}
     if on == false then u.show[key] = false else u.show[key] = nil end   -- only false is stored
     GAB.Utility.Reconcile()
+    return true
+end
+
+-- One of the bar's own layout settings (Utility.LAYOUT's keys), used when it
+-- isn't matching a docked bar. False for a bad key or value.
+function Settings.SetUtilityLayout(key, value)
+    if not GAB.Utility.ValidLayout(key, value) then return false end
+    utility()[key] = value
+    GAB.Utility.Reconcile()
+    return true
+end
+
+-- Where the undocked bar sits: its bottom-left corner on UIParent. The
+-- Utility bar's drag and undock save it; false for a bad position.
+function Settings.SetUtilityPosition(x, y)
+    if not GAB.Utility.ValidPos({ x = x, y = y }) then return false end
+    utility().pos = { x = x, y = y }
     return true
 end
 
