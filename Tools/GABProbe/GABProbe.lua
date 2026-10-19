@@ -384,10 +384,67 @@ Probe:Steps("barmove", {
     { text = "Type /reload (or press Reload now) to save the results.", reload = true },
 })
 
+-- ------------------------------------------------------------------
+-- look (#34): the button feedback in game, the Soft preset: the halo on a
+-- hovered button, the ripple on a click, the flash on a key press, the key
+-- text above the buttons, faint empty slots; on every family, in a fight.
+-- ------------------------------------------------------------------
+
+local function buttons() local g = rawget(_G, "GlassActionBars"); return g and g.Buttons end
+local function settings() local g = rawget(_G, "GlassActionBars"); return g and g.Settings end
+
+-- A skinned button under the pointer, and its halo's alpha.
+local function hovered()
+    local B, found = buttons(), nil
+    if not B then return nil end
+    B.Each(function(s)
+        local v = s.button:IsMouseOver()
+        if not found and not secret(v) and v == true and s.button:IsVisible() == true then found = s end
+    end)
+    return found
+end
+
+local lookFights, lookMark = 0, nil
+Probe:Steps("look", {
+    title = "Button feedback, the Soft preset (#34)",
+    { text = "Press Soft: GAB switches to its Soft look (halo, ripple, key text above, faint empty slots).",
+      button = "Soft", run = function() settings().SetLookPreset("soft"); return buttons().Preset() end,
+      check = function() return buttons().Preset() == "soft", "the Soft preset" end,
+      screenshot = "the Soft look" },
+    { text = "Point at an action button with something on it and keep the pointer there.",
+      wait = function()
+          local s = hovered()
+          if not s then return false, "no button under the pointer" end
+          return s.halo and s.halo:GetAlpha() > 0.9, "halo alpha " .. Show(s.halo and s.halo:GetAlpha())
+      end, timeout = 120, screenshot = "the halo" },
+    { text = "Did a warm halo fade in round the button, and fade out when you moved away?", ask = true },
+    { text = "Click an action button with the mouse (out of combat). Did a soft circle swell from the pointer and fade?",
+      ask = true },
+    { text = "Press one of your action bar key bindings. Did that button flash?", ask = true },
+    { text = "Are the key texts above the buttons, large, and readable (not clipped, not over the bar above)?",
+      ask = true },
+    { text = "Are the empty slots faint, and the bag slots unchanged?", ask = true },
+    { text = "Do the stance or pet buttons and the Utility bar show the same halo and ripple?", ask = true },
+    { text = "Fight something: point at buttons, click them and press their keys in the fight. This step completes "
+        .. "when the fight is over.",
+      wait = function()
+          lookMark = lookMark or lookFights
+          return lookFights > lookMark and not InCombatLockdown(), "waiting for a fight to start and end"
+      end, timeout = 900 },
+    { text = "In the fight, did the halo, ripple and flash work, with nothing saying an action was blocked?",
+      ask = true },
+    { text = "Press Glass to go back to today's look, or Skip to keep Soft.", button = "Glass",
+      run = function() settings().SetLookPreset("glass"); return buttons().Preset() end },
+    { text = "Press Reload now to save the results.", reload = true },
+})
+
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
 boot:SetScript("OnEvent", function(_, event, name)
-    if event == "PLAYER_REGEN_ENABLED" then fights = fights + 1 return end
+    if event == "PLAYER_REGEN_ENABLED" then
+        fights, lookFights = fights + 1, lookFights + 1
+        return
+    end
     if name ~= ADDON then return end
     Probe:Ready()
     -- The standalone probe's saved table had another shape: start afresh.

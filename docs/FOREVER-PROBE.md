@@ -6,6 +6,13 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
+## Session 5: button feedback (#34, pending)
+
+`pwsh Tools\deploy.ps1 -Probe`, `/reload`, then `/fp steps gab look`: the Soft preset; the halo on
+a hovered button (measured: its alpha reaches 1 under the pointer), the ripple on a click, the
+flash on a key press, the key text above, faint empty slots, on the stance/pet buttons and the
+Utility bar, and all of it in a fight with nothing blocked.
+
 ## Session 4: moving the stance and pet bars (#30), 2026-10-18, build 70450
 
 `/fp steps gab barmove` (procedure rev 1) on the owner's hunter, pet out, GUF's link off. GAB's

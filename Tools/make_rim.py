@@ -106,11 +106,51 @@ def button_rim():
     return rgba
 
 
+# The hover halo (#34): the same rounded boundary (radius 7) centred in 16 px of
+# transparent padding, so the glow outside the line isn't clipped. 64x64,
+# 9-sliced with margins 24, anchored 16 UI px beyond the button so the line sits
+# on its edge. A thicker line, a soft glow outward, a faint inner fill (the wash
+# over the icon). White; the warm colour is a vertex colour.
+HALO, HALO_PAD = 64, 16
+HALO_LINE, HALO_GLOW, HALO_GLOW_ALPHA, HALO_FILL = 2.5, 4.0, 0.55, 0.16
+
+
+def button_halo():
+    d = rounded_rect_sdf(HALO, HALO, HALO_PAD + INSET, RADIUS)
+    line = band(d, -HALO_LINE, 0.0, soft=0.6)
+    glow = np.where(d > 0, HALO_GLOW_ALPHA * np.exp(-np.maximum(d, 0) / HALO_GLOW), 0.0)
+    fill = coverage(d + HALO_LINE) * HALO_FILL
+    rgba = np.ones((HALO, HALO, 4))
+    rgba[..., 3] = np.maximum(np.maximum(line, glow), fill)
+    return rgba
+
+
+def button_ripple():
+    """The press ripple: a soft white disc, strongest in the middle, fading to the edge."""
+    ys, xs = np.mgrid[0:64, 0:64].astype(np.float64) + 0.5
+    r = np.hypot(xs - 32, ys - 32) / 31.0
+    rgba = np.ones((64, 64, 4))
+    rgba[..., 3] = np.clip(1 - r, 0, 1) ** 0.8 * 0.9
+    return rgba
+
+
+def button_mask():
+    """The button's rounded square as a mask (unsliced, stretched over the button)."""
+    rgba = np.ones((SIZE, SIZE, 4))
+    rgba[..., 3] = coverage(rounded_rect_sdf(SIZE, SIZE, INSET, RADIUS))
+    return rgba
+
+
 def main():
     rim = button_rim()
     inner = rim[9:SIZE - 9, 9:SIZE - 9, 3]
     assert inner.max() == 0, "the centre must be fully transparent"
     write_tga("ButtonRim", rim)
+    halo = button_halo()
+    assert halo[0, 0, 3] < 0.01 and halo[0, HALO // 2, 3] < 0.05, "the halo's padding must fade out"
+    write_tga("ButtonHalo", halo)
+    write_tga("ButtonRipple", button_ripple())
+    write_tga("ButtonMask", button_mask())
 
 
 if __name__ == "__main__":

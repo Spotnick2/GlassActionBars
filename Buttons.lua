@@ -56,6 +56,63 @@ function Buttons.Tune(key)
     return Buttons.TUNE[key][1]
 end
 
+-- Button feedback (#34, from the owner's Final Fantasy XIV reference): how a
+-- button answers the pointer and a press, how an empty slot shows, where its
+-- key text sits. Each is a setting (GlassActionBarsDB, the keys below); a
+-- preset sets all five. Glass is today's look.
+Buttons.LOOK = {
+    hover = { "off", "glow", "halo" },             -- glow: Blizzard's highlight, softened
+    press = { "off", "flash", "ripple" },          -- flash: the pushed rim; ripple: plus a ripple on a click
+    emptySlots = { "hidden", "faint", "half", "full" },
+    keyPosition = { "inside", "above" },
+    keySize = { "normal", "large" },
+}
+Buttons.LOOK_ORDER = { "hover", "press", "emptySlots", "keyPosition", "keySize" }
+Buttons.PRESETS = {
+    glass = { hover = "glow", press = "flash", emptySlots = "full", keyPosition = "inside", keySize = "normal" },
+    soft = { hover = "halo", press = "ripple", emptySlots = "faint", keyPosition = "above", keySize = "large" },
+    minimal = { hover = "off", press = "flash", emptySlots = "hidden", keyPosition = "inside", keySize = "normal" },
+}
+Buttons.PRESET_ORDER = { "glass", "soft", "minimal" }
+Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1 }   -- an empty slot's glass
+-- The halo: Media/ButtonHalo (Tools/make_rim.py), 16 px of padding round the
+-- button's boundary, 9-sliced at 24; a warm white; the reference's ~0.1 s in.
+Buttons.HALO = { file = "ButtonHalo", pad = 16, margin = 24, color = { 1, 0.94, 0.8 }, fadeIn = 0.1, fadeOut = 0.15 }
+Buttons.RIPPLE = { file = "ButtonRipple", mask = "ButtonMask", duration = 0.3, from = 0.3, to = 1.6, alpha = 0.6 }
+
+function Buttons.ValidLook(key, v)
+    for _, x in ipairs(Buttons.LOOK[key] or {}) do
+        if x == v then return true end
+    end
+    return false
+end
+
+local function look(key)
+    local v = GAB.db and GAB.db[key]
+    if Buttons.ValidLook(key, v) then return v end
+    return Buttons.PRESETS.glass[key]
+end
+Buttons.Look = look
+
+-- The preset the five settings match, or "custom".
+function Buttons.Preset()
+    for _, name in ipairs(Buttons.PRESET_ORDER) do
+        local all = true
+        for _, k in ipairs(Buttons.LOOK_ORDER) do
+            if look(k) ~= Buttons.PRESETS[name][k] then all = false end
+        end
+        if all then return name end
+    end
+    return "custom"
+end
+
+-- An empty slot's glass, as a factor (1 on a slot with an action, and on a
+-- family that keeps its own empty look: the bag slots).
+local function emptyFactor(s)
+    if s.occupied or s.keepEmpty then return 1 end
+    return Buttons.EMPTY[look("emptySlots")]
+end
+
 local function font()
     local f = Glass.FONTS[Glass.fontKey] or Glass.FONTS.arial
     return f.file, f.bump
@@ -67,7 +124,7 @@ local function styleText(s)
     local r = s.regions
     local file, bump = font()
     if r.hotkey then
-        r.hotkey:SetFont(file, (s.small and 10 or 12) + bump, "OUTLINE")
+        r.hotkey:SetFont(file, (s.small and 10 or 12) + bump + (look("keySize") == "large" and 4 or 0), "OUTLINE")
         r.hotkey:SetAlpha(GAB.db.showHotkeys and 1 or 0)
     end
     if r.count then r.count:SetFont(file, (s.small and 11 or 14) + bump, "OUTLINE") end
@@ -75,9 +132,157 @@ local function styleText(s)
 end
 
 local function paintRim(s)
-    local f = s.occupied and 1 or Buttons.Tune("empty")
+    local f = s.occupied and 1 or Buttons.Tune("empty") * emptyFactor(s)
     s.g.rim:SetAlpha(Buttons.Tune("rim") * f)
     s.g.dark:SetAlpha(Buttons.Tune("dark") * f)
+end
+
+-- The key text above the button's top-left corner, outside it (the
+-- reference's), or where Blizzard put it. Its anchor, size and justification
+-- as built are kept (read) to put back. A protected button's region: never
+-- moved in combat, the fight's end does it.
+local pendingKeys = false
+local function recordHotkey(s)
+    local hk = s.regions.hotkey
+    if not hk or s.hkOrig then return end
+    local o = { points = {} }
+    local n = API.Plain(hk:GetNumPoints())
+    for i = 1, type(n) == "number" and n or 0 do
+        local p = { hk:GetPoint(i) }
+        for j = 1, 5 do if API.IsSecret(p[j]) then return end end
+        o.points[i] = p
+    end
+    o.w, o.h, o.justify = API.Plain(hk:GetWidth()), API.Plain(hk:GetHeight()), API.Plain(hk:GetJustifyH())
+    s.hkOrig = o
+end
+
+local function placeHotkey(s)
+    local hk = s.regions.hotkey
+    if not hk then return end
+    if InCombatLockdown() then pendingKeys = true return end
+    if look("keyPosition") == "above" then
+        local w = API.Plain(s.button:GetWidth())
+        hk:ClearAllPoints()
+        hk:SetPoint("BOTTOMLEFT", s.button, "TOPLEFT", 0, 1)
+        hk:SetSize((type(w) == "number" and w or 45) * 2, look("keySize") == "large" and 18 or 14)
+        hk:SetJustifyH("LEFT")
+        s.hkMoved = true
+    elseif s.hkMoved and s.hkOrig then
+        local o = s.hkOrig
+        hk:ClearAllPoints()
+        for _, p in ipairs(o.points) do hk:SetPoint(unpack(p, 1, 5)) end
+        if type(o.w) == "number" and type(o.h) == "number" then hk:SetSize(o.w, o.h) end
+        if type(o.justify) == "string" then hk:SetJustifyH(o.justify) end
+        s.hkMoved = false
+    end
+end
+
+-- Hover and press effects run on one driver, its OnUpdate set only while a
+-- halo fades or a ripple swells. Everything here is on our own regions.
+local driver = CreateFrame("Frame")
+local fading, rippling = {}, {}   -- state -> the halo's target alpha; state -> the ripple's elapsed time
+
+local function step(_, elapsed)
+    for s, target in pairs(fading) do
+        local a = s.halo:GetAlpha()
+        local d = elapsed / (target > a and Buttons.HALO.fadeIn or Buttons.HALO.fadeOut)
+        a = target > a and math.min(target, a + d) or math.max(target, a - d)
+        s.halo:SetAlpha(a)
+        if a == target then fading[s] = nil end
+    end
+    local R = Buttons.RIPPLE
+    for s, t in pairs(rippling) do
+        t = t + elapsed
+        local p = math.min(1, t / R.duration)
+        local size = s.rippleBase * (R.from + (R.to - R.from) * p)
+        s.ripple:SetSize(size, size)
+        s.ripple:SetAlpha(R.alpha * (1 - p))
+        if p >= 1 then
+            rippling[s] = nil
+            s.ripple:Hide()
+        else
+            rippling[s] = t
+        end
+    end
+    if not next(fading) and not next(rippling) then driver:SetScript("OnUpdate", nil) end
+end
+
+local function fadeTo(s, target)
+    if not s.halo or (fading[s] == nil and s.halo:GetAlpha() == target) then return end
+    fading[s] = target
+    driver:SetScript("OnUpdate", step)
+end
+
+local function clearEffects(s)
+    fading[s], rippling[s] = nil, nil
+    if s.halo then s.halo:SetAlpha(0) end
+    if s.ripple then s.ripple:Hide() end
+end
+
+-- Blizzard's highlight: softened for glow, off when the halo (or nothing) answers.
+local function applyHighlight(s)
+    local h = s.regions.highlight
+    if h then h:SetAlpha(look("hover") == "glow" and Buttons.HIGHLIGHT or 0) end
+end
+
+local function makeHalo(s)
+    local H = Buttons.HALO
+    local t = s.g.top:CreateTexture(nil, "ARTWORK", nil, 7)
+    t:SetTexture(GAB.MEDIA .. H.file)
+    t:SetTextureSliceMargins(H.margin, H.margin, H.margin, H.margin)
+    local modes = Enum and Enum.UITextureSliceMode
+    t:SetTextureSliceMode((modes and modes.Stretched) or 0)
+    t:SetPoint("TOPLEFT", s.button, "TOPLEFT", -H.pad, H.pad)
+    t:SetPoint("BOTTOMRIGHT", s.button, "BOTTOMRIGHT", H.pad, -H.pad)
+    t:SetVertexColor(H.color[1], H.color[2], H.color[3], 1)
+    t:SetBlendMode("ADD")
+    t:SetAlpha(0)
+    s.halo = t
+end
+
+-- A click: the ripple from the pointer, inside the button's rounded square.
+-- One ripple per button, made on its first click.
+local function ripple(s)
+    if look("press") ~= "ripple" then return end
+    local b, R = s.button, Buttons.RIPPLE
+    if not s.ripple then
+        local mask = s.g.top:CreateMaskTexture()
+        mask:SetTexture(GAB.MEDIA .. R.mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        mask:SetAllPoints(b)
+        local t = s.g.top:CreateTexture(nil, "OVERLAY")
+        t:SetTexture(GAB.MEDIA .. R.file)
+        t:SetBlendMode("ADD")
+        t:AddMaskTexture(mask)
+        t:Hide()
+        s.ripple = t
+    end
+    local w = API.Plain(b:GetWidth())
+    s.rippleBase = type(w) == "number" and w > 0 and w or 36
+    local x, y = GetCursorPosition()
+    x, y = API.Plain(x), API.Plain(y)
+    local es, l, bt = API.Plain(b:GetEffectiveScale()), API.Plain(b:GetLeft()), API.Plain(b:GetBottom())
+    s.ripple:ClearAllPoints()
+    if type(x) == "number" and type(y) == "number" and type(es) == "number" and es > 0
+            and type(l) == "number" and type(bt) == "number" then
+        s.ripple:SetPoint("CENTER", b, "BOTTOMLEFT", x / es - l, y / es - bt)
+    else
+        s.ripple:SetPoint("CENTER", b, "CENTER")
+    end
+    s.ripple:SetSize(s.rippleBase * R.from, s.rippleBase * R.from)
+    s.ripple:SetAlpha(R.alpha)
+    s.ripple:Show()
+    rippling[s] = 0
+    driver:SetScript("OnUpdate", step)
+end
+
+-- The pointer and a click, on the button's own scripts (HookScript: Blizzard's
+-- handlers run first and untouched). Read the setting when they fire.
+local function hookFeedback(s)
+    local b = s.button
+    b:HookScript("OnEnter", function() if look("hover") == "halo" then fadeTo(s, 1) end end)
+    b:HookScript("OnLeave", function() fadeTo(s, 0) end)
+    b:HookScript("OnHide", function() clearEffects(s) end)
+    b:HookScript("OnMouseDown", function() API.Try("skin:ripple", ripple, s) end)
 end
 
 -- The body under the button, the rim over it. Run again whenever Blizzard
@@ -112,6 +317,7 @@ local function stylePushed(s)
     p:SetAllPoints(s.button)
     p:SetVertexColor(1, 1, 1, 1)
     p:SetBlendMode("ADD")
+    p:SetAlpha(look("press") == "off" and 0 or 1)
 end
 
 -- The fades first, each on its own, then the pressed look: one refusal
@@ -126,9 +332,10 @@ end
 
 -- The glass on one button. `regions` names its parts: icon, cooldown,
 -- count, hotkey, name, normal, pushed, highlight, slotArt, slotBackground
--- (any may be absent). Returns the button's state; a second call returns
--- the same one.
-function Buttons.Build(button, regions)
+-- (any may be absent). `opts.keepEmpty`: the family keeps its own empty look
+-- (the empty-slots setting skips it). Returns the button's state; a second
+-- call returns the same one.
+function Buttons.Build(button, regions, opts)
     if skins[button] then return skins[button] end
     local body = CreateFrame("Frame", nil, button)
     body:SetAllPoints(button)
@@ -138,7 +345,7 @@ function Buttons.Build(button, regions)
     g.grain:SetAlpha(0)
     rimTexture(g.rim)      -- our rim on the surface's own rim region (ours to retexture)
     local s = { button = button, body = body, g = g, regions = regions or {}, occupied = true,
-                small = (API.Plain(button:GetWidth()) or 45) < 40 }
+                small = (API.Plain(button:GetWidth()) or 45) < 40, keepEmpty = opts and opts.keepEmpty == true }
     skins[button] = s
     -- The body's paint first, and every later step on its own: a step that
     -- throws on the client (a region method Blizzard's art refuses) must not
@@ -146,13 +353,19 @@ function Buttons.Build(button, regions)
     -- recorded per step and button for /gab failures. (The owner's grey fill,
     -- 2026-10-13, turned out to be the wash's gradient ignoring SetAlpha: see
     -- Theme.lua's paint.)
-    GAB.Theme.Register(g, function() return Buttons.Tune("wash"), Buttons.Tune("body") end)
+    GAB.Theme.Register(g, function()
+        local f = emptyFactor(s)
+        return Buttons.Tune("wash") * f, Buttons.Tune("body") * f
+    end)
     local name = API.Plain(button:GetName()) or "?"
     API.Try("skin:rim:" .. name, paintRim, s)
     API.Try("skin:level:" .. name, relevel, s)
     API.Try("skin:art:" .. name, styleArt, s)
     API.Try("skin:text:" .. name, styleText, s)
-    if s.regions.highlight then API.Try("skin:highlight:" .. name, s.regions.highlight.SetAlpha, s.regions.highlight, Buttons.HIGHLIGHT) end
+    API.Try("skin:highlight:" .. name, applyHighlight, s)
+    API.Try("skin:halo:" .. name, makeHalo, s)
+    API.Try("skin:hotkey:" .. name, function() recordHotkey(s); placeHotkey(s) end)
+    API.Try("skin:feedback:" .. name, hookFeedback, s)
     return s
 end
 
@@ -174,9 +387,45 @@ function Buttons.Each(fn) for _, s in pairs(skins) do fn(s) end end
 function Buttons.SetOccupied(button, occupied)
     local s = skins[button]
     if not s or occupied == nil then return end
+    local was = s.occupied
     s.occupied = occupied == true
     paintRim(s)
+    -- The body's paint carries the empty-slots factor.
+    if was ~= s.occupied and not s.keepEmpty then GAB.Theme.Repaint(s.g) end
 end
+
+-- The feedback settings changed: every button's highlight, halo, pressed
+-- look, empty glass and key text, at once (the key text after a fight).
+function Buttons.RefreshFeedback()
+    for _, s in pairs(skins) do
+        API.Try("skin:feedback", function()
+            applyHighlight(s)
+            if look("hover") ~= "halo" then
+                fading[s] = nil
+                if s.halo then s.halo:SetAlpha(0) end
+            elseif API.Plain(s.button:IsMouseOver()) == true then
+                fadeTo(s, 1)   -- turned on under a still pointer
+            end
+            if look("press") ~= "ripple" and s.ripple then
+                rippling[s] = nil
+                s.ripple:Hide()
+            end
+            stylePushed(s)
+            paintRim(s)
+            if not s.keepEmpty then GAB.Theme.Repaint(s.g) end
+            styleText(s)
+            placeHotkey(s)
+        end)
+    end
+end
+
+driver:SetScript("OnEvent", function()
+    if pendingKeys then
+        pendingKeys = false
+        for _, s in pairs(skins) do API.Try("skin:hotkey", placeHotkey, s) end
+    end
+end)
+API.RegisterEvents(driver, { "PLAYER_REGEN_ENABLED" }, "skin")
 
 -- Settings changed: hotkeys and macro names shown or not.
 function Buttons.RefreshText()
@@ -222,6 +471,13 @@ local function skinStock(button)
         hooksecurefunc(button, "UpdateButtonArt", function(self)
             local st = skins[self]
             if st then API.Try("skin:art", function() styleArt(st); relevel(st) end) end
+        end)
+    end
+    -- Blizzard re-anchors and resizes the key text here: put ours back.
+    if type(button.UpdateHotkeys) == "function" then
+        hooksecurefunc(button, "UpdateHotkeys", function(self)
+            local st = skins[self]
+            if st and look("keyPosition") == "above" then API.Try("skin:hotkey", placeHotkey, st) end
         end)
     end
     return s
@@ -289,4 +545,5 @@ function Buttons.Start()
     API.RegisterEvents(waiter, { "PLAYER_REGEN_ENABLED" }, "skin")
 end
 
-Buttons._test = { skins = skins, styleArt = styleArt }
+Buttons._test = { skins = skins, styleArt = styleArt, fading = fading, rippling = rippling,
+    pendingKeys = function() return pendingKeys end }

@@ -351,6 +351,8 @@ function Methods.SetFormattedText(fs, fmt, ...)
 end
 function Methods.SetFont(fs, file, size, flags) fs._font = { file, size, flags }; return true end
 function Methods.SetFontObject(fs, obj) fs._fontObject = obj end
+function Methods.SetJustifyH(fs, j) fs._justifyH = j end
+function Methods.GetJustifyH(fs) return fs._justifyH or "CENTER" end
 function Methods.GetFont(fs)
     local f = fs._font or { "Fonts\FRIZQT__.TTF", 10, "" }
     return f[1], f[2], f[3]
@@ -426,6 +428,8 @@ end,
     GetAuraDataByIndex = function(unit, i, filter) return (WoW.helpful or {})[i] end }
 function GetBindingKey(action) return WoW.bindings[action] end
 function IsAltKeyDown() return WoW.altDown == true end
+-- The pointer in screen pixels (WoW.cursor = { x, y }; a test may make either secret).
+function GetCursorPosition() local c = WoW.cursor or { 0, 0 }; return c[1], c[2] end
 
 -- Errors handed to the client's error handler (a Lua error popup in game).
 WoW.errors = {}
@@ -620,6 +624,16 @@ local function actionButton(name, parent, small)
         Methods["Set" .. state .. "Texture"](b, "atlas:" .. state)
         b[state .. "Texture"] = Methods["Get" .. state .. "Texture"](b)
     end
+    -- The template's key text: top right, right-justified; UpdateHotkeys (ActionButton.lua:480)
+    -- sizes it to the button and anchors it again (SetPoint, no ClearAllPoints).
+    Methods.SetPoint(b.HotKey, "TOPRIGHT", b, "TOPRIGHT", -2, -4)
+    Methods.SetSize(b.HotKey, side - 8, 10)
+    Methods.SetJustifyH(b.HotKey, "RIGHT")
+    rawset(b, "UpdateHotkeys", function(self)
+        Methods.SetSize(self.HotKey, self._width - 8, 10)
+        Methods.SetPoint(self.HotKey, "TOPRIGHT", self, "TOPRIGHT", -2, -4)
+        self._hotkeyUpdates = (self._hotkeyUpdates or 0) + 1
+    end)
     rawset(b, "UpdateButtonArt", function(self)
         self.NormalTexture._file = "UI-HUD-ActionBar-IconFrame"
         self.PushedTexture._file = "UI-HUD-ActionBar-IconFrame-Down"

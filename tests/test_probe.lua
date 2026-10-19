@@ -106,6 +106,10 @@ SlashCmdList.FOREVERPROBE("steps gab barmove")
 rec = ForeverProbeDB.steps.records["GABProbe/barmove"]
 check(rec and rec.status == "active", "/fp steps gab barmove starts")
 SlashCmdList.FOREVERPROBE("steps stop")
+SlashCmdList.FOREVERPROBE("steps gab look")
+rec = ForeverProbeDB.steps.records["GABProbe/look"]
+check(rec and rec.status == "active", "/fp steps gab look starts")
+SlashCmdList.FOREVERPROBE("steps stop")
 SlashCmdList.FOREVERPROBE("gab clear")
 eq(#GABProbeDB.log, 1, "/fp gab clear empties the log in place (one line left: 'log cleared')")
 

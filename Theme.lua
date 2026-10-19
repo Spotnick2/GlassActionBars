@@ -27,6 +27,7 @@ Theme.PRESETS = {
 }
 
 local surfaces = {}
+local byG = setmetatable({}, { __mode = "k" })   -- a surface by its glass
 Theme.pending = false
 
 function Theme.IsValid(name) return Theme.PRESETS[name] ~= nil end
@@ -81,10 +82,17 @@ function Theme.Register(g, scale)
     if type(g) ~= "table" or not g.tint then return end
     local s = { g = g, scale = scale }
     surfaces[#surfaces + 1] = s
+    byG[g] = s
     local name = current()
     local tint, known = tintFor(name)
     if not known then Theme.pending = true end
     API.Try("theme:paint", paint, s, name, tint)
+end
+
+-- Repaint one surface (its scale changed: a button's slot emptied or filled).
+function Theme.Repaint(g)
+    local s = byG[g]
+    if s then API.Try("theme:paint", paint, s, current(), (tintFor(current()))) end
 end
 
 -- Repaint every surface. Returns false while the class colour is unreadable.

@@ -16,6 +16,8 @@ local DEFAULTS = {
     endCaps = false,        -- the main bar's gryphons
     fadeAlpha = 0,          -- a faded bar's alpha (fade: { [bar frame name] = mode }, absent = no fade)
     follow = true,          -- the stance and pet bars move with Glass Unit Frames' player and pet frames
+    -- Button feedback (#34; Buttons.LOOK, Buttons.PRESETS): the Glass preset.
+    hover = "glow", press = "flash", emptySlots = "full", keyPosition = "inside", keySize = "normal",
 }
 GAB.DEFAULTS = DEFAULTS
 
@@ -31,6 +33,10 @@ local function ensureDefaults()
     end
     -- A theme this version doesn't know falls back to the default.
     if db.theme ~= nil and not GAB.Theme.IsValid(db.theme) then db.theme = nil end
+    -- Button feedback: an unknown choice falls back to the default.
+    for _, k in ipairs(GAB.Buttons.LOOK_ORDER) do
+        if db[k] ~= nil and not GAB.Buttons.ValidLook(k, db[k]) then db[k] = nil end
+    end
     -- /gab tune: only known keys with a number in 0..1 survive.
     if db.tune ~= nil then
         if type(db.tune) ~= "table" then db.tune = nil else
@@ -129,6 +135,24 @@ end
 function Settings.SetEndCaps(on)
     GAB.db.endCaps = on == true
     GAB.Bars.Refresh()
+    return true
+end
+
+-- One button-feedback setting (Buttons.LOOK's keys and choices), live. False
+-- for an unknown key or choice.
+function Settings.SetLook(key, value)
+    if not GAB.Buttons.ValidLook(key, value) then return false end
+    GAB.db[key] = value
+    GAB.Buttons.RefreshFeedback()
+    return true
+end
+
+-- A preset (Buttons.PRESETS): all five at once. False for an unknown one.
+function Settings.SetLookPreset(name)
+    local p = GAB.Buttons.PRESETS[name]
+    if not p then return false end
+    for k, v in pairs(p) do GAB.db[k] = v end
+    GAB.Buttons.RefreshFeedback()
     return true
 end
 
@@ -290,6 +314,8 @@ local function helpLines()
         "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match on/off] - dock a smart bar to an action bar",
         "/gab utility on/off - the Utility bar: Hearthstone, professions, camping (" .. onoff(GAB.Utility.Enabled()) .. ")",
         "/gab follow [on/off] - the stance and pet bars move with Glass Unit Frames (" .. onoff(db.follow) .. ")",
+        "/gab look [glass|soft|minimal | hover|press|empty|keys|keysize <choice>] - button feedback ("
+            .. GAB.Buttons.Preset() .. ")",
         "/gab inspect [button|hide n|show n|restore] - what a button draws, layer by layer",
         "/gab layer <name> off/on - hide one layer on every button, for a look (a /reload undoes it)",
         "/gab options - open the options page",
@@ -401,6 +427,23 @@ local function slash(msg)
         if ONOFF[arg] == nil then return say("/gab utility on/off") end
         Settings.SetUtilityEnabled(ONOFF[arg])
         say("Utility bar " .. arg .. (InCombatLockdown() and " (when the fight ends)" or ""))
+    elseif cmd == "look" then
+        local B = GAB.Buttons
+        local key, value = arg:match("^(%S*)%s*(%S*)$")
+        local alias = { empty = "emptySlots", keys = "keyPosition", keysize = "keySize", hover = "hover", press = "press" }
+        if key == "" then
+            local parts = {}
+            for _, k in ipairs(B.LOOK_ORDER) do parts[#parts + 1] = k .. " " .. B.Look(k) end
+            say("look: " .. B.Preset() .. " (" .. table.concat(parts, ", ") .. ")")
+        elseif B.PRESETS[key] and value == "" then
+            Settings.SetLookPreset(key)
+            say("look: " .. key)
+        elseif alias[key] and Settings.SetLook(alias[key], value) then
+            say("look: " .. alias[key] .. " " .. value)
+        else
+            say("/gab look glass|soft|minimal, or /gab look hover off|glow|halo, press off|flash|ripple, "
+                .. "empty hidden|faint|half|full, keys inside|above, keysize normal|large")
+        end
     elseif cmd == "follow" then
         if arg == "" then
             local s = GAB.Follow.Status()
