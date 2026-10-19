@@ -59,9 +59,10 @@ Buttons.TUNE_ORDER = { "rim", "empty", "dark", "wash", "body", "frostGrey", "fro
 
 -- Pearl's own defaults (#44, the owner's FFXIV reference, 2026-10-19), by the
 -- material built at login (Look.lua); Clean and Classic keep TUNE's. A saved
--- /gab tune wins over both.
+-- /gab tune wins over both. The gloss was chosen in game (0.16 and 0.22 tried;
+-- 0.08 kept with the soft highlight).
 Buttons.PEARL = { rim = 0.70, dark = 0.20, frostGrey = 0.40, frostAlpha = 0.22,
-                  frostRim = 0.60, gloss = 0.16, socketShade = 0.18 }
+                  frostRim = 0.60, gloss = 0.08, socketShade = 0.18 }
 
 function Buttons.TuneDefault(key)
     if GAB.GlassPreset == "pearl" and Buttons.PEARL[key] ~= nil then return Buttons.PEARL[key] end

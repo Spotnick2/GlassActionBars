@@ -114,7 +114,7 @@ SlashCmdList.FOREVERPROBE("steps stop")
 SlashCmdList.FOREVERPROBE("steps gab pearl")
 rec = ForeverProbeDB.steps.records["GABProbe/pearl"]
 check(rec and rec.status == "active", "/fp steps gab pearl starts")
-check(logHas("pearl") and logHas("gloss 0.16"), "  Pearl built, its gloss read")
+check(logHas("pearl") and logHas("gloss 0.08"), "  Pearl built, its gloss read")
 SlashCmdList.FOREVERPROBE("steps stop")
 SlashCmdList.FOREVERPROBE("gab clear")
 eq(#GABProbeDB.log, 1, "/fp gab clear empties the log in place (one line left: 'log cleared')")

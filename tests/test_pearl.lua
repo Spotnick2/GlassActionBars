@@ -31,7 +31,7 @@ check(close(c[1], c[2]) and close(c[2], c[3]), "Pearl empty fill is neutral")
 B.SetOccupied(b, true)
 check(s.g.rim:GetAlpha() > 0 and s.socketRim:GetAlpha() == 0 and s.socketShade:GetAlpha() == 0,
     "filled: recessed edges disappear")
-check(close(s.gloss:GetAlpha(), 0.16), "filled: upper reflection")
+check(close(s.gloss:GetAlpha(), 0.08), "filled: upper reflection")
 local file = b.icon._file
 local points = #b.icon._points
 WoW.combat = true

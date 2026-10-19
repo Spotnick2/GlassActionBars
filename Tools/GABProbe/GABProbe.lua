@@ -440,7 +440,7 @@ Probe:Steps("look", {
 -- ------------------------------------------------------------------
 -- pearl (#44): Pearl's face in game. The reflection sits on the rim's frame,
 -- over the cooldown sweep like the rim: is a cooldown still readable under it
--- (gloss 0.16 against 0)? A proc glow is a child of the button at our level
+-- (Pearl's gloss against 0)? A proc glow is a child of the button at our level
 -- (ActionButtonSpellAlerts), its order against the reflection unmeasured: the
 -- same pair of shots. The recessed empty socket, and the 30 px buttons.
 -- ------------------------------------------------------------------
