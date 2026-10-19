@@ -116,6 +116,12 @@ rec = ForeverProbeDB.steps.records["GABProbe/pearl"]
 check(rec and rec.status == "active", "/fp steps gab pearl starts")
 check(logHas("pearl") and logHas("gloss 0.08"), "  Pearl built, its gloss read")
 SlashCmdList.FOREVERPROBE("steps stop")
+-- icons (#46): the Utility bar's size read as it starts.
+SlashCmdList.FOREVERPROBE("steps gab icons")
+rec = ForeverProbeDB.steps.records["GABProbe/icons"]
+check(rec and rec.status == "active", "/fp steps gab icons starts")
+check(logHas("iconSize"), "  the Utility bar's size read")
+SlashCmdList.FOREVERPROBE("steps stop")
 SlashCmdList.FOREVERPROBE("gab clear")
 eq(#GABProbeDB.log, 1, "/fp gab clear empties the log in place (one line left: 'log cleared')")
 

@@ -80,6 +80,7 @@ end
 -- for a fight to end; the skin setting is read again when it runs.
 local ROLES = { icon = "Texture", normal = "Texture", pushed = "Texture", highlight = "Texture",
     hotkey = "FontString", count = "FontString", name = "FontString", cooldown = "Cooldown" }
+local ROUND = { maskIcon = true }   -- a provider's icon rounded to the glass (#46)
 local pending = {}       -- button -> its region copy, until the glass is built and out of combat
 local waiter
 
@@ -89,7 +90,7 @@ function GAB.FlushSkinRequests()
     for button, regions in pairs(pending) do
         pending[button] = nil
         if GAB.db.skin ~= false and not GAB.Buttons.IsSkinned(button) then
-            API.Try("api:skin", GAB.Buttons.Build, button, regions)
+            API.Try("api:skin", GAB.Buttons.Build, button, regions, ROUND)
         end
     end
 end
@@ -118,7 +119,7 @@ function GAB.SkinButton(button, regions, owner)
         end
         return true
     end
-    API.Try("api:skin", GAB.Buttons.Build, button, copy)
+    API.Try("api:skin", GAB.Buttons.Build, button, copy, ROUND)
     return GAB.Buttons.IsSkinned(button)
 end
 

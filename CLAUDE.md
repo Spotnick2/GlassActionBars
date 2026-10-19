@@ -140,8 +140,9 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (1, checked
   with `==`; not `API_VERSION`: `GlassActionBars.API` is the client adapter), `RegisterBar` (wraps
   `Dock.Register`), `RequestLayout`, `SkinButton` (regions checked by role, queued in combat),
-  `RegisterButton` (stored; the Utility bar hosts them). Inputs are copied on acceptance; refusals
-  return `false, reason`. Any incompatible change bumps the version and the doc.
+  `RegisterButton` (stored; the Utility bar hosts them). A provider's icon, and the Utility bar's,
+  is rounded to the glass (`Build`'s `maskIcon`, #46): Blizzard's have the template's IconMask.
+  Inputs are copied on acceptance; refusals return `false, reason`. Any incompatible change bumps the version and the doc.
 - **`Utility.lua`**: the Utility bar (#9), Apotheca's profession bar plus the camping items.
   `ACTIONS` (Apotheca's, `measured` marked), `CAMPING` (the authoritative list: 3 kits + 34
   features; a feature needs `CAMPFIRE_AURA`, read through `API.HasPlayerAura`), the `camping`

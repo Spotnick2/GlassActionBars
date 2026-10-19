@@ -260,6 +260,7 @@ local function makeButton(key)
     local r = {}
     r.icon = b:CreateTexture(nil, "BACKGROUND")
     r.icon:SetAllPoints(b)
+    r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- the icon's baked border off, as Blizzard's mask does (#46)
     r.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
     r.cooldown:SetAllPoints(b)
     b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
@@ -634,7 +635,7 @@ local function skin()
     if skinned or GAB.db.skin == false then return end
     skinned = true
     for _, b in pairs(buttons) do
-        API.Try("utility:skin", GAB.Buttons.Build, b, regions[b])
+        API.Try("utility:skin", GAB.Buttons.Build, b, regions[b], { maskIcon = true })
     end
 end
 
