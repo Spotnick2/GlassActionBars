@@ -71,4 +71,23 @@ for _, material in ipairs({ "clean", "classic" }) do
     check(close(frost[1], 0.9) and close(frost[2], 0.91) and close(frost[3], 0.94), material .. ": old tint")
 end
 
+-- The reflection's shape (Media/ButtonGloss, Tools/make_rim.py): an even band
+-- over the upper third with a definite lower edge, gone before the middle.
+-- (The first one, a bell fading out from 12%, read as a grey haze in game.)
+local f = io.open("Media/ButtonGloss.tga", "rb")
+local tga = f and f:read("*a")
+if f then f:close() end
+check(tga ~= nil, "ButtonGloss ships")
+if tga then
+    local n = tga:byte(13) + 256 * tga:byte(14)
+    local function alpha(y, x)   -- 0..1 at y (0 top) and x, of the bottom-up BGRA rows
+        local row, col = math.floor(y * n), math.floor(x * n)
+        return tga:byte(18 + ((n - 1 - row) * n + col) * 4 + 4) / 255
+    end
+    check(alpha(0.05, 0.5) > 0.9 and alpha(0.25, 0.5) > 0.7, "  the band: strong down to a quarter")
+    check(alpha(0.25, 0.5) - alpha(0.40, 0.5) > 0.6, "  a definite lower edge, not a long fade")
+    check(alpha(0.45, 0.5) == 0 and alpha(0.6, 0.2) == 0, "  nothing from just before the middle down")
+    check(alpha(0.32, 0.5) > alpha(0.32, 0.05), "  the edge bows down in the middle (a curved face)")
+end
+
 done("test_pearl")

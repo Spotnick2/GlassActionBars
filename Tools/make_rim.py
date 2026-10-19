@@ -165,16 +165,23 @@ def button_socket_shade():
 
 
 def button_gloss():
-    """Broad upper reflection. Runtime mask follows the fixed rounded corners.
+    """Pearl's reflection on a filled button (#44): a band over the upper third.
 
-    A static bitmap (not SetGradient) so live SetAlpha is effective on Forever.
-    BLEND white, not ADD: a restrained highlight without blowing out the icon.
+    FFXIV's (the owner's references): an even band, brightest at the top, that
+    ends in a soft but definite lower edge; that edge is what reads as a glass
+    face. The first version, a bell peaking at 12% that faded out by 43%, had
+    no edge and read as a faint grey haze. The edge bows down a little in the
+    middle (a curved face) and is gone before the middle of the button; the
+    mask at runtime rounds the corners. A static bitmap (not SetGradient, so
+    SetAlpha works on Forever), BLEND white, its strength the gloss tune.
     """
-    y = (np.arange(64, dtype=np.float64) + 0.5)[:, None] / 64
-    peak = 0.45 + 0.55 * np.exp(-((y - 0.12) / 0.11) ** 2)
-    alpha = peak * (1 - smoothstep(0.20, 0.43, y))
-    rgba = np.ones((64, 64, 4))
-    rgba[..., 3] = np.tile(alpha, (1, 64))
+    n = 64
+    y = (np.arange(n, dtype=np.float64) + 0.5)[:, None] / n
+    x = (np.arange(n, dtype=np.float64) + 0.5)[None, :] / n
+    edge = 0.30 + 0.03 * (1 - (2 * x - 1) ** 2)          # 0.30 at the sides, 0.33 in the middle
+    band = 1 - smoothstep(edge - 0.035, edge + 0.035, y)   # ~4.5 px soft edge at 64 px
+    rgba = np.ones((n, n, 4))
+    rgba[..., 3] = band * (1 - 0.3 * np.clip(y / 0.33, 0, 1))   # brightest at the top
     return rgba
 
 
