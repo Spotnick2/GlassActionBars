@@ -189,6 +189,17 @@ function Methods.SetFrameLevel(w, l) w._level = l end
 function Methods.SetFrameStrata(w, s) w._strata = s end
 function Methods.GetFrameStrata(w) return w._strata or "MEDIUM" end
 function Methods.EnableMouse(w, v) w._mouse = v end
+-- Moving: like the client, refused on a protected frame (or one with
+-- protected children: the test marks it _protected) in combat.
+function Methods.SetMovable(w, v) w._movable = v end
+function Methods.StartMoving(w)
+    if WoW.combat and w._protected then table.insert(WoW.violations, "StartMoving in combat") return end
+    w._moving = true
+end
+function Methods.StopMovingOrSizing(w)
+    if WoW.combat and w._protected then table.insert(WoW.violations, "StopMovingOrSizing in combat") return end
+    w._moving = false
+end
 -- The pointer: WoW.hover[frame] = true (or a secret, as IsMouseOver's
 -- SecretWhenAnchoringSecret allows) says it is over that frame.
 WoW.hover = {}
@@ -411,6 +422,7 @@ C_UnitAuras = { GetPlayerAuraBySpellID = function(id)
     return a
 end }
 function GetBindingKey(action) return WoW.bindings[action] end
+function IsAltKeyDown() return WoW.altDown == true end
 
 -- Errors handed to the client's error handler (a Lua error popup in game).
 WoW.errors = {}

@@ -312,18 +312,38 @@ end)
 -- Camping group) with a show checkbox and up/down buttons, in the player's
 -- order. The rows are re-anchored on every show, so a move shows at once.
 Options.UTILITY_ROW = 26
+Options.UTILITY_LAYOUT = {
+    { "orientation", "Direction", { { "HORIZONTAL", "Horizontal" }, { "VERTICAL", "Vertical" } } },
+    { "rows", "Rows (columns when vertical)", { { 1, "1" }, { 2, "2" }, { 3, "3" }, { 4, "4" } } },
+    { "iconSize", "Button size", { { 30, "30" }, { 36, "36" }, { 40, "40" }, { 45, "45" } } },
+    { "iconPadding", "Spacing", { { 0, "0" }, { 2, "2" }, { 4, "4" }, { 6, "6" } } },
+}
 Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
     local U = GAB.Utility
     local enabled = Options.checkbox(page, title, "Show the Utility bar",
         function() return U.Enabled() end, GAB.Settings.SetUtilityEnabled)
     local note = label(page, "A button shows only when the character can use it: a profession it knows, an item in "
         .. "its bags. Campfire kits show whenever carried, the other camping items only near a campfire. Key "
-        .. "bindings: Esc > Options > Keybindings > Glass Action Bars. Where the bar sits: the Dock page.",
+        .. "bindings: Esc > Options > Keybindings > Glass Action Bars. Docking: the Dock page. Hold Alt and drag "
+        .. "the bar to put it anywhere: that undocks it, and the spot is shared by every character.",
         "GameFontHighlightSmall")
     note:SetPoint("TOPLEFT", enabled, "BOTTOMLEFT", 0, -8)
     note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
     note:SetJustifyH("LEFT")
-    local content, top = Options.scrollArea(page, note)
+    -- Its own layout: undocked, or docked with Match off.
+    local head = label(page, "Layout (undocked, or when Match is off on the Dock page)", "GameFontNormal")
+    head:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -12)
+    local last = head
+    Options._test.utilityLayout = {}
+    for _, r in ipairs(Options.UTILITY_LAYOUT) do
+        local name = label(page, r[2])
+        name:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -10)
+        local _, group = Options.radios(page, name, r[3], function() return U.LayoutSetting(r[1]) end,
+            function(v) GAB.Settings.SetUtilityLayout(r[1], v) end, { 200, 90 })
+        Options._test.utilityLayout[r[1]] = group
+        last = name
+    end
+    local content, top = Options.scrollArea(page, last)
     local rows, sync = {}, nil
     for _, key in ipairs(U.ORDER_KEYS) do
         local r = CreateFrame("Frame", nil, content)

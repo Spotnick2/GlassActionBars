@@ -23,7 +23,9 @@
 --
 -- Placement is the dock's (client "utility", Dock.lua): docked right of Action
 -- Bar 1 by default. Layout(geom) lays the buttons out with the bar's geometry,
--- or the bar's own when geom is nil; undocked, it keeps its last placement.
+-- or the bar's own (LAYOUT, Apotheca's keys) when geom is nil. Alt-drag moves
+-- the bar anywhere: the drag undocks it at its start (so no dock pass moves
+-- it mid-drag) and the drop saves the spot; undocked, the bar sits there.
 
 GlassActionBars = GlassActionBars or {}
 local GAB = GlassActionBars
@@ -36,6 +38,10 @@ Utility.HEARTHSTONE = 6948
 Utility.CAMPFIRE_AURA = 1283391   -- "Campfire Nearby" (Wowhead; to confirm in game)
 Utility.SIZE, Utility.PADDING = 36, 4
 Utility.DOCK = { bar = 1, side = "RIGHT", align = "END", gap = 4, match = true }
+-- The bar's own layout (undocked, or docked without matching): Apotheca's
+-- setting keys, so its import is a copy. VERTICAL: `rows` counts columns.
+Utility.LAYOUT = { orientation = "HORIZONTAL", rows = 1, iconSize = Utility.SIZE, iconPadding = Utility.PADDING }
+local LAYOUT_RANGE = { rows = { 1, 12 }, iconSize = { 16, 64 }, iconPadding = { 0, 16 } }
 
 -- Apotheca's actions, in their default order. `spells`: candidate IDs,
 -- highest rank first (only one is known at a time). `measured`: on 70334
@@ -142,6 +148,25 @@ function Utility.IsShown(key)
     return not (s and type(s.show) == "table" and s.show[key] == false)
 end
 
+-- A valid value for one of LAYOUT's keys.
+function Utility.ValidLayout(key, v)
+    if key == "orientation" then return v == "HORIZONTAL" or v == "VERTICAL" end
+    local r = LAYOUT_RANGE[key]
+    return r ~= nil and type(v) == "number" and v >= r[1] and v <= r[2] and (key ~= "rows" or v % 1 == 0)
+end
+
+function Utility.LayoutSetting(key)
+    local s = saved()
+    if s and Utility.ValidLayout(key, s[key]) then return s[key] end
+    return Utility.LAYOUT[key]
+end
+
+-- A saved position: the bottom-left corner, finite UIParent offsets.
+local function finite(v) return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge end
+function Utility.ValidPos(p)
+    return type(p) == "table" and finite(p.x) and finite(p.y)
+end
+
 -- The saved order (known keys, once each), then any key it lacks.
 function Utility.Order()
     local s, out, seen = saved(), {}, {}
@@ -210,6 +235,8 @@ local frame = CreateFrame("Frame", "GlassActionBarsUtilityFrame", UIParent)
 frame:SetSize(Utility.SIZE, Utility.SIZE)
 frame:SetPoint("RIGHT", UIParent, "RIGHT", -150, 0)
 frame:SetFrameStrata("MEDIUM")
+frame:SetMovable(true)            -- before the secure children exist
+frame:SetClampedToScreen(true)
 frame:Hide()
 Utility.frame = frame
 
@@ -319,13 +346,15 @@ local shownList, lastGeom = {}, nil
 
 local function arrange()
     local g = lastGeom
-    local size = g and g.size or Utility.SIZE
-    local pad = g and g.padding or Utility.PADDING
-    local rows = math.max(1, g and g.rows or 1)
+    local size = g and g.size or Utility.LayoutSetting("iconSize")
+    local pad = g and g.padding or Utility.LayoutSetting("iconPadding")
+    local rows = math.max(1, g and g.rows or Utility.LayoutSetting("rows"))
+    local vertical
+    if g then vertical = g.orientation == 1 else vertical = Utility.LayoutSetting("orientation") == "VERTICAL" end
     local n = #shownList
     if n == 0 then frame:SetSize(size, size) return end
     local cols
-    if g and g.orientation == 1 then
+    if vertical then
         cols = math.min(rows, n)
         rows = math.ceil(n / cols)
     else
@@ -347,13 +376,136 @@ function Utility.Layout(geom)
     arrange()
 end
 
--- Undocked (or a first placement failed): our own geometry, where it is.
-function Utility.OnHosted(isHosted)
-    if not isHosted then
-        lastGeom = nil
-        if not InCombatLockdown() then arrange() end
+-- The undocked spot: the saved one, else the default point.
+local function savedPos()
+    local s = saved()
+    return s and Utility.ValidPos(s.pos) and s.pos or nil
+end
+local function placeAt(x, y)
+    frame:ClearAllPoints()
+    frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
+end
+local function restorePos()
+    local p = savedPos()
+    if p then placeAt(p.x, p.y) else
+        frame:ClearAllPoints()
+        frame:SetPoint("RIGHT", UIParent, "RIGHT", -150, 0)
     end
 end
+
+-- The frame's bottom-left corner, saved and anchored there; false when
+-- unreadable (the frame stays as it is).
+local function saveHere()
+    local x, y = API.Plain(frame:GetLeft()), API.Plain(frame:GetBottom())
+    if not GAB.Settings.SetUtilityPosition(x, y) then return false end
+    placeAt(x, y)
+    return true
+end
+
+-- Dragging (Apotheca's, measured there): no StartMoving or
+-- StopMovingOrSizing in combat on a frame that parents secure buttons.
+-- PLAYER_REGEN_DISABLED stops a drag before lockdown; if lockdown is already
+-- on, the stop waits for the fight's end, the overlay staying up to keep
+-- clicks off the buttons, and the bar goes where combat caught it.
+local dragging, stopPending, dropPos = false, false, nil
+local hosted = false
+
+-- Undocked by the player (or a first placement failed): our own geometry, at
+-- the saved spot; undocking with none saves where the dock had it. Never
+-- during a drag: the drop places it.
+function Utility.OnHosted(isHosted)
+    if isHosted then hosted = true return end
+    local was = hosted
+    hosted, lastGeom = false, nil
+    if InCombatLockdown() then return end
+    arrange()
+    if dragging then return end
+    if savedPos() then restorePos()
+    elseif was and GAB.Dock.Setting("utility", "bar") == false then saveHere() end
+end
+
+local function stopDrag()
+    if not dragging then return end
+    if InCombatLockdown() then
+        if not stopPending then
+            dropPos = { x = API.Plain(frame:GetLeft()), y = API.Plain(frame:GetBottom()) }
+        end
+        stopPending = true
+        return
+    end
+    frame:StopMovingOrSizing()
+    local p = dropPos
+    dragging, stopPending, dropPos = false, false, nil
+    if p then
+        if GAB.Settings.SetUtilityPosition(p.x, p.y) then placeAt(p.x, p.y) else restorePos() end
+    elseif not saveHere() then
+        restorePos()
+    end
+end
+
+-- The overlay: shown while Alt is held over the bar out of combat; it takes
+-- the drag and keeps clicks off the secure buttons under it. Polled while
+-- Alt is down (no event says the pointer reached the bar), up or dragging.
+local mover = CreateFrame("Frame", nil, frame)
+mover:SetAllPoints(frame)
+mover:SetFrameStrata("DIALOG")
+mover:EnableMouse(true)
+mover:RegisterForDrag("LeftButton")
+mover:Hide()
+do
+    local bg = mover:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.5, 0.83, 1, 0.35)
+    local text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    text:SetPoint("CENTER")
+    text:SetText("Drag")
+end
+
+local poller = CreateFrame("Frame")
+local updateMover
+local sincePoll = 0
+local function poll(_, elapsed)
+    sincePoll = sincePoll + elapsed
+    if sincePoll >= 0.05 then
+        sincePoll = 0
+        updateMover()
+    end
+end
+
+function updateMover()
+    if dragging then
+        if stopPending then
+            if not InCombatLockdown() then stopDrag(); mover:Hide() end
+        elseif not IsAltKeyDown() or InCombatLockdown() then
+            stopDrag()
+            if not stopPending then mover:Hide() end
+        end
+    elseif IsAltKeyDown() and not InCombatLockdown() and API.Plain(frame:IsVisible()) == true
+            and API.Plain(frame:IsMouseOver()) == true then
+        mover:Show()
+    else
+        mover:Hide()
+    end
+    poller:SetScript("OnUpdate", (dragging or mover:IsShown() or IsAltKeyDown()) and poll or nil)
+end
+Utility.UpdateMover = updateMover
+
+mover:SetScript("OnDragStart", function()
+    if InCombatLockdown() or not IsAltKeyDown() then return end
+    -- Undock first: a dock pass never moves the bar under the pointer.
+    if GAB.Dock.Setting("utility", "bar") ~= false then GAB.Settings.SetDock("utility", "bar", false) end
+    dragging = true
+    frame:StartMoving()
+end)
+mover:SetScript("OnDragStop", function()
+    stopDrag()
+    updateMover()
+end)
+-- Never leave the frame on the pointer (in combat this only marks the stop).
+frame:SetScript("OnHide", function()
+    stopDrag()
+    updateMover()
+end)
 
 local function clear(b)
     b:SetAttribute("type", nil)
@@ -473,11 +625,29 @@ function Utility.Start()
         Layout = Utility.Layout, OnHosted = Utility.OnHosted })
     Utility.LocalizeBindingNames()
     Utility.ReadCampfire()
+    -- The saved spot until a dock pass places the bar (its target may be
+    -- unavailable on this character); a /reload in combat waits for the fight.
+    local posPending = false
+    if savedPos() then
+        if InCombatLockdown() then posPending = true else restorePos() end
+    end
     driver:SetScript("OnEvent", function(_, event, unit)
         if event == "PLAYER_REGEN_ENABLED" then
+            -- An interrupted drag ends first (updateMover), before a rebuild can resize or hide the frame.
+            updateMover()
+            if posPending then
+                posPending = false
+                if not hosted then restorePos() end
+            end
             skin()
             -- A combat read may have been unknown: a change found now rebuilds too.
             if Utility.ReadCampfire() or pending then Utility.Reconcile() end
+        elseif event == "PLAYER_REGEN_DISABLED" then
+            -- The last moment before lockdown: a drag stops cleanly, where it is.
+            if dragging and not InCombatLockdown() then stopDrag() end
+            updateMover()
+        elseif event == "MODIFIER_STATE_CHANGED" then
+            updateMover()
         elseif event == "UNIT_AURA" then
             if unit == "player" and Utility.ReadCampfire() then Utility.Refresh() end
         elseif event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN" or event == "UPDATE_BINDINGS" then
@@ -489,7 +659,8 @@ function Utility.Start()
             Utility.Refresh()
         end
     end)
-    API.RegisterEvents(driver, { "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "SPELLS_CHANGED",
+    API.RegisterEvents(driver, { "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
+        "MODIFIER_STATE_CHANGED", "SPELLS_CHANGED",
         "SKILL_LINES_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE", "BAG_UPDATE_DELAYED", "UNIT_AURA",
         "BAG_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN", "UPDATE_BINDINGS", "GET_ITEM_INFO_RECEIVED" }, "utility")
     Utility.Refresh()
@@ -497,4 +668,5 @@ end
 
 Utility._test = { regions = regions, state = state, frame = frame,
     shown = function() return shownList end, geom = function() return lastGeom end,
-    setCampfire = function(v) campfire = v end }
+    setCampfire = function(v) campfire = v end, mover = mover, poller = poller,
+    dragging = function() return dragging, stopPending end }
