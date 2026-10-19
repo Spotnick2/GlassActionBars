@@ -729,6 +729,14 @@ for _, f in ipairs({ StanceBar, PetActionBar }) do
     rawset(f, "SetPointBase", function(self, ...) Methods.SetPoint(self, ...) end)
     rawset(f, "ClearAllPointsBase", function(self) Methods.ClearAllPoints(self) end)
     rawset(f, "ApplySystemAnchor", function() end)
+    -- BreakFrameSnap (on a snapped-to bar's hide): frozen where it is, as an absolute
+    -- TOPLEFT anchor (the stub keeps the x it had); f._default: IsInDefaultPosition.
+    rawset(f, "BreakFrameSnap", function(self)
+        local x = self._points[1] and self._points[1][4] or 0
+        Methods.ClearAllPoints(self)
+        Methods.SetPoint(self, "TOPLEFT", UIParent, "TOPLEFT", x, -500)
+    end)
+    rawset(f, "IsInDefaultPosition", function(self) return self._default == true end)
 end
 
 -- Edit Mode's manager: it re-stacks the default-position bars when one shows

@@ -76,13 +76,51 @@ WoW.trigger("EditMode.Exit")
 settle()
 check(close(x(StanceBar), -340 + 50 / 0.7), "  and it becomes the base")
 
--- A pet bar snapped to the stance bar moves with it: not moved again.
-PetActionBar:ClearAllPoints()
-PetActionBar:SetPoint("LEFT", StanceBar, "RIGHT", 5, 0)
+-- Snaps (Codex review of #35). The player snapped the stance bar to the pet
+-- bar: neither moves, so dismissing the pet (Blizzard breaks the snap and
+-- freezes the stance bar where it is) can't put a shifted place in the layout.
+rawset(StanceBar, "snappedToFrame", PetActionBar)
+rawset(PetActionBar, "snappedFrames", { [StanceBar] = true })
+StanceBar:ClearAllPoints()
+StanceBar:SetPoint("LEFT", PetActionBar, "RIGHT", 5, 0)
 EditModeManagerFrame:UpdateBottomActionBarPositions()
 settle()
-eq(x(PetActionBar), 5, "the pet bar snapped to the stance bar: not moved separately")
-check(F.Status().PetActionBar:find("anchored to StanceBar", 1, true), "  and /gab follow says why")
+eq(x(StanceBar), 5, "the stance bar snapped to the pet bar: stays")
+check(close(x(PetActionBar), 50), "  the pet bar, with a bar snapped to it: put back, stays")
+check(F.Status().PetActionBar:find("snapped to it", 1, true), "  /gab follow says why (pet bar)")
+check(F.Status().StanceBar:find("snapped to PetActionBar", 1, true), "  and why (stance bar)")
+StanceBar.BreakFrameSnap(StanceBar)              -- the pet dismissed: Blizzard freezes the stance bar
+rawset(StanceBar, "snappedToFrame", nil)
+rawset(PetActionBar, "snappedFrames", nil)
+eq(x(StanceBar), 5, "  the frozen stance bar holds no shift")
+settle()
+eq(StanceBar._points[1][1], "TOPLEFT", "  and once free, it follows from the frozen place")
+check(close(x(StanceBar), 5 + 50 / 0.7), "    (by dx)")
+-- A default-position bar is snapped to Action Bar 1 by Blizzard's stacking: it follows,
+-- and a freeze (Action Bar 1 hidden) never doubles the shift.
+reanchor(StanceBar, -340)
+reanchor(PetActionBar, 50)
+settle()
+rawset(PetActionBar, "snappedToFrame", MainActionBar)
+PetActionBar._default = true
+EditModeManagerFrame:UpdateBottomActionBarPositions()
+settle()
+check(close(x(PetActionBar), 50 + 50 / 0.7), "a default pet bar stacked on Action Bar 1: follows")
+PetActionBar.BreakFrameSnap(PetActionBar)        -- Action Bar 1 hid: frozen where we had it
+settle()
+check(close(x(PetActionBar), 50 + 50 / 0.7), "  frozen there: our shift taken off the new base, not doubled")
+announce(true, 0, 0)
+check(close(x(PetActionBar), 50), "  and back to the unshifted place")
+announce(true, 50, 50)
+PetActionBar.BreakFrameSnap(PetActionBar)        -- frozen while ours, then Blizzard re-stacks before our pass
+reanchor(PetActionBar, 60)
+settle()
+check(close(x(PetActionBar), 60 + 50 / 0.7), "  re-stacked after a freeze: a fresh base, nothing taken off")
+-- The player snapped the pet bar to another bar (not default): stays.
+PetActionBar._default = false
+announce(true, 50, 50)
+check(close(x(PetActionBar), 60), "the pet bar snapped by the player to Action Bar 1: put back, stays")
+rawset(PetActionBar, "snappedToFrame", nil)
 reanchor(PetActionBar, 50)
 settle()
 

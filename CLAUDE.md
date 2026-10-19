@@ -97,8 +97,11 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   by `petDx`, horizontally from the anchor Blizzard gave it (the base, a side table; the layout is
   never written). Ownership marker = the anchor read back after our write: after Blizzard's
   passes (`UpdateBottomActionBarPositions`, `ApplySystemAnchor`, deferred a frame) a different
-  anchor is the new base. Edit Mode entry puts an owned bar back; a bar snapped to the other one
-  isn't moved again; one plain anchor only; combat and Edit Mode wait; scale events re-apply.
+  anchor is the new base. Edit Mode entry puts an owned bar back. Snaps: a hidden bar's
+  `BreakSnappedFrames` freezes its snapped bars where they are and copies that into the layout, so
+  a bar with bars snapped to it, or one the player snapped to another bar, stays put; a default
+  bar (stacked on Action Bar 1) follows, and after a `BreakFrameSnap` our shift is taken off the
+  frozen anchor. One plain anchor only; combat and Edit Mode wait; scale events re-apply.
   Snap, no glide. `/gab follow [on/off]` shows each bar's state.
 - **`API.lua`**: the public provider API (#8); the contract is
   [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (1, checked
