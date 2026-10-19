@@ -340,6 +340,16 @@ local function makePearlFace(s)
     s.socketShade = edge("ButtonSocketShade", 4, 0, 0, 0)   -- the inner line's
 end
 
+-- A provider's or the Utility bar's icon, rounded like the rim (#46): a mask
+-- on the icon's own frame (never a Blizzard one: their icons aren't passed),
+-- the rim's rounded square, as the ripple's.
+local function maskIcon(icon)
+    local mask = icon:GetParent():CreateMaskTexture()
+    mask:SetTexture(GAB.MEDIA .. Buttons.RIPPLE.mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    mask:SetAllPoints(icon)
+    icon:AddMaskTexture(mask)
+end
+
 -- The pressed look's alpha: the live part (a region's alpha only, safe in combat).
 local function pushedAlpha(s)
     local p = s.regions.pushed
@@ -372,7 +382,9 @@ end
 
 -- The glass on one button. `regions` names its parts: icon, cooldown,
 -- count, hotkey, name, normal, pushed, highlight, slotArt, slotBackground
--- (any may be absent). Returns the button's state; a second call returns the
+-- (any may be absent). `opts.maskIcon`: round the icon to the glass's shape
+-- (#46), for icons that aren't Blizzard's (theirs have the template's
+-- IconMask). Returns the button's state; a second call returns the
 -- same one.
 function Buttons.Build(button, regions, opts)
     if skins[button] then return skins[button] end
@@ -387,6 +399,7 @@ function Buttons.Build(button, regions, opts)
                 small = (API.Plain(button:GetWidth()) or 45) < 40 }
     skins[button] = s
     API.Try("skin:pearl", makePearlFace, s)
+    if opts and opts.maskIcon and s.regions.icon then API.Try("skin:mask", maskIcon, s.regions.icon) end
     -- The body's paint first, and every later step on its own: a step that
     -- throws on the client (a region method Blizzard's art refuses) must not
     -- leave the body unpainted and out of /gab tune's reach. A failure is

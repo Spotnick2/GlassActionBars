@@ -69,6 +69,10 @@ for _, f in ipairs(FRAMES) do
     end
 end
 eq(T.skins[StanceButton1].small, true, "stance buttons are the small size")
+-- Blizzard's icons keep the template's own mask: GAB adds none (#46).
+for _, b in ipairs({ ActionButton1, StanceButton1, PetActionButton1, CharacterBag0Slot }) do
+    eq(b.icon and b.icon._masks, nil, "no mask from GAB on " .. b:GetName() .. "'s icon")
+end
 eq(T.skins[ActionButton1].small, false, "action buttons are not")
 
 -- The rim: bright with an action, faint without, kept when unreadable.
