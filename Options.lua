@@ -159,13 +159,45 @@ end
 -- The look: the glass, the text on the buttons, the gryphons, and glass or
 -- Blizzard's own art.
 Options.AddSection(function(parent, anchor)
+    local Look = GAB.Look
     local look = label(parent, "The glass", "GameFontNormal")
     look:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -16)
+    -- While following Glass UI, a first choice follows its tint (#39): it is
+    -- selected whenever the player hasn't set their own (by source, not value).
+    local following = Look.Following()
     local choices = {}
+    if following then choices[1] = { "suite", "Glass UI" } end
     for _, name in ipairs(GAB.Theme.NAMES) do choices[#choices + 1] = { name, GAB.Theme.LABELS[name] } end
-    local last, group = Options.radios(parent, look, choices, function() return GAB.db.theme end,
-        GAB.Settings.SetTheme)
+    local last, group = Options.radios(parent, look, choices, function()
+        if following and Look.Own("theme") == nil then return "suite" end
+        return GAB.Theme.Current()
+    end, function(v)
+        if v == "suite" then GAB.Settings.ClearLook("theme") else GAB.Settings.SetTheme(v) end
+    end)
+    if following and group[1].text then
+        building[#building + 1] = function()
+            group[1].text:SetText("Glass UI (" .. (GAB.Theme.LABELS[Look.SuiteValue("theme") or "clear"] or "?") .. ")")
+        end
+    end
     Options._test.themeRadios = group
+    -- The material (LibGlass's preset), built at login: a change waits for a
+    -- /reload. Glass UI's while following.
+    local material = label(parent, "The glass itself (after a /reload)")
+    material:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -12)
+    if following then
+        local note = label(parent, "", "GameFontHighlightSmall")
+        note:SetPoint("LEFT", material, "LEFT", 240, 0)
+        building[#building + 1] = function()
+            note:SetText("Glass UI's: " .. tostring(GAB.GlassPreset) .. " (set in Glass UI)")
+        end
+        Options._test.materialNote = note
+    else
+        local _, mgroup = Options.radios(parent, material,
+            { { "pearl", "Pearl" }, { "clean", "Clean" }, { "classic", "Classic" } },
+            Look.Material, GAB.Settings.SetMaterial, { 240, 90 })
+        Options._test.materialRadios = mgroup
+    end
+    last = material
     local buttons = label(parent, "On the buttons", "GameFontNormal")
     buttons:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -16)
     local hotkeys = Options.checkbox(parent, buttons, "Key bindings",
@@ -238,28 +270,62 @@ Options.lookPage = Options.AddPage("Buttons", function(page, title)
     note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
     note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
     note:SetJustifyH("LEFT")
+    -- While following Glass UI (#39), each row's first choice follows the
+    -- suite, selected by source: whenever the player hasn't set their own.
+    local Look = GAB.Look
+    local following = Look.Following()
+    local across = following and { 130, 80 } or Options.LOOK_ACROSS
+    local function withSuite(list)
+        if not following then return list end
+        local out = { { "suite", "Glass UI" } }
+        for _, c in ipairs(list) do out[#out + 1] = c end
+        return out
+    end
+    local function allSuite()
+        for _, k in ipairs(B.LOOK_ORDER) do
+            if Look.Own(k) ~= nil then return false end
+        end
+        return true
+    end
     local head = label(page, "Preset")
     head:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
-    local _, presets = Options.radios(page, head, Options.LOOK_PRESETS, B.Preset, function(name)
+    local presetChoices = withSuite(Options.LOOK_PRESETS)
+    local _, presets = Options.radios(page, head, presetChoices, function()
+        if following and allSuite() then return "suite" end
+        return B.Preset()
+    end, function(name)
         GAB.Settings.SetLookPreset(name)
         Options.RefreshPage(page)
-    end, Options.LOOK_ACROSS)
+    end, across)
     local now = label(page, "", "GameFontHighlightSmall")
-    now:SetPoint("LEFT", head, "LEFT", Options.LOOK_ACROSS[1] + #Options.LOOK_PRESETS * Options.LOOK_ACROSS[2], 0)
+    now:SetPoint("LEFT", head, "LEFT", across[1] + #presetChoices * across[2], 0)
     building[#building + 1] = function()
-        now:SetText(B.Preset() == "custom" and "now: your own mix" or "")
+        now:SetText(B.Preset() == "custom" and not (following and allSuite()) and "now: your own mix" or "")
     end
     Options._test.lookPresets, Options._test.lookNow, Options._test.lookRows = presets, now, {}
     local last = head
     for i, r in ipairs(Options.LOOK_ROWS) do
         local name = label(page, r[2])
         name:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, i == 1 and -20 or -12)
-        local _, group = Options.radios(page, name, r[3], function() return B.Look(r[1]) end, function(v)
-            GAB.Settings.SetLook(r[1], v)
+        local _, group = Options.radios(page, name, withSuite(r[3]), function()
+            if following and Look.Own(r[1]) == nil then return "suite" end
+            return B.Look(r[1])
+        end, function(v)
+            if v == "suite" then GAB.Settings.ClearLook(r[1]) else GAB.Settings.SetLook(r[1], v) end
             Options.RefreshPage(page)
-        end, Options.LOOK_ACROSS)
+        end, across)
         Options._test.lookRows[r[1]] = group
         last = name
+    end
+    if following then
+        local suiteNow = label(page, "", "GameFontHighlightSmall")
+        suiteNow:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -16)
+        building[#building + 1] = function()
+            local parts = {}
+            for _, k in ipairs(B.LOOK_ORDER) do parts[#parts + 1] = tostring(Look.SuiteValue(k) or Look.DEFAULTS[k]) end
+            suiteNow:SetText("Glass UI's look now: " .. table.concat(parts, ", ") .. ". Set it in Glass UI.")
+        end
+        Options._test.lookSuiteNow = suiteNow
     end
 end)
 

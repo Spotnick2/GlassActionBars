@@ -10,14 +10,14 @@ local say = API.Print
 -- Account-wide (GlassActionBarsDB). Each feature adds its settings here as it lands.
 local DEFAULTS = {
     skin = true,            -- the glass on Blizzard's bars (off: Blizzard's own art, after a /reload)
-    theme = "clear",        -- one of GAB.Theme.NAMES
+    material = "pearl",     -- the glass's LibGlass preset (GAB.MATERIALS), after a /reload; unused while following Glass UI
     showHotkeys = true,     -- the key binding text on each button
     showMacroNames = true,  -- a macro's name on its button
     endCaps = false,        -- the main bar's gryphons
     fadeAlpha = 0,          -- a faded bar's alpha (fade: { [bar frame name] = mode }, absent = no fade)
     follow = true,          -- the stance and pet bars move with Glass Unit Frames' player and pet frames
-    -- Button feedback (#34; Buttons.LOOK, Buttons.PRESETS): the Glass preset.
-    hover = "glow", press = "flash", emptySlots = "frosted",
+    -- The look (theme, hover, press, emptySlots) is GlassActionBarsDB.look,
+    -- the player's own values, never pruned; its defaults are Look.DEFAULTS.
 }
 GAB.DEFAULTS = DEFAULTS
 
@@ -28,15 +28,26 @@ GAB.DEFAULTS = DEFAULTS
 local function ensureDefaults()
     if type(GlassActionBarsDB) ~= "table" then GlassActionBarsDB = {} end
     local db = GlassActionBarsDB
+    -- The look moves into its own table (#39), once and before any prune: the
+    -- raw top-level keys, valid ones only, into keys `look` lacks (an existing
+    -- entry wins), then the old keys go. Idempotent, no version stamp. A
+    -- legacy key equal to a default still moves: the player set it.
+    local look = type(rawget(db, "look")) == "table" and rawget(db, "look") or {}
+    for _, k in ipairs(GAB.Look.KEYS) do
+        local v = rawget(db, k)
+        if v ~= nil then
+            if look[k] == nil and GAB.Look.Valid(k, v) then look[k] = v end
+            db[k] = nil
+        end
+    end
+    for k, v in pairs(look) do
+        if not GAB.Look.Valid(k, v) then look[k] = nil end   -- unknown key or choice
+    end
+    db.look = next(look) ~= nil and look or nil
     for k, v in pairs(DEFAULTS) do
         if db[k] == v then db[k] = nil end
     end
-    -- A theme this version doesn't know falls back to the default.
-    if db.theme ~= nil and not GAB.Theme.IsValid(db.theme) then db.theme = nil end
-    -- Button feedback: an unknown choice falls back to the default.
-    for _, k in ipairs(GAB.Buttons.LOOK_ORDER) do
-        if db[k] ~= nil and not GAB.Buttons.ValidLook(k, db[k]) then db[k] = nil end
-    end
+    if db.material ~= nil and not GAB.IsMaterial(db.material) then db.material = nil end
     -- /gab tune: only known keys with a number in 0..1 survive.
     if db.tune ~= nil then
         if type(db.tune) ~= "table" then db.tune = nil else
@@ -112,11 +123,43 @@ end
 local Settings = {}
 GAB.Settings = Settings
 
+-- The player's own look values (an override while following Glass UI).
+local function ownLook()
+    local t = rawget(GAB.db, "look")
+    if type(t) ~= "table" then
+        t = {}
+        GAB.db.look = t
+    end
+    return t
+end
+
 -- False for a name that isn't a theme; the setting is left as it was.
 function Settings.SetTheme(name)
     if not GAB.Theme.IsValid(name) then return false end
-    GAB.db.theme = name
-    GAB.Theme.Refresh()
+    ownLook().theme = name
+    GAB.Look.Refresh()
+    return true
+end
+
+-- Back to Glass UI's value for one look key ("theme", "hover", "press",
+-- "emptySlots"; GAB's default when not following): the player's own cleared.
+function Settings.ClearLook(key)
+    if GAB.Look.DEFAULTS[key] == nil then return false end
+    local t = rawget(GAB.db, "look")
+    if type(t) == "table" then
+        t[key] = nil
+        if next(t) == nil then GAB.db.look = nil end
+    end
+    GAB.Look.Refresh()
+    return true
+end
+
+-- The glass's material (GAB.MATERIALS), applied at the next /reload. While
+-- following Glass UI the material is Glass UI's: refused, and why.
+function Settings.SetMaterial(m)
+    if GAB.Look.Following() then return false, "set in Glass UI" end
+    if not GAB.IsMaterial(m) then return false, "pearl, clean or classic" end
+    GAB.db.material = m
     return true
 end
 
@@ -142,17 +185,28 @@ end
 -- for an unknown key or choice.
 function Settings.SetLook(key, value)
     if not GAB.Buttons.ValidLook(key, value) then return false end
-    GAB.db[key] = value
-    GAB.Buttons.RefreshFeedback()
+    ownLook()[key] = value
+    GAB.Look.Refresh()
     return true
 end
 
--- A preset (Buttons.PRESETS): all three at once. False for an unknown one.
+-- A preset (Buttons.PRESETS): all three at once, as the player's own.
+-- "suite": the three back to Glass UI's. False for an unknown one.
 function Settings.SetLookPreset(name)
+    if name == "suite" then
+        local t = rawget(GAB.db, "look")
+        if type(t) == "table" then
+            for _, k in ipairs(GAB.Buttons.LOOK_ORDER) do t[k] = nil end
+            if next(t) == nil then GAB.db.look = nil end
+        end
+        GAB.Look.Refresh()
+        return true
+    end
     local p = GAB.Buttons.PRESETS[name]
     if not p then return false end
-    for k, v in pairs(p) do GAB.db[k] = v end
-    GAB.Buttons.RefreshFeedback()
+    local t = ownLook()
+    for k, v in pairs(p) do t[k] = v end
+    GAB.Look.Refresh()
     return true
 end
 
@@ -303,7 +357,8 @@ local function onoff(v) return v and "on" or "off" end
 local function helpLines()
     local db = GAB.db
     return {
-        "/gab theme " .. table.concat(GAB.Theme.NAMES, "/") .. " - the glass (" .. db.theme .. ")",
+        "/gab theme " .. table.concat(GAB.Theme.NAMES, "/") .. "|suite - the glass's tint (" .. GAB.Theme.Current() .. ")",
+        "/gab material pearl/clean/classic - the glass itself, after a /reload (" .. (GAB.GlassPreset or "?") .. ")",
         "/gab hotkeys on/off - key bindings on the buttons (" .. onoff(db.showHotkeys) .. ")",
         "/gab macros on/off - macro names on the buttons (" .. onoff(db.showMacroNames) .. ")",
         "/gab gryphons on/off - the main bar's end caps (" .. onoff(db.endCaps) .. ")",
@@ -337,8 +392,13 @@ local SWITCHES = {
 local function slash(msg)
     local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
     if cmd == "theme" then
-        if Settings.SetTheme(arg) then say("theme " .. arg)
-        else say("/gab theme " .. table.concat(GAB.Theme.NAMES, "/")) end
+        if arg == "suite" and Settings.ClearLook("theme") then say("theme: Glass UI's")
+        elseif Settings.SetTheme(arg) then say("theme " .. arg)
+        else say("/gab theme " .. table.concat(GAB.Theme.NAMES, "/") .. "/suite") end
+    elseif cmd == "material" then
+        local ok, why = Settings.SetMaterial(arg)
+        if ok then say("material " .. arg .. ", after a /reload")
+        else say("/gab material pearl/clean/classic" .. (why and (": " .. why) or "")) end
     elseif SWITCHES[cmd] then
         if ONOFF[arg] == nil then return say("/gab " .. cmd .. " on/off") end
         SWITCHES[cmd][1](ONOFF[arg])
@@ -435,14 +495,16 @@ local function slash(msg)
             local parts = {}
             for _, k in ipairs(B.LOOK_ORDER) do parts[#parts + 1] = k .. " " .. B.Look(k) end
             say("look: " .. B.Preset() .. " (" .. table.concat(parts, ", ") .. ")")
-        elseif B.PRESETS[key] and value == "" then
+        elseif (B.PRESETS[key] or key == "suite") and value == "" then
             Settings.SetLookPreset(key)
-            say("look: " .. key)
+            say("look: " .. (key == "suite" and "Glass UI's" or key))
+        elseif alias[key] and value == "suite" and Settings.ClearLook(alias[key]) then
+            say("look: " .. alias[key] .. " from Glass UI")
         elseif alias[key] and Settings.SetLook(alias[key], value) then
             say("look: " .. alias[key] .. " " .. value)
         else
-            say("/gab look glass|soft|minimal, or /gab look hover off|glow|halo, press off|flash|ripple, "
-                .. "empty hidden|faint|half|full")
+            say("/gab look glass|soft|minimal|suite, or /gab look hover off|glow|halo|suite, "
+                .. "press off|flash|ripple|suite, empty hidden|faint|half|full|frosted|suite")
         end
     elseif cmd == "follow" then
         if arg == "" then
@@ -498,8 +560,13 @@ boot:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_LOGIN" then
         -- SavedVariables are read here at the latest (porting guide: not at file scope).
         if not GAB.db then GAB.db = ensureDefaults() end
+        -- The look first: Glass UI asked, the glass built (Look.lua). Nothing
+        -- builds a surface before it.
+        start("look", GAB.Look.Start)
+        if not GAB.GlassBuilt() then start("glass", function() GAB.BuildGlass("clean") end) end
         start("options", GAB.Options.Register)
         start("buttons", GAB.Buttons.Start)
+        start("skin requests", GAB.FlushSkinRequests)   -- providers that asked before the glass existed
         start("bars", GAB.Bars.Start)
         start("bags", GAB.Bags.Start)
         start("micro", GAB.Micro.Start)

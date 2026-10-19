@@ -165,7 +165,8 @@ check(chatHas("look: custom"), "/gab look: the current mix")
 -- Saved values: an unknown choice dropped.
 GlassActionBarsDB = { hover = "sparkle", press = "ripple", emptySlots = 3 }
 local db = GAB._test.ensureDefaults()
-check(rawget(db, "hover") == nil and rawget(db, "emptySlots") == nil and db.press == "ripple", "load: bad choices dropped")
+check(db.look and db.look.hover == nil and db.look.emptySlots == nil and db.look.press == "ripple", "load: bad choices dropped, a good one moved into look")
+check(rawget(db, "press") == nil, "  the old top-level key gone")
 eq(next(GAB.failures), nil, "nothing failed")
 
 done("test_look")

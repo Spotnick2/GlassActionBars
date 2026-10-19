@@ -82,11 +82,18 @@ yourself, using the last `geom` you got or your own geometry if it was `nil`. Th
 Ask for your bar to be laid out and placed again. Calls are combined into one pass on the next
 frame, out of combat. A call from inside your own `Layout` is ignored, so it can't loop.
 
-## `GlassActionBars.SkinButton(button, regions)` → `true` or `false, reason`
+## `GlassActionBars.SkinButton(button, regions, owner)` → `true` or `false, reason`
 
 Puts one of your buttons in glass: the same body, rim and pressed look as the action buttons,
-with the hotkey and count in the glass font. `button` must be a Button or CheckButton. `regions`
-names its parts, and each one is checked against its type:
+with the hotkey and count in the glass font, and the player's look (tint, hover, press, empty
+slots), followed live as they change it. `button` must be a Button or CheckButton.
+
+`owner`, optional: your addon's name (`"Apotheca"`). Glass Action Bars reports it to Glass UI,
+whose page then says your addon follows Glass Action Bars' look. It is an additive argument:
+version 1 callers that omit it are unaffected. A request made before Glass Action Bars has built
+its glass (before its `PLAYER_LOGIN`) waits, its regions and owner kept, and is built then.
+
+`regions` names its parts, and each one is checked against its type:
 
 | Key | Type | What happens to it |
 |---|---|---|

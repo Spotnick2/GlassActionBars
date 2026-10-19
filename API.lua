@@ -74,24 +74,30 @@ end
 
 -- The glass on a provider's button. regions: icon, normal, pushed,
 -- highlight (Textures), hotkey, count, name (FontStrings), cooldown (a
--- Cooldown); others are dropped. In combat it waits for the fight to end.
+-- Cooldown); others are dropped. `owner`, optional: the calling addon's
+-- name, reported to Glass UI as a tenant wearing GAB's look (#39). It waits,
+-- region copy and owner kept, for GAB's glass to be built (PLAYER_LOGIN) and
+-- for a fight to end; the skin setting is read again when it runs.
 local ROLES = { icon = "Texture", normal = "Texture", pushed = "Texture", highlight = "Texture",
     hotkey = "FontString", count = "FontString", name = "FontString", cooldown = "Cooldown" }
-local pending = {}       -- button -> its region copy, while in combat
+local pending = {}       -- button -> its region copy, until the glass is built and out of combat
 local waiter
 
-local function flush()
+-- The waiting requests, once the glass is built and out of combat.
+function GAB.FlushSkinRequests()
+    if InCombatLockdown() or not GAB.GlassBuilt() then return end
     for button, regions in pairs(pending) do
         pending[button] = nil
-        if not GAB.Buttons.IsSkinned(button) then
+        if GAB.db.skin ~= false and not GAB.Buttons.IsSkinned(button) then
             API.Try("api:skin", GAB.Buttons.Build, button, regions)
         end
     end
 end
 
-function GAB.SkinButton(button, regions)
+function GAB.SkinButton(button, regions, owner)
     if not isA(button, "Button") then return false, "button must be a Button" end
     if regions ~= nil and type(regions) ~= "table" then return false, "regions must be a table" end
+    if owner ~= nil and (type(owner) ~= "string" or owner == "") then return false, "owner must be a name" end
     local copy = {}
     for key, role in pairs(ROLES) do
         local r = regions and regions[key]
@@ -101,12 +107,13 @@ function GAB.SkinButton(button, regions)
         end
     end
     if GAB.db and GAB.db.skin == false then return false, "the glass is off (/gab skin)" end
+    if owner then GAB.Look.AddTenant(owner) end
     if GAB.Buttons.IsSkinned(button) then return true end
-    if InCombatLockdown() then
+    if InCombatLockdown() or not GAB.GlassBuilt() then
         pending[button] = copy
         if not waiter then
             waiter = CreateFrame("Frame")
-            waiter:SetScript("OnEvent", flush)
+            waiter:SetScript("OnEvent", GAB.FlushSkinRequests)
             API.RegisterEvents(waiter, { "PLAYER_REGEN_ENABLED" }, "api")
         end
         return true

@@ -7,6 +7,12 @@
   spell or item to it, open its flyout, use Edit Mode or Quick Keybind mode, or have the spellbook
   open. Choose how faded it is: hidden, faint or half. On the new **Bar fade** options page, or
   `/gab fade`.
+- **Pearl glass**: the glass is now LibGlass's Pearl material by default (a softer light and a
+  quieter outline); choose Pearl, Clean or Classic on the options page or with
+  `/gab material` (after a /reload).
+- **Glass UI**: with Glass UI's "Use Glass UI appearance" on for Glass Action Bars, its material is
+  Glass UI's, and its tint and button feedback follow Glass UI's look live; anything you set in
+  Glass Action Bars stays yours (a "Glass UI" choice on each control goes back to following it).
 - **Button feedback**, on a new **Buttons** options page (`/gab look`): how a button answers the
   pointer (off, Blizzard's glow, or a warm **halo** that fades in), a click (off, the flash, or a
   **ripple** from the pointer), and how empty slots show (hidden, faint, half, full, or **frosted**,
