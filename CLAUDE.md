@@ -132,11 +132,11 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
 
 ## References: read these before touching an unfamiliar API
 
-- `C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md`: measured, addon-agnostic field notes.
+- `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md`: measured, addon-agnostic field notes.
   New addon-agnostic findings go there, not into a copy here.
-- `C:\Projects\WoW\References\forever-api-1.60.1.70374.md`: the API dump. **Presence is not a contract.**
-- `C:\Projects\WoW\References\EMBEDDED-LIBRARIES.md`, `LIBGLASS-MIGRATION.md`, `RELEASING.md`.
-- `C:\Projects\WoW\References\Bartender4-4.18.3.1`: a behaviour reference (its Forever art
+- `C:\Projects\WoW\References\Forever\api\forever-api-1.60.1.70374.md`: the API dump. **Presence is not a contract.**
+- `C:\Projects\WoW\References\Docs\EMBEDDED-LIBRARIES.md`, `LIBGLASS-MIGRATION.md`, `RELEASING.md`.
+- `C:\Projects\WoW\References\Addons\ActionBars\Bartender4`: a behaviour reference (its Forever art
   handling, bar fade with flyouts, LibActionButton's duration-object cooldowns). It owns its buttons
   and uses state drivers; we don't.
 - `C:\Projects\WoW\Apotheca` (`ApothecaUtility.lua`, `ApothecaCompat.lua`), `..\123`
@@ -181,7 +181,7 @@ and an in-game checklist.
 - CurseForge (project 1744070, https://www.curseforge.com/wow/addons/glass-action-bars) builds
   releases from the tag webhook through `.pkgmeta`; the `release` job publishes a GitHub Release
   from the tag's `## vX.Y.Z` section of `CHANGELOG.md`. Check CurseForge's own zip with an alpha
-  tag first (`References\RELEASING.md`).
+  tag first (`References\Docs\RELEASING.md`).
 
 ## Conventions
 

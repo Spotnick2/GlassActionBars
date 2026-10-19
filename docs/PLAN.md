@@ -131,7 +131,7 @@ Tests:
 - Failure isolation: one bad button doesn't stop the others.
 - Skinning a hidden or reparented stock button raises no errors.
 
-Release v0.1.0 following `References/RELEASING.md`: an alpha tag first, then `Tools/check_package.py` on CurseForge's zip, screenshots, and a CHANGELOG section.
+Release v0.1.0 following `References/Docs/RELEASING.md`: an alpha tag first, then `Tools/check_package.py` on CurseForge's zip, screenshots, and a CHANGELOG section.
 
 ## Phase 2, v0.2.0: dock, provider API, Utility bar and fade
 

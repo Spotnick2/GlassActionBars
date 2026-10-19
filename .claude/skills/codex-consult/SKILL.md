@@ -87,12 +87,12 @@ For GlassActionBars, good things to hand Codex:
 - any plan that grows scope toward a bar replacement (Bartender4, ElvUI), or owns action buttons.
 
 **Always hand it `CLAUDE.md` and `docs/PLAN.md` alongside the diff or plan**, plus
-`C:/Projects/WoW/References/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md` once it exists.
+`C:/Projects/WoW/References/Docs/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md` once it exists.
 Those findings were measured on the live client. Without them, a cold reviewer argues from
 Classic-era or Retail behaviour that doesn't hold here.
-`C:/Projects/WoW/References/forever-api-1.60.1.70374.md` is the full API surface when a question
+`C:/Projects/WoW/References/Forever/api/forever-api-1.60.1.70374.md` is the full API surface when a question
 turns on whether something exists, and `C:/Projects/WoW/wow-ui-source` (branch `forever`) is the
-client's own FrameXML (`Blizzard_ActionBar`). `C:/Projects/WoW/References/Bartender4-4.18.3.1` is
+client's own FrameXML (`Blizzard_ActionBar`). `C:/Projects/WoW/References/Addons/ActionBars/Bartender4` is
 a behaviour reference: it owns its buttons, which we deliberately don't.
 
 Say what you have already established and ask it not to repeat that work. A clean "no defect found"
