@@ -62,6 +62,14 @@ check(v == nil and detail:find("none of the ready"), "  nothing placed yet: inco
 WoW.itemCooldowns[279979] = { 100, 3600 }        -- the Camp Chair placed
 v, detail = T.cooldownVerdict()
 check(v == false and detail:find("independent"), "  only the placed one cooling: independent")
+WoW.itemCooldowns[279969] = { 100, WoW.Secret("dur") }
+v, detail = T.cooldownVerdict()
+check(v == nil and detail:find("unreadable"), "  the other's cooldown secret: inconclusive, not independent")
+WoW.items[279969] = 0
+WoW.itemCooldowns[279969] = nil
+v, detail = T.cooldownVerdict()
+check(v == nil and detail:find("unreadable"), "  the other no longer carried: inconclusive")
+WoW.items[279969] = 1
 WoW.itemCooldowns[279969] = { 100, 3600 }
 v, detail = T.cooldownVerdict()
 check(v == true and detail:find("shared"), "  both cooling: shared")

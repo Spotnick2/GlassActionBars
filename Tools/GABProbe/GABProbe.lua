@@ -126,12 +126,19 @@ local function takeBaseline()
 end
 
 local function cooldownVerdict()
-    local _, _, _, coolingKeys = readCamping()
+    local _, _, readyNow, coolingKeys = readCamping()
     if not baseline or #baseline < 2 then
         return nil, "inconclusive: fewer than two ready features by the fire"
     end
+    local isReady = {}
+    for _, k in ipairs(readyNow) do isReady[k] = true end
+    -- Every baseline feature must read plainly as cooling or ready: one
+    -- unreadable (secret, refused, no longer carried) could be either.
     local started = 0
-    for _, k in ipairs(baseline) do if coolingKeys[k] then started = started + 1 end end
+    for _, k in ipairs(baseline) do
+        if coolingKeys[k] then started = started + 1
+        elseif not isReady[k] then return nil, "inconclusive: " .. k .. "'s cooldown unreadable after placing" end
+    end
     if started == 0 then return nil, "inconclusive: none of the ready features is cooling (was one placed?)" end
     if started == #baseline then return true, "shared: all " .. started .. " ready features started cooling" end
     return false, "independent: " .. started .. " of " .. #baseline .. " ready features cooling"
