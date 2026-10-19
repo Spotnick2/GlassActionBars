@@ -9,7 +9,8 @@
 --   pushed and highlight atlases, by the button's own UpdateTextures
 --   (Camelot\MainMenuBarBagButtons.lua:9-41), which runs on every slot update.
 --   That is the hook.
--- - The empty slot's silhouette is the slot's icon, not its frame: it stays.
+-- - The empty slot's silhouette is the slot's icon, not its frame: it stays,
+--   even when the empty-slots look hides the slot's glass.
 -- - ItemButtonMixin replaces the button's own SetAlpha (it fades the icon and
 --   count only), so nothing here calls SetAlpha on a bag button: only on its
 --   regions.
@@ -68,8 +69,8 @@ function Bags.Start()
         local b = _G[name]
         if b and not GAB.Buttons.IsSkinned(b) then
             API.Try("bags:" .. name, function()
-                -- The bag slots keep their own empty look (an empty slot's quieter rim).
-                GAB.Buttons.Build(b, regionsOf(b), { keepEmpty = true })
+                -- An empty bag slot takes the empty-slots look, like an empty action slot (#50).
+                GAB.Buttons.Build(b, regionsOf(b))
                 if type(b.UpdateTextures) == "function" then
                     hooksecurefunc(b, "UpdateTextures", function(self)
                         GAB.Buttons.Restyle(self)
