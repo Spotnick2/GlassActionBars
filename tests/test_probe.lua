@@ -48,6 +48,25 @@ eq(near, true, "  the Utility bar knows it's by a fire")
 check(shown:find("camp_skinning1", 1, true) and shown:find("camp_basic", 1, true), "  its camping buttons shown")
 check(logHas("aura 3: id 25694"), "  each aura logged")
 
+-- Shared cooldowns, by a transition from a ready baseline.
+local v, detail = T.cooldownVerdict()
+eq(v, nil, "no baseline yet: inconclusive")
+WoW.itemCooldowns[279979] = { 100, 3600 }        -- the Camp Chair already cooling when brought
+eq(T.takeBaseline(), 1, "  one ready feature by the fire")
+v, detail = T.cooldownVerdict()
+check(v == nil and detail:find("fewer than two"), "  fewer than two ready: inconclusive, though all are cooling")
+WoW.itemCooldowns[279979] = nil
+eq(T.takeBaseline(), 2, "two ready features: the baseline")
+v, detail = T.cooldownVerdict()
+check(v == nil and detail:find("none of the ready"), "  nothing placed yet: inconclusive")
+WoW.itemCooldowns[279979] = { 100, 3600 }        -- the Camp Chair placed
+v, detail = T.cooldownVerdict()
+check(v == false and detail:find("independent"), "  only the placed one cooling: independent")
+WoW.itemCooldowns[279969] = { 100, 3600 }
+v, detail = T.cooldownVerdict()
+check(v == true and detail:find("shared"), "  both cooling: shared")
+WoW.itemCooldowns[279969], WoW.itemCooldowns[279979] = nil, nil
+
 -- Camping cooldowns: features cooling down, kits not counted.
 WoW.itemCooldowns[279979] = { 100, 3600 }
 local cooling, carried = T.readCamping()
