@@ -1,8 +1,17 @@
 # Forever probe: Glass Action Bars
 
-What the live client does, measured with `Tools/GABProbe` (`/gabprobe help`). docs/PLAN.md's
-Phase 0 questions; each answer decides a detail of the skin. Facts that hold for every addon go
-to `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
+What the live client does, measured with `Tools/GABProbe`. Sessions 1 and 2 used the standalone
+probe (`/gabprobe help`, in git history before #32); from session 3 it is a ForeverProbe module
+(`/fp gab`, procedures with `/fp steps gab <name>`). docs/PLAN.md's Phase 0 questions; each answer
+decides a detail of the skin. Facts that hold for every addon go to
+`C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
+
+## Session 3: the campfire buff and camping cooldowns (#9, pending)
+
+`pwsh Tools\deploy.ps1 -Probe`, `/reload`, then `/fp steps gab campfire` and follow the panel.
+Whether aura 1283391 is a campfire's buff (every helpful aura's id is logged by the fire), whether
+the Utility bar adds and drops the camp features with it, and whether camp features share one
+cooldown.
 
 ## How to run session 1
 
