@@ -228,6 +228,8 @@ Options.LOOK_ROWS = {
         { "frosted", "Frosted" } } },
 }
 Options.LOOK_PRESETS = { { "glass", "Glass" }, { "soft", "Soft" }, { "minimal", "Minimal" } }
+-- The radio columns: five choices fit the page (Frosted overflowed at 150/110).
+Options.LOOK_ACROSS = { 130, 90 }
 Options.lookPage = Options.AddPage("Buttons", function(page, title)
     local B = GAB.Buttons
     local note = label(page, "How the buttons answer the pointer and a click, and how empty slots show. A preset "
@@ -241,9 +243,9 @@ Options.lookPage = Options.AddPage("Buttons", function(page, title)
     local _, presets = Options.radios(page, head, Options.LOOK_PRESETS, B.Preset, function(name)
         GAB.Settings.SetLookPreset(name)
         Options.RefreshPage(page)
-    end, { 150, 110 })
+    end, Options.LOOK_ACROSS)
     local now = label(page, "", "GameFontHighlightSmall")
-    now:SetPoint("LEFT", head, "LEFT", 150 + #Options.LOOK_PRESETS * 110, 0)
+    now:SetPoint("LEFT", head, "LEFT", Options.LOOK_ACROSS[1] + #Options.LOOK_PRESETS * Options.LOOK_ACROSS[2], 0)
     building[#building + 1] = function()
         now:SetText(B.Preset() == "custom" and "now: your own mix" or "")
     end
@@ -255,7 +257,7 @@ Options.lookPage = Options.AddPage("Buttons", function(page, title)
         local _, group = Options.radios(page, name, r[3], function() return B.Look(r[1]) end, function(v)
             GAB.Settings.SetLook(r[1], v)
             Options.RefreshPage(page)
-        end, { 150, 110 })
+        end, Options.LOOK_ACROSS)
         Options._test.lookRows[r[1]] = group
         last = name
     end
