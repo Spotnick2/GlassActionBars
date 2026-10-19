@@ -68,4 +68,17 @@ if tga then
     eq(header:byte(17), 32, "  32 bits, with alpha")
 end
 
+for _, asset in ipairs({ { "ButtonGloss", 64 }, { "ButtonSocketRim", 32 }, { "ButtonSocketShade", 32 } }) do
+    local f = io.open("Media/" .. asset[1] .. ".tga", "rb")
+    check(f ~= nil, "Pearl asset ships: " .. asset[1])
+    if f then
+        local h = f:read(18)
+        f:close()
+        eq(h:byte(3), 2, asset[1] .. ": uncompressed truecolour")
+        eq(h:byte(13) + 256 * h:byte(14), asset[2], asset[1] .. ": width")
+        eq(h:byte(15) + 256 * h:byte(16), asset[2], asset[1] .. ": height")
+        eq(h:byte(17), 32, asset[1] .. ": alpha channel")
+    end
+end
+
 done("test_toc")

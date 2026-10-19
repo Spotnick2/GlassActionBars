@@ -9,7 +9,9 @@
   `/gab fade`.
 - **Pearl glass**: the glass is now LibGlass's Pearl material by default (a softer light and a
   quieter outline); choose Pearl, Clean or Classic on the options page or with
-  `/gab material` (after a /reload).
+  `/gab material` (after a /reload). With Pearl, the buttons take after Final Fantasy XIV's: a
+  frosted empty slot is a grey, recessed tile (a dark top edge, a light bottom lip), and a filled
+  one has a soft reflection over the top of its icon (`/gab tune gloss 0` takes it off).
 - **Glass UI**: with Glass UI's "Use Glass UI appearance" on for Glass Action Bars, its material is
   Glass UI's, and its tint and button feedback follow Glass UI's look live; anything you set in
   Glass Action Bars stays yours (a "Glass UI" choice on each control goes back to following it).

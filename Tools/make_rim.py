@@ -141,6 +141,43 @@ def button_mask():
     return rgba
 
 
+def button_socket_rim():
+    """Pearl empty socket: the lower lip catches light, the upper edge recedes.
+
+    Same fixed corner geometry and 8 px slices as ButtonRim. No inner halo.
+    This is button skin art; the shared LibGlass material remains unchanged.
+    """
+    d = rounded_rect_sdf(SIZE, SIZE, INSET, RADIUS)
+    y = (np.arange(SIZE, dtype=np.float64) + 0.5)[:, None] / SIZE
+    weight = 0.18 + 0.82 * smoothstep(0.10, 0.95, y)
+    rgba = np.ones((SIZE, SIZE, 4))
+    rgba[..., 3] = band(d, -1.15, 0, soft=0.55) * weight
+    return rgba
+
+
+def button_socket_shade():
+    """White alpha texture, painted black at runtime: a narrow upper inset."""
+    d = rounded_rect_sdf(SIZE, SIZE, INSET, RADIUS)
+    y = (np.arange(SIZE, dtype=np.float64) + 0.5)[:, None] / SIZE
+    rgba = np.ones((SIZE, SIZE, 4))
+    rgba[..., 3] = band(d, -2.4, -0.3, soft=0.65) * (1 - smoothstep(0.10, 0.70, y))
+    return rgba
+
+
+def button_gloss():
+    """Broad upper reflection. Runtime mask follows the fixed rounded corners.
+
+    A static bitmap (not SetGradient) so live SetAlpha is effective on Forever.
+    BLEND white, not ADD: a restrained highlight without blowing out the icon.
+    """
+    y = (np.arange(64, dtype=np.float64) + 0.5)[:, None] / 64
+    peak = 0.45 + 0.55 * np.exp(-((y - 0.12) / 0.11) ** 2)
+    alpha = peak * (1 - smoothstep(0.20, 0.43, y))
+    rgba = np.ones((64, 64, 4))
+    rgba[..., 3] = np.tile(alpha, (1, 64))
+    return rgba
+
+
 def main():
     rim = button_rim()
     inner = rim[9:SIZE - 9, 9:SIZE - 9, 3]
@@ -151,6 +188,9 @@ def main():
     write_tga("ButtonHalo", halo)
     write_tga("ButtonRipple", button_ripple())
     write_tga("ButtonMask", button_mask())
+    write_tga("ButtonSocketRim", button_socket_rim())
+    write_tga("ButtonSocketShade", button_socket_shade())
+    write_tga("ButtonGloss", button_gloss())
 
 
 if __name__ == "__main__":

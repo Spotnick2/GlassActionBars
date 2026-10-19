@@ -83,6 +83,12 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   and the rim once (`Theme.Repaint` per surface); `Build(..., { keepEmpty = true })` opts a family
   out (bags). The key text stays where Blizzard puts it: moving it above the buttons was tried and
   taken out (docs/FOREVER-PROBE.md session 5). Textures from `Tools/make_rim.py`.
+  Pearl's face (#44, the owner's FFXIV reference; Pearl built only): `Buttons.PEARL` overrides
+  `TUNE`'s defaults (`TuneDefault`; a saved tune of a PEARL key is never pruned, the material is
+  only known at login), a neutral frosted fill, a frosted empty slot's recessed socket
+  (ButtonSocketRim / ButtonSocketShade in place of the rim and inner line) and a filled slot's
+  reflection (ButtonGloss, masked by ButtonMask), all on `g.top`: over the cooldown sweep like the
+  rim, by choice (a fixed order); `/gab tune gloss 0` takes it off. GABProbe's `pearl` checks it.
 - **`Bars.lua`**: the main bar's `BorderArt`, its pooled dividers (re-faded after
   `UpdateDividers`) and the end caps' textures (`/gab gryphons`), re-applied on
   `EDIT_MODE_LAYOUTS_UPDATED`.

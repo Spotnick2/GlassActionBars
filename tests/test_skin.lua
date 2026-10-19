@@ -72,7 +72,10 @@ eq(T.skins[StanceButton1].small, true, "stance buttons are the small size")
 eq(T.skins[ActionButton1].small, false, "action buttons are not")
 
 -- The rim: bright with an action, faint without, kept when unreadable.
-local function rim(b) return T.skins[b].g.rim:GetAlpha() end
+local function rim(b)
+    local s = T.skins[b]
+    return s.g.rim:GetAlpha() + (s.socketRim and s.socketRim:GetAlpha() or 0)
+end
 local full = GAB.Buttons.Tune("rim")
 -- An empty slot's rim: the tune's fraction, times the empty-slots setting's factor (#34).
 local function emptyFactor()   -- the empty-slots setting's factor; frosted's is the frostRim tune
@@ -167,7 +170,7 @@ SlashCmdList.GLASSACTIONBARS("tune rim")
 check(chatHas("tune rim 0.50"), "/gab tune rim prints, changes nothing")
 SlashCmdList.GLASSACTIONBARS("tune reset")
 eq(rawget(GlassActionBarsDB, "tune"), nil, "tune reset: nothing saved")
-check(close(rim(ActionButton1), GAB.Buttons.TUNE.rim[1]), "  the built-in rim back")
+check(close(rim(ActionButton1), GAB.Buttons.TuneDefault("rim")), "  the built-in rim back")
 GlassActionBarsDB = { tune = { rim = 0.3, bogus = 1, dark = 7, empty = GAB.Buttons.TUNE.empty[1] } }
 local db = GAB._test.ensureDefaults()
 eq(db.tune.rim, 0.3, "a saved tune value survives a load")
