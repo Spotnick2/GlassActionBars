@@ -17,8 +17,8 @@ decides a detail of the skin. Facts that hold for every addon go to
   - Apotheca's frame is its buttons' union, L 1425.9 R 1508.7 T 132.6 B 7.6. Its rows (tops
     132.6 / 90.3 / 48.1) are the bar's (132.7 / 90.4 / 48.0); its left edge is the bar's right.
   - The owner: lines up (screenshot checked).
-  - The ~7 px seen earlier was on Action Bar 1, before #47 / #49 and Apotheca #71. Not seen on
-    bar 8 now; bar 1 itself wasn't measured in this run.
+  - The ~7 px seen earlier was on this same bar (the owner's "bar 1" is Action Bar 8), before
+    #47 / #49 and Apotheca #71. Gone: the same reading again in run #265; #53 closed.
 - **The bag bar error (#55):** `attempt to call a nil value` at `BagsBar.lua:125`
   (`self:UpdateDividers()` in `BagsBarMixin:Layout`), on each cursor change, 50x in the previous
   session (BugGrabber session 18, last at 19:34). In this run:
