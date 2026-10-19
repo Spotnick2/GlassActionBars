@@ -133,7 +133,7 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
 - **`API.lua`**: the public provider API (#8); the contract is
   [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (1, checked
   with `==`; not `API_VERSION`: `GlassActionBars.API` is the client adapter), `RegisterBar` (wraps
-  `Dock.Register`), `RequestLayout`, `SkinButton` (regions checked by role, queued in combat),
+  `Dock.Register`), `RequestLayout`, `SkinButton` (regions checked by role, queued in combat), `SetButtonEmpty` (a provider's empty slot),
   `RegisterButton` (stored; the Utility bar hosts them). Inputs are copied on acceptance; refusals
   return `false, reason`. Any incompatible change bumps the version and the doc.
 - **`Utility.lua`**: the Utility bar (#9), Apotheca's profession bar plus the camping items.

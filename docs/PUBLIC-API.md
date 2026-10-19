@@ -112,6 +112,17 @@ when the fight ends. If the player turned the glass off (`/gab skin off`), it re
 need their standalone look back as soon as they are undocked, don't call `SkinButton` on them;
 their look is then yours.
 
+## `GlassActionBars.SetButtonEmpty(button, isEmpty)` → `true` or `false, reason`
+
+Tells Glass Action Bars whether a button you skinned with `SkinButton` is an **empty slot**
+(`true`) or holds something (`false`), so it shows the player's empty-slot look (frosted by
+default, or faint, half, hidden...) exactly like the action bars' empty slots. A skinned button
+counts as filled until you say otherwise. Call it whenever a slot empties or fills; the same
+answer twice is harmless. It only changes colours and alphas, so it is safe in combat. Called
+while the skin is still waiting (before Glass Action Bars has built its glass, or in combat), the
+answer is kept and applied when the skin is built. A button that was never passed to `SkinButton`
+is refused. Added within version 1 (additive).
+
 ## `GlassActionBars.RegisterButton(def)` → `true` or `false, reason`
 
 A button for the player's **Utility bar** (Hearthstone, professions, and buttons like yours), in

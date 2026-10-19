@@ -84,6 +84,8 @@ local pending = {}       -- button -> its region copy, until the glass is built 
 local waiter
 
 -- The waiting requests, once the glass is built and out of combat.
+local pendingEmpty = {}  -- button -> its last SetButtonEmpty answer, while its skin waits
+
 function GAB.FlushSkinRequests()
     if InCombatLockdown() or not GAB.GlassBuilt() then return end
     for button, regions in pairs(pending) do
@@ -91,7 +93,29 @@ function GAB.FlushSkinRequests()
         if GAB.db.skin ~= false and not GAB.Buttons.IsSkinned(button) then
             API.Try("api:skin", GAB.Buttons.Build, button, regions)
         end
+        if pendingEmpty[button] ~= nil then
+            GAB.Buttons.SetOccupied(button, not pendingEmpty[button])
+            pendingEmpty[button] = nil
+        end
     end
+end
+
+-- A skinned provider button's slot is empty (true) or holds something
+-- (false), so it shows the player's empty-slot look (frosted, faint,
+-- hidden...) like the action bars' empty slots; a skinned button counts as
+-- filled until told. Safe in combat (colours and alphas). Before its skin is
+-- built (a request still waiting), the answer is kept and applied then.
+function GAB.SetButtonEmpty(button, isEmpty)
+    if type(isEmpty) ~= "boolean" then return false, "isEmpty must be true or false" end
+    if GAB.Buttons.IsSkinned(button) then
+        GAB.Buttons.SetOccupied(button, not isEmpty)
+        return true
+    end
+    if pending[button] then
+        pendingEmpty[button] = isEmpty
+        return true
+    end
+    return false, "the button isn't skinned (SkinButton first)"
 end
 
 function GAB.SkinButton(button, regions, owner)

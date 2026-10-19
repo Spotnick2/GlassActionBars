@@ -183,4 +183,21 @@ WoW.tick()
 eq(GAB.failures["api:roulette"], nil, "no callback until the Utility bar hosts it")
 check(not clicked, "  not clicked")
 
+-- SetButtonEmpty (Apotheca#68): a provider's empty slot gets the empty-slot look.
+local pb = CreateFrame("Button", "EmptyTestButton", UIParent)
+check(GAB.SkinButton(pb, { icon = pb:CreateTexture() }, "Test"), "a provider button skinned")
+local pst = GAB.Buttons.State(pb)
+eq(pst.occupied, true, "  it counts as filled until told")
+check(GAB.SetButtonEmpty(pb, true), "SetButtonEmpty(true)")
+eq(pst.occupied, false, "  empty: the empty-slot look")
+check(GAB.SetButtonEmpty(pb, false) and pst.occupied == true, "SetButtonEmpty(false): filled again")
+eq(GAB.SetButtonEmpty(pb, "yes"), false, "a non-boolean refused")
+eq(GAB.SetButtonEmpty(CreateFrame("Button", "NeverSkinned", UIParent), true), false, "a button never skinned refused")
+WoW.combat = true
+local qb = CreateFrame("Button", "WaitingButton", UIParent)
+check(GAB.SkinButton(qb, { icon = qb:CreateTexture() }), "in combat: the skin waits")
+check(GAB.SetButtonEmpty(qb, true), "  SetButtonEmpty on a waiting button: kept")
+WoW.combat = false
+WoW.fire("PLAYER_REGEN_ENABLED")
+check(GAB.Buttons.IsSkinned(qb) and GAB.Buttons.State(qb).occupied == false, "  applied once the skin is built")
 done("test_api")
