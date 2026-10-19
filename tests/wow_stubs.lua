@@ -729,12 +729,18 @@ for _, f in ipairs({ StanceBar, PetActionBar }) do
     rawset(f, "SetPointBase", function(self, ...) Methods.SetPoint(self, ...) end)
     rawset(f, "ClearAllPointsBase", function(self) Methods.ClearAllPoints(self) end)
     rawset(f, "ApplySystemAnchor", function() end)
-    -- BreakFrameSnap (on a snapped-to bar's hide): frozen where it is, as an absolute
-    -- TOPLEFT anchor (the stub keeps the x it had); f._default: IsInDefaultPosition.
+    -- BreakFrameSnap (a snapped-to bar hid): as Blizzard's, frozen where it is as an
+    -- absolute TOPLEFT anchor (the stub keeps the x it had), the snap dropped, and
+    -- OnSystemPositionChange: the layout's anchor written (f._layout), the default flag
+    -- cleared. f._default: IsInDefaultPosition.
     rawset(f, "BreakFrameSnap", function(self)
         local x = self._points[1] and self._points[1][4] or 0
+        local to = rawget(self, "snappedToFrame")
+        if to and type(rawget(to, "snappedFrames")) == "table" then to.snappedFrames[self] = nil end
+        rawset(self, "snappedToFrame", nil)
         Methods.ClearAllPoints(self)
         Methods.SetPoint(self, "TOPLEFT", UIParent, "TOPLEFT", x, -500)
+        self._layout, self._default = { "TOPLEFT", x, -500 }, false
     end)
     rawset(f, "IsInDefaultPosition", function(self) return self._default == true end)
 end

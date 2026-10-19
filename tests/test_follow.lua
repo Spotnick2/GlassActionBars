@@ -90,14 +90,13 @@ check(close(x(PetActionBar), 50), "  the pet bar, with a bar snapped to it: put 
 check(F.Status().PetActionBar:find("snapped to it", 1, true), "  /gab follow says why (pet bar)")
 check(F.Status().StanceBar:find("snapped to PetActionBar", 1, true), "  and why (stance bar)")
 StanceBar.BreakFrameSnap(StanceBar)              -- the pet dismissed: Blizzard freezes the stance bar
-rawset(StanceBar, "snappedToFrame", nil)
 rawset(PetActionBar, "snappedFrames", nil)
-eq(x(StanceBar), 5, "  the frozen stance bar holds no shift")
+eq(StanceBar._layout[2], 5, "  the layout Blizzard wrote holds no shift")
 settle()
-eq(StanceBar._points[1][1], "TOPLEFT", "  and once free, it follows from the frozen place")
+eq(StanceBar._points[1][1], "TOPLEFT", "  once free (anchored to the screen), it follows from the frozen place")
 check(close(x(StanceBar), 5 + 50 / 0.7), "    (by dx)")
--- A default-position bar is snapped to Action Bar 1 by Blizzard's stacking: it follows,
--- and a freeze (Action Bar 1 hidden) never doubles the shift.
+-- A default-position bar is snapped to Action Bar 1 by Blizzard's stacking: it stays,
+-- so Action Bar 1 hiding (a vehicle) freezes an unshifted place into the layout.
 reanchor(StanceBar, -340)
 reanchor(PetActionBar, 50)
 settle()
@@ -105,21 +104,21 @@ rawset(PetActionBar, "snappedToFrame", MainActionBar)
 PetActionBar._default = true
 EditModeManagerFrame:UpdateBottomActionBarPositions()
 settle()
-check(close(x(PetActionBar), 50 + 50 / 0.7), "a default pet bar stacked on Action Bar 1: follows")
-PetActionBar.BreakFrameSnap(PetActionBar)        -- Action Bar 1 hid: frozen where we had it
+check(close(x(PetActionBar), 50), "a default pet bar stacked on Action Bar 1: put back, stays")
+check(F.Status().PetActionBar:find("default place", 1, true), "  /gab follow says how to let it follow")
+PetActionBar.BreakFrameSnap(PetActionBar)        -- Action Bar 1 hid: Blizzard freezes it, writes the layout
+eq(PetActionBar._layout[2], 50, "  the layout Blizzard wrote holds no shift")
+eq(PetActionBar._default, false, "  (and it's no longer in its default place)")
 settle()
-check(close(x(PetActionBar), 50 + 50 / 0.7), "  frozen there: our shift taken off the new base, not doubled")
-announce(true, 0, 0)
-check(close(x(PetActionBar), 50), "  and back to the unshifted place")
-announce(true, 50, 50)
-PetActionBar.BreakFrameSnap(PetActionBar)        -- frozen while ours, then Blizzard re-stacks before our pass
-reanchor(PetActionBar, 60)
-settle()
-check(close(x(PetActionBar), 60 + 50 / 0.7), "  re-stacked after a freeze: a fresh base, nothing taken off")
+check(close(x(PetActionBar), 50 + 50 / 0.7), "  now anchored to the screen, it follows")
+Settings.SetFollow(false)
+check(close(x(PetActionBar), 50) and PetActionBar._layout[2] == 50, "  follow off: back at the layout's place")
+Settings.SetFollow(true)
 -- The player snapped the pet bar to another bar (not default): stays.
-PetActionBar._default = false
+rawset(PetActionBar, "snappedToFrame", MainActionBar)
 announce(true, 50, 50)
-check(close(x(PetActionBar), 60), "the pet bar snapped by the player to Action Bar 1: put back, stays")
+check(close(x(PetActionBar), 50), "the pet bar snapped by the player to another bar: put back, stays")
+check(F.Status().PetActionBar:find("snapped to", 1, true), "  and said so")
 rawset(PetActionBar, "snappedToFrame", nil)
 reanchor(PetActionBar, 50)
 settle()
