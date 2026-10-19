@@ -12,7 +12,7 @@
 --   - whether the Utility bar adds and drops the camp features with it;
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
--- Also barmove (#30), look (#34) and pearl (#44): /fp steps gab <name>.
+-- Also barmove (#30), look (#34), pearl (#44) and icons (#46): /fp steps gab <name>.
 -- Commands: /fp gab aura, /fp gab camping, /fp gab clear.
 
 local ADDON, NS = ...
@@ -495,6 +495,52 @@ Probe:Steps("pearl", {
       run = function() settings().SetTune("gloss", savedGloss); return "gloss " .. Show(buttons().Tune("gloss")) end },
     { text = "Press Reload now to save the results.", reload = true },
 })
+
+-- ------------------------------------------------------------------
+-- icons (#46): the Utility bar's and a provider's icons rounded by a mask
+-- stretched over the icon (its corner grows with the size), the rim sliced
+-- (its corner fixed): do they agree at 16, 32, 45 and 64? A cooldown's
+-- square swipe over a rounded icon. Undocked Utility bar: its own size.
+-- ------------------------------------------------------------------
+
+local savedSize
+local function utilitySize(v)
+    return function()
+        if v then settings().SetUtilityLayout("iconSize", v) else
+            local u = rawget(gab().db, "utility")
+            if type(u) == "table" then u.iconSize = savedSize end
+            gab().Utility.Reconcile()
+        end
+        return "iconSize " .. Show(gab().Utility.LayoutSetting("iconSize"))
+    end
+end
+
+local iconSteps = {
+    title = "Rounded icons on the Utility bar and Apotheca (#46)",
+    { text = "Reading the Utility bar's size.", auto = true,
+      run = function()
+          local u = rawget(gab().db, "utility")
+          savedSize = type(u) == "table" and u.iconSize or nil
+          return "iconSize " .. Show(gab().Utility.LayoutSetting("iconSize")), "dock " .. Show(gab().Dock.Setting("utility", "bar"))
+      end,
+      check = function() return gab().Dock.Setting("utility", "bar") == false, "the Utility bar undocked (else it takes the bar's size)" end },
+}
+for _, size in ipairs({ 16, 32, 45, 64 }) do
+    iconSteps[#iconSteps + 1] = { text = "Press Size " .. size .. ": the Utility bar's icons at " .. size
+        .. ". Are the icon's corners inside the rim's, with no square corner and no gap?", button = "Size " .. size,
+        run = utilitySize(size), screenshot = "Utility icons at " .. size }
+    iconSteps[#iconSteps + 1] = { text = "At " .. size .. ": the icon's corners follow the rim?", ask = true }
+end
+for _, step in ipairs({
+    { text = "Putting your Utility bar's size back.", auto = true, run = utilitySize(nil) },
+    { text = "Use your Hearthstone (or anything on the Utility bar with a cooldown), then press Shot.", button = "Shot",
+      run = function() return "shot" end, screenshot = "a cooldown over a rounded icon" },
+    { text = "Is the cooldown's square swipe acceptable over the rounded icon?", ask = true },
+    { text = "Apotheca's buttons: rounded icons, no square corners past the rim?", ask = true,
+      screenshot = "Apotheca's icons" },
+    { text = "Press Reload now to save the results.", reload = true },
+}) do iconSteps[#iconSteps + 1] = step end
+Probe:Steps("icons", iconSteps)
 
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })

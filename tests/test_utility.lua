@@ -29,6 +29,11 @@ eq(kits, 3, "  3 of them kits")
 for _, a in ipairs(U.ACTIONS) do check(_G["GlassActionBarsUtil_" .. a.key] == B[a.key], "named button " .. a.key) end
 for _, a in ipairs(U.CAMPING) do check(_G["GlassActionBarsUtil_" .. a.key] ~= nil, "named button " .. a.key) end
 for _, b in pairs(B) do check(GAB.Buttons.IsSkinned(b), "skinned at login: " .. b:GetName()) end
+-- Its icons rounded to the glass and their baked border cropped (#46).
+for _, b in pairs(B) do
+    local icon = GAB.Buttons.State(b).regions.icon
+    check(icon._masks and #icon._masks == 1 and icon._masks[1]:GetParent() == b, "icon rounded: " .. b:GetName())
+end
 
 -- Nothing known, nothing carried: hidden, no attributes.
 rebuild()
