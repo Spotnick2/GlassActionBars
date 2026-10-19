@@ -2,7 +2,7 @@
 
 What the live client does, measured with `Tools/GABProbe` (`/gabprobe help`). docs/PLAN.md's
 Phase 0 questions; each answer decides a detail of the skin. Facts that hold for every addon go
-to `C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md` instead.
+to `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
 ## How to run session 1
 
