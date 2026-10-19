@@ -121,6 +121,16 @@ WoW.auras[U.CAMPFIRE_AURA] = nil
 WoW.fire("UNIT_AURA", "player")
 WoW.tick()
 
+-- Above the stock action buttons: one it overlaps never takes its clicks.
+local top = 0
+for _, bb in ipairs(GAB.Dock.BARS) do
+    for i = 1, 12 do
+        local x = rawget(_G, bb[2] .. i)
+        if x and x:GetFrameLevel() > top then top = x:GetFrameLevel() end
+    end
+end
+check(U.frame:GetFrameLevel() > top, "the Utility bar above every stock action button")
+
 -- Placement: docked right of bar 1 by default, matched to it.
 rebuild()
 WoW.tick()
