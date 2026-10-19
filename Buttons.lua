@@ -47,13 +47,32 @@ Buttons.TUNE = {
     dark = { 0.15, "the dark inner line under the rim" },
     wash = { 0.04, "the body's top-down haze, as a fraction of the theme's" },
     body = { 0.25, "the body's tint alpha, as a fraction of the theme's" },
+    -- The frosted empty slot (#34), dialled in game against the owner's reference.
+    frostGrey = { 0.9, "the frosted empty slot's fill: 0 black, 1 white" },
+    frostAlpha = { 0.08, "the frosted empty slot's fill strength" },
+    frostRim = { 0.35, "the frosted empty slot's rim, as a fraction of an empty slot's" },
+    -- Pearl's face (#44); nothing draws them on Clean and Classic.
+    gloss = { 0, "Pearl: the reflection over a filled slot's icon" },
+    socketShade = { 0, "Pearl: a frosted empty slot's dark upper inset" },
 }
-Buttons.TUNE_ORDER = { "rim", "empty", "dark", "wash", "body" }
+Buttons.TUNE_ORDER = { "rim", "empty", "dark", "wash", "body", "frostGrey", "frostAlpha", "frostRim", "gloss", "socketShade" }
+
+-- Pearl's own defaults (#44, the owner's FFXIV reference, 2026-10-19), by the
+-- material built at login (Look.lua); Clean and Classic keep TUNE's. A saved
+-- /gab tune wins over both. The gloss was chosen in game (0.16 and 0.22 tried;
+-- 0.08 kept with the soft highlight).
+Buttons.PEARL = { rim = 0.70, dark = 0.20, frostGrey = 0.40, frostAlpha = 0.22,
+                  frostRim = 0.60, gloss = 0.08, socketShade = 0.18 }
+
+function Buttons.TuneDefault(key)
+    if GAB.GlassPreset == "pearl" and Buttons.PEARL[key] ~= nil then return Buttons.PEARL[key] end
+    return Buttons.TUNE[key][1]
+end
 
 function Buttons.Tune(key)
     local saved = GAB.db and type(GAB.db.tune) == "table" and GAB.db.tune[key]
     if type(saved) == "number" then return saved end
-    return Buttons.TUNE[key][1]
+    return Buttons.TuneDefault(key)
 end
 
 -- Button feedback (#34, from the owner's Final Fantasy XIV reference): how a
@@ -73,11 +92,17 @@ Buttons.PRESETS = {
     minimal = { hover = "off", press = "flash", emptySlots = "hidden" },
 }
 Buttons.PRESET_ORDER = { "glass", "soft", "minimal" }
-Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1, frosted = 0.35 }   -- an empty slot's glass
+Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1 }   -- an empty slot's glass (frosted: the frostRim tune)
 -- Frosted (the reference's empty slots, owner 2026-10-19): a pale neutral fill
 -- in place of the theme's tint, so the slot reads as a light tile over any
 -- background, its rim softer (the factor above).
-Buttons.FROST = { 0.9, 0.91, 0.94, 0.08 }   -- halved after the owner's first look (too strong)
+-- The fill: a cool near-neutral grey (frostGrey, its blue a little higher)
+-- at frostAlpha (8% after the owner's first look: 16% was too strong).
+function Buttons.Frost()
+    local g = Buttons.Tune("frostGrey")
+    if GAB.GlassPreset == "pearl" then return { g, g, g, Buttons.Tune("frostAlpha") } end
+    return { g, math.min(1, g + 0.01), math.min(1, g + 0.04), Buttons.Tune("frostAlpha") }
+end
 -- The halo: Media/ButtonHalo (Tools/make_rim.py), 16 px of padding round the
 -- button's boundary, 9-sliced at 24; a warm white; the reference's ~0.1 s in.
 Buttons.HALO = { file = "ButtonHalo", pad = 16, margin = 24, color = { 1, 0.94, 0.8 }, fadeIn = 0.1, fadeOut = 0.15 }
@@ -113,7 +138,9 @@ end
 -- family that keeps its own empty look: the bag slots).
 local function emptyFactor(s)
     if s.occupied or s.keepEmpty then return 1 end
-    return Buttons.EMPTY[look("emptySlots")]
+    local mode = look("emptySlots")
+    if mode == "frosted" then return Buttons.Tune("frostRim") end
+    return Buttons.EMPTY[mode]
 end
 
 local function font()
@@ -134,10 +161,18 @@ local function styleText(s)
     if r.name then r.name:SetAlpha(GAB.db.showMacroNames and 1 or 0) end
 end
 
+-- The rim, and Pearl's face (#44): a frosted empty slot shows the recessed
+-- socket instead of the raised rim, a filled one the reflection.
 local function paintRim(s)
     local f = s.occupied and 1 or Buttons.Tune("empty") * emptyFactor(s)
-    s.g.rim:SetAlpha(Buttons.Tune("rim") * f)
-    s.g.dark:SetAlpha(Buttons.Tune("dark") * f)
+    local recessed = s.socketRim and not s.occupied and not s.keepEmpty and look("emptySlots") == "frosted"
+    s.g.rim:SetAlpha(recessed and 0 or Buttons.Tune("rim") * f)
+    s.g.dark:SetAlpha(recessed and 0 or Buttons.Tune("dark") * f)
+    if s.socketRim then
+        s.socketRim:SetAlpha(recessed and Buttons.Tune("rim") * f or 0)
+        s.socketShade:SetAlpha(recessed and Buttons.Tune("socketShade") * emptyFactor(s) or 0)
+        s.gloss:SetAlpha(s.occupied and Buttons.Tune("gloss") or 0)
+    end
 end
 
 -- Hover and press effects run on one driver, its OnUpdate set only while a
@@ -272,6 +307,40 @@ local function rimTexture(t)
     t:SetTextureSliceMode((modes and modes.Stretched) or 0)
 end
 
+-- Pearl's face (#44, the owner's FFXIV reference; Tools/make_rim.py): on a
+-- filled slot a reflection over the icon's upper part, on a frosted empty one
+-- a recessed socket (a lit lower lip, a dark upper inset) in place of the
+-- raised rim. Pearl only, built once; paintRim sets their alphas. All on the
+-- rim's frame, one level over the button: a fixed order, over the icon and,
+-- like the rim, over the cooldown sweep (the trade: a 16% sheen on it; the
+-- button's own level would have no order measured against the cooldowns).
+-- /gab tune gloss 0 takes the reflection off.
+local function makePearlFace(s)
+    if GAB.GlassPreset ~= "pearl" then return end
+    local mask = s.g.top:CreateMaskTexture()   -- the rounded square, as the ripple's
+    mask:SetTexture(GAB.MEDIA .. Buttons.RIPPLE.mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    mask:SetAllPoints(s.button)
+    local gloss = s.g.top:CreateTexture(nil, "ARTWORK", nil, 0)   -- under the rim (OVERLAY) and the halo
+    gloss:SetAllPoints(s.button)
+    gloss:SetTexture(GAB.MEDIA .. "ButtonGloss")
+    gloss:AddMaskTexture(mask)
+    gloss:SetAlpha(0)
+    local function edge(file, sub, r, g, b)
+        local t = s.g.top:CreateTexture(nil, "OVERLAY", nil, sub)
+        t:SetAllPoints(s.g.top)
+        t:SetTexture(GAB.MEDIA .. file)
+        t:SetTextureSliceMargins(Buttons.RIM_MARGIN, Buttons.RIM_MARGIN, Buttons.RIM_MARGIN, Buttons.RIM_MARGIN)
+        local modes = Enum and Enum.UITextureSliceMode
+        t:SetTextureSliceMode((modes and modes.Stretched) or 0)
+        t:SetVertexColor(r, g, b, 1)
+        t:SetAlpha(0)
+        return t
+    end
+    s.gloss = gloss
+    s.socketRim = edge("ButtonSocketRim", 6, 1, 1, 1)       -- the rim's sublayer
+    s.socketShade = edge("ButtonSocketShade", 4, 0, 0, 0)   -- the inner line's
+end
+
 -- The pressed look's alpha: the live part (a region's alpha only, safe in combat).
 local function pushedAlpha(s)
     local p = s.regions.pushed
@@ -319,6 +388,7 @@ function Buttons.Build(button, regions, opts)
     local s = { button = button, body = body, g = g, regions = regions or {}, occupied = true,
                 small = (API.Plain(button:GetWidth()) or 45) < 40, keepEmpty = opts and opts.keepEmpty == true }
     skins[button] = s
+    API.Try("skin:pearl", makePearlFace, s)
     -- The body's paint first, and every later step on its own: a step that
     -- throws on the client (a region method Blizzard's art refuses) must not
     -- leave the body unpainted and out of /gab tune's reach. A failure is
@@ -329,7 +399,7 @@ function Buttons.Build(button, regions, opts)
         -- Frosted replaces only the clear glass's colour: smoked and class
         -- glass keep their tint, so the theme still shows (owner, 2026-10-19).
         if not s.occupied and not s.keepEmpty and look("emptySlots") == "frosted" and GAB.Theme.Current() == "clear" then
-            return Buttons.Tune("wash"), 1, Buttons.FROST   -- the fill's own alpha, unscaled
+            return Buttons.Tune("wash"), 1, Buttons.Frost()   -- the fill's own alpha, unscaled
         end
         local f = emptyFactor(s)
         return Buttons.Tune("wash") * f, Buttons.Tune("body") * f

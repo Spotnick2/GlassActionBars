@@ -12,6 +12,7 @@
 --   - whether the Utility bar adds and drops the camp features with it;
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
+-- Also barmove (#30), look (#34) and pearl (#44): /fp steps gab <name>.
 -- Commands: /fp gab aura, /fp gab camping, /fp gab clear.
 
 local ADDON, NS = ...
@@ -433,6 +434,65 @@ Probe:Steps("look", {
       ask = true },
     { text = "Press Glass to go back to today's look, or Skip to keep Soft.", button = "Glass",
       run = function() settings().SetLookPreset("glass"); return buttons().Preset() end },
+    { text = "Press Reload now to save the results.", reload = true },
+})
+
+-- ------------------------------------------------------------------
+-- pearl (#44): Pearl's face in game. The reflection sits on the rim's frame,
+-- over the cooldown sweep like the rim: is a cooldown still readable under it
+-- (Pearl's gloss against 0)? A proc glow is a child of the button at our level
+-- (ActionButtonSpellAlerts), its order against the reflection unmeasured: the
+-- same pair of shots. The recessed empty socket, and the 30 px buttons.
+-- ------------------------------------------------------------------
+
+local function gab() return rawget(_G, "GlassActionBars") end
+local function tunes()
+    local out = {}
+    for _, k in ipairs(buttons().TUNE_ORDER) do out[#out + 1] = k .. " " .. Show(buttons().Tune(k)) end
+    return table.concat(out, ", ")
+end
+local savedGloss
+
+Probe:Steps("pearl", {
+    title = "Pearl's face: the reflection and the socket (#44)",
+    { text = "Reading the material and the glass's numbers.", auto = true,
+      run = function()
+          local t = rawget(gab().db, "tune")
+          savedGloss = type(t) == "table" and t.gloss or nil
+          return gab().GlassPreset, tunes()
+      end,
+      check = function() return gab().GlassPreset == "pearl", "Pearl built (else: Glass UI's material, or /gab material pearl and reload)" end },
+    { text = "Your own /gab tune numbers win over Pearl's. Press Reset to clear them and see Pearl's, or Skip to keep yours.",
+      button = "Reset", run = function()
+          for _, k in ipairs(buttons().TUNE_ORDER) do settings().SetTune(k, nil) end
+          savedGloss = nil
+          return tunes()
+      end },
+    { text = "Look at an empty slot: a grey tile with a dark top edge and a light bottom lip, no raised rim?",
+      ask = true, screenshot = "empty sockets and filled buttons" },
+    { text = "Filled buttons: a soft reflection over the top of each icon, the icon still clear?", ask = true },
+    { text = "Use an ability or item with a cooldown of 20 s or more, then press Shot while it shows.",
+      button = "Shot", run = function() settings().SetTune("gloss", buttons().PEARL.gloss); return "gloss " .. Show(buttons().Tune("gloss")) end,
+      screenshot = "a cooldown under the reflection" },
+    { text = "Press No gloss (while it still shows): the same view without the reflection.",
+      button = "No gloss", run = function() settings().SetTune("gloss", 0); return "gloss 0" end,
+      screenshot = "a cooldown without the reflection" },
+    { text = "Was the cooldown sweep as easy to read with the reflection as without it?", ask = true },
+    { text = "If your class has a proc that makes a button glow (else Skip both), get it to glow, then press Shot while it shows.",
+      button = "Shot", run = function() settings().SetTune("gloss", buttons().PEARL.gloss); return "gloss " .. Show(buttons().Tune("gloss")) end,
+      screenshot = "a proc glow under the reflection" },
+    { text = "Press No gloss (while it still shows): the same view without the reflection.",
+      button = "No gloss", run = function() settings().SetTune("gloss", 0); return "gloss 0" end,
+      screenshot = "a proc glow without the reflection" },
+    { text = "Was the proc glow as bright with the reflection as without it (Not sure if you skipped it)?", ask = true },
+    { text = "Press Gloss for Pearl's reflection while you look at the rest.", button = "Gloss",
+      run = function() settings().SetTune("gloss", buttons().PEARL.gloss); return "gloss " .. Show(buttons().Tune("gloss")) end },
+    { text = "An out-of-range or unusable icon, a checked (active) button, the key and count text, and a stun "
+        .. "or silence if one came your way: all still plain under the reflection?", ask = true },
+    { text = "The stance or pet buttons (the small ones): the reflection, the empty socket, the pet's autocast "
+        .. "ring, all right at that size?", ask = true, screenshot = "the small buttons" },
+    { text = "Putting your own reflection setting back.", auto = true,
+      run = function() settings().SetTune("gloss", savedGloss); return "gloss " .. Show(buttons().Tune("gloss")) end },
     { text = "Press Reload now to save the results.", reload = true },
 })
 

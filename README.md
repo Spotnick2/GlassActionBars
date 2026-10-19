@@ -46,6 +46,8 @@ Glass Action Bars).
 - `/gab gryphons on/off` - the main bar's end caps
 - `/gab skin on/off` - glass, or Blizzard's own art (after a `/reload`)
 - `/gab tune` - the glass's numbers (rim, empty slots, inner line, haze, body), live
+  (with Pearl, also `gloss`, the reflection on filled buttons, and `socketShade`, an empty
+  slot's dark top edge)
 - `/gab fade 1-8|stance|pet|all off/mouseover/combat` - fade a bar until you point at it, or out
   of combat; `/gab fade alpha 0..1` - how faded (also on the **Bar fade** options page)
 
