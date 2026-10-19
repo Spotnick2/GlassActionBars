@@ -12,6 +12,9 @@
   `/gab material` (after a /reload). With Pearl, the buttons take after Final Fantasy XIV's: a
   frosted empty slot is a grey, recessed tile (a dark top edge, a light bottom lip), and a filled
   one has a soft reflection over the top of its icon (`/gab tune gloss 0` takes it off).
+- **The bag bar and the micro menu**: an empty bag slot now looks like an empty action slot
+  (frosted by default; it follows `/gab look`), and the micro menu has no panel behind it any more:
+  its buttons sit on the world, with Blizzard's dark panel still gone.
 - **Glass UI**: with Glass UI's "Use Glass UI appearance" on for Glass Action Bars, its material is
   Glass UI's, and its tint and button feedback follow Glass UI's look live; anything you set in
   Glass Action Bars stays yours (a "Glass UI" choice on each control goes back to following it).
@@ -29,7 +32,9 @@
   and choose its direction, rows, button size and spacing. Choose and order its buttons on the new
   **Utility bar** options page; `/gab utility on/off`.
 - **Dock**: smart bars dock beside one of Edit Mode's Action Bars 1-8 and follow it (the new
-  **Dock** options page, `/gab dock`).
+  **Dock** options page, `/gab dock`), matching its button size and spacing, its rows and
+  direction, or both (`/gab dock <bar> match on/off`, `/gab dock <bar> rows on/off`). Their buttons,
+  and the Utility bar's, wear the same glass, with rounded icons like the action bars'.
 - **With Glass Unit Frames**: when it slides your player and pet frames beside the raid grid, the
   stance bar and the pet bar move with them, and come back when it lets go. Your Edit Mode layout
   is never changed. A bar still in Edit Mode's default place (stacked on Action Bar 1), or snapped

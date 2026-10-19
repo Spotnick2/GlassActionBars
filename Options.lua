@@ -369,7 +369,7 @@ local SIDE_LABELS = { LEFT = "Left", RIGHT = "Right", TOP = "Top", BOTTOM = "Bot
 local ALIGN_LABELS = { START = "Start", CENTER = "Center", END = "End" }
 -- A section's height: its heading, four rows of radios and the checkbox, with
 -- the space above the next one. Generous: a little slack only adds scroll.
-Options.DOCK_SECTION_HEIGHT = 190
+Options.DOCK_SECTION_HEIGHT = 218   -- a section, two checkboxes (#48) included
 Options.dockPage = Options.AddPage("Dock", function(page, title)
     local Dock = GAB.Dock
     local note = label(page, "A smart bar docks beside one of Edit Mode's Action Bars 1-8 and follows it when the "
@@ -416,9 +416,11 @@ Options.dockPage = Options.AddPage("Dock", function(page, title)
         s.gapText = label(f, "", "GameFontHighlightSmall")
         s.gapText:SetPoint("LEFT", r4, "LEFT", 100 + #gaps * 50 + 10, 0)
         building[#building + 1] = function() s.gapText:SetText(("now %g"):format(Dock.Setting(id, "gap"))) end
-        s.match = Options.checkbox(f, r4, "Match the bar's button size, spacing and rows",
+        s.match = Options.checkbox(f, r4, "Match the bar's button size and spacing",
             function() return Dock.Setting(id, "match") end, function(on) GAB.Settings.SetDock(id, "match", on) end)
-        last = s.match
+        s.matchRows = Options.checkbox(f, s.match, "Match the bar's rows and direction",
+            function() return Dock.Setting(id, "matchRows") end, function(on) GAB.Settings.SetDock(id, "matchRows", on) end)
+        last = s.matchRows
         built = built + 1
         content:SetHeight(built * Options.DOCK_SECTION_HEIGHT + 16)   -- the scroll range follows
         return s

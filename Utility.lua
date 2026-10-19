@@ -260,6 +260,7 @@ local function makeButton(key)
     local r = {}
     r.icon = b:CreateTexture(nil, "BACKGROUND")
     r.icon:SetAllPoints(b)
+    r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- the icon's baked border off, as Blizzard's mask does (#46)
     r.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
     r.cooldown:SetAllPoints(b)
     b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
@@ -346,11 +347,12 @@ local shownList, lastGeom = {}, nil
 
 local function arrange()
     local g = lastGeom
+    -- Each part the bar's when the dock gives it (the player matches it), else our own.
     local size = g and g.size or Utility.LayoutSetting("iconSize")
     local pad = g and g.padding or Utility.LayoutSetting("iconPadding")
     local rows = math.max(1, g and g.rows or Utility.LayoutSetting("rows"))
     local vertical
-    if g then vertical = g.orientation == 1 else vertical = Utility.LayoutSetting("orientation") == "VERTICAL" end
+    if g and g.orientation then vertical = g.orientation == 1 else vertical = Utility.LayoutSetting("orientation") == "VERTICAL" end
     local n = #shownList
     if n == 0 then frame:SetSize(size, size) return end
     local cols
@@ -634,7 +636,7 @@ local function skin()
     if skinned or GAB.db.skin == false then return end
     skinned = true
     for _, b in pairs(buttons) do
-        API.Try("utility:skin", GAB.Buttons.Build, b, regions[b])
+        API.Try("utility:skin", GAB.Buttons.Build, b, regions[b], { maskIcon = true })
     end
 end
 

@@ -33,11 +33,11 @@ local function provider(id, extra)
     return f, log, def
 end
 
-local early, earlyLog, earlyDef = provider("early", { default = { bar = 1, side = "UP", gap = 6 } })
+local early, earlyLog, earlyDef = provider("early", { default = { bar = 1, side = "UP", gap = 6, matchRows = false } })
 local GAB = loadAddon({ beforeLogin = function(G)
     check(G.RegisterBar(earlyDef), "RegisterBar before login: accepted")
 end })
-eq(GAB.PUBLIC_API_VERSION, 1, "PUBLIC_API_VERSION 1")
+eq(GAB.PUBLIC_API_VERSION, 2, "PUBLIC_API_VERSION 2 (#48: geom carries what the player matches)")
 eq(next(GAB.failures), nil, "nothing failed")
 
 -- The early provider: docked by its default once logged in; the bad default
@@ -47,6 +47,8 @@ eq(earlyLog[1], "hosted", "queued before login: hosted after it")
 eq(earlyLog[2], "layout", "  then laid out")
 eq(GAB.Dock.Setting("early", "side"), "RIGHT", "  an invalid default side dropped")
 eq(GAB.Dock.Setting("early", "gap"), 6, "  a valid default gap kept")
+eq(GAB.Dock.Setting("early", "matchRows"), false, "  a default matchRows kept (#48)")
+check(earlyLog.geom and earlyLog.geom.size and earlyLog.geom.rows == nil, "  so Layout gets the size, not the rows")
 local p = early._points[#early._points]
 check(p and close(p[4], 1062 + 6), "  placed right of bar 1, 6 apart")
 
@@ -89,9 +91,10 @@ eq(#ownLog, 0, "  not docked by default: no callback")
 GAB.Settings.SetDock("own", "bar", 1)
 GAB.Settings.SetDock("own", "side", "LEFT")
 GAB.Settings.SetDock("own", "match", false)
+GAB.Settings.SetDock("own", "matchRows", false)
 WoW.tick()
 eq(ownLog[1], "hosted", "docked: hosted")
-eq(ownLog[2], "layout(nil)", "  match off: Layout(nil)")
+eq(ownLog[2], "layout(nil)", "  nothing matched: Layout(nil)")
 p = own._points[#own._points]
 check(close(p[4], 500 - 4 - 60), "  left of bar 1 by its own width")
 own._width = 90                                 -- a button appeared
@@ -100,6 +103,7 @@ WoW.tick()
 p = own._points[#own._points]
 check(close(p[4], 500 - 4 - 90), "contents changed + RequestLayout: re-placed by the new width")
 GAB.Settings.SetDock("own", "match", true)
+GAB.Settings.SetDock("own", "matchRows", true)
 WoW.tick()
 eq(ownLog[#ownLog], "layout", "match on again: the bar's geometry")
 check(close(ownLog.geom.size, 45), "  45 at 100%")
@@ -133,6 +137,25 @@ eq(s.regions.extra, nil, "  an unknown key dropped")
 eq(s.regions.icon, regions.icon, "  the icon kept")
 check(s.regions ~= regions, "  a copy of the region map, not the provider's table")
 check(GAB.SkinButton(btn, regions), "  a second call: true")
+-- The icon rounded to the glass (#46): one mask, on the provider's own frame, over the icon.
+local masks = regions.icon._masks
+eq(masks and #masks, 1, "  the icon masked, once")
+local m = masks and masks[1]
+check(m and m:GetParent() == btn, "  the mask on the icon's own frame")
+check(m and tostring(m._file):find("ButtonMask") ~= nil, "  the rim's rounded square")
+check(m and m._points[1] and m._points[1][1] == "ALL" and m._points[1][2] == regions.icon, "  over the icon")
+GAB.SkinButton(btn, regions)
+eq(#regions.icon._masks, 1, "  a repeat call adds none")
+-- An icon on a provider's child frame, with a mask of its own: ours made on
+-- that child, theirs kept.
+local btn3 = CreateFrame("Button", "ProvButton3", own)
+local holder = CreateFrame("Frame", nil, btn3)
+local icon3 = holder:CreateTexture()
+local theirs = holder:CreateMaskTexture()
+icon3:AddMaskTexture(theirs)
+check(GAB.SkinButton(btn3, { icon = icon3 }), "an icon on a child frame: skinned")
+eq(#icon3._masks, 2, "  their mask kept, ours added")
+check(icon3._masks[1] == theirs and icon3._masks[2]:GetParent() == holder, "  ours on the icon's own frame, not the button")
 for k in pairs(fields(btn)) do check(beforeFields[k] ~= nil, "no field written on the provider's button: " .. tostring(k)) end
 
 -- In combat: queued (with a copy), applied when the fight ends.
@@ -143,12 +166,14 @@ WoW.combat = true
 WoW.fire("PLAYER_REGEN_DISABLED")
 check(GAB.SkinButton(btn2, r2), "SkinButton in combat: accepted")
 check(not GAB.Buttons.IsSkinned(btn2), "  not built in combat")
+eq(r2.icon._masks, nil, "  its icon not masked yet")
 r2.icon = nil                                   -- the provider's table changes while queued
 eq(#WoW.violations, 0, "  no protected change in combat")
 WoW.combat = false
 WoW.fire("PLAYER_REGEN_ENABLED")
 check(GAB.Buttons.IsSkinned(btn2), "  built when the fight ended")
 check(GAB.Buttons.State(btn2).regions.icon ~= nil, "  from the copy taken when it was accepted")
+eq(GAB.Buttons.State(btn2).regions.icon._masks and #GAB.Buttons.State(btn2).regions.icon._masks, 1, "  its icon masked too")
 
 -- The glass off: refused.
 GAB.db.skin = false

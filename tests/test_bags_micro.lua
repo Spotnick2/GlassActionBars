@@ -1,7 +1,8 @@
--- The bag bar (full glass, like the action buttons) and the micro menu (a
--- glass panel behind Blizzard's own framed icons), #14. No field written on
--- a Blizzard frame, art faded not hidden, re-styled after Blizzard's writers,
--- the icons and the micro buttons left alone.
+-- The bag bar (full glass, like the action buttons; an empty slot the
+-- empty-slots look, #50) and the micro menu (Blizzard's dark panel faded, no
+-- panel of ours, #50), #14. No field written on a Blizzard frame, art faded
+-- not hidden, re-styled after Blizzard's writers, the icons and the micro
+-- buttons left alone.
 dofile("tests/wow_stubs.lua")
 dofile("tests/harness.lua")
 
@@ -47,11 +48,38 @@ for _, b in ipairs(BAGS) do
     eq(#b.icon._points, iconBefore[b][2], b._name .. ": the icon never moved")
 end
 eq(GAB.Buttons.State(KeyRingButton).small, true, "the 33 px key ring is the small size")
-local function rim(b) return GAB.Buttons.State(b).g.rim:GetAlpha() end
-local full, empty = GAB.Buttons.Tune("rim"), GAB.Buttons.Tune("rim") * GAB.Buttons.Tune("empty")
-check(close(rim(MainMenuBarBackpackButton), full), "the backpack: full rim")
-check(close(rim(CharacterBag0Slot), full), "a slot with a bag: full rim")
-check(close(rim(CharacterBag1Slot), empty), "an empty bag slot: the quieter rim")
+local B = GAB.Buttons
+local function rim(b) return B.State(b).g.rim:GetAlpha() end
+local function socket(b) return B.State(b).socketRim:GetAlpha() end
+local function frosted(b)   -- Pearl's recessed socket, in the pale fill
+    local s, frost = B.State(b), B.Frost()
+    local c = s.g.tint._color
+    return rim(b) == 0 and close(socket(b), B.Tune("rim") * B.Tune("empty") * B.Tune("frostRim"))
+        and s.g.tint:IsShown() and close(c[1], frost[1]) and close(c[4], frost[4])
+end
+local function filled(b)
+    local s = B.State(b)
+    return close(rim(b), B.Tune("rim")) and socket(b) == 0
+        and close(s.g.tint._color[4], GAB.Glass.STYLE.tint[4] * B.Tune("body"))
+end
+eq(B.Look("emptySlots"), "frosted", "empty slots frosted by default")
+check(filled(MainMenuBarBackpackButton), "the backpack: full glass")
+check(filled(KeyRingButton), "the key ring: full glass")
+check(filled(CharacterBag0Slot), "a slot with a bag: full glass")
+check(frosted(CharacterBag1Slot), "an empty bag slot: frosted, like an empty action slot")
+check(frosted(CharacterReagentBag0Slot), "the empty reagent bag slot too")
+
+-- It follows the empty-slots look (/gab look).
+GAB.Settings.SetLook("emptySlots", "faint")
+check(close(rim(CharacterBag1Slot), B.Tune("rim") * B.Tune("empty") * B.EMPTY.faint) and socket(CharacterBag1Slot) == 0,
+    "faint: the empty bag slot's rim")
+check(filled(CharacterBag0Slot), "  the slot with a bag unchanged")
+GAB.Settings.SetLook("emptySlots", "hidden")
+check(rim(CharacterBag1Slot) == 0 and not B.State(CharacterBag1Slot).g.tint:IsShown(), "hidden: no glass on the empty bag slot")
+check(CharacterBag1Slot.icon:IsShown() and CharacterBag1Slot.icon:GetAlpha() == iconBefore[CharacterBag1Slot][1]
+    and #CharacterBag1Slot.icon._points == iconBefore[CharacterBag1Slot][2], "  its silhouette (the icon) still shows, unmoved")
+GAB.Settings.SetLook("emptySlots", "frosted")
+check(frosted(CharacterBag1Slot), "frosted again")
 
 -- UpdateTextures sets the atlases again (every slot update): faded again, the
 -- rim follows the bag.
@@ -61,10 +89,10 @@ CharacterBag1Slot:UpdateTextures()
 eq(CharacterBag1Slot.NormalTexture:GetAlpha(), 0, "UpdateTextures: the frame faded again")
 eq(CharacterBag1Slot.PushedTexture._file, rimFile, "  the pressed look ours again")
 eq(CharacterBag1Slot.PushedTexture._blend, "ADD", "  added light again")
-check(close(rim(CharacterBag1Slot), full), "  a bag put in: full rim")
+check(filled(CharacterBag1Slot), "  a bag put in: full glass")
 WoW.bagTextures[32] = nil
 CharacterBag1Slot:UpdateTextures()
-check(close(rim(CharacterBag1Slot), empty), "  taken out: the quieter rim")
+check(frosted(CharacterBag1Slot), "  taken out: frosted again")
 
 -- The bar's own art.
 eq(BagsBar.BorderArt:GetAlpha(), 0, "the bag bar's frame faded")
@@ -74,37 +102,31 @@ local n = 0
 for d in BagsBar.HorizontalDividersPool:EnumerateActive() do n = n + 1; eq(d:GetAlpha(), 0, "Layout: a new divider faded") end
 eq(n, 5, "the dividers were acquired again")
 
--- Micro menu: Blizzard's dark panel faded, ours behind the buttons.
+-- Micro menu: Blizzard's dark panel faded, and no panel of ours (#50).
 eq(MicroMenu.BorderArt:GetAlpha(), 0, "the micro menu's border art faded")
 eq(MicroMenu.BackgroundArt:GetAlpha(), 0, "the micro menu's background faded")
 check(MicroMenu.BorderArt:IsShown(), "  not hidden")
-local panel, g = GAB.Micro._test.panel(), GAB.Micro._test.glass()
-check(panel:IsShown(), "our glass panel shows")
-eq(panel:GetParent(), UIParent, "  a frame of its own (MicroMenu flattens its children's layers)")
-check(panel:GetFrameLevel() < MicroMenu:GetFrameLevel(), "  under the micro menu")
-eq(g.top:GetFrameLevel(), panel:GetFrameLevel(), "  its rims too, never over the buttons")
-eq(panel._mouse, false, "  takes no clicks")
+local onMicro = 0
+for _, f in ipairs(WoW.frames) do
+    for _, p in ipairs(f._points) do if p[2] == MicroMenu then onMicro = onMicro + 1 end end
+end
+eq(onMicro, 0, "no glass panel behind the micro menu (nothing anchored to it)")
 eq(CharacterMicroButton.Background:GetAlpha(), 1, "the micro buttons' own art untouched")
 check(not GAB.Buttons.IsSkinned(CharacterMicroButton), "no glass rim round a framed icon")
-GAB.Settings.SetTune("body", 0.5)
-check(close(g.tint._color[4], GAB.Glass.STYLE.tint[4] * 0.5), "the panel's body follows /gab tune body")
-
--- Blizzard moves the micro menu to the override bar or a pet battle: the panel goes; back home, it returns.
-MicroMenu:SetParent(OverrideActionBar)
-check(not panel:IsShown(), "micro menu away (override bar): no panel")
-MicroMenu:SetParent(MicroMenuContainer)
-check(panel:IsShown(), "back home: the panel")
-MicroMenu:Hide()
-check(not panel:IsShown(), "micro menu hidden: no panel")
-MicroMenu:Show()
-check(panel:IsShown(), "shown again: the panel")
 MicroMenu.BackgroundArt:SetAlpha(1)
 WoW.fire("EDIT_MODE_LAYOUTS_UPDATED")
 eq(MicroMenu.BackgroundArt:GetAlpha(), 0, "an Edit Mode layout change: faded again")
 
--- Combat: nothing protected touched.
+-- Combat: a bag put in and taken out repaints the slot's own glass, and
+-- nothing protected is touched.
 WoW.combat = true
 for _, b in ipairs(BAGS) do b:UpdateTextures() end
+WoW.bagTextures[33] = 133635
+CharacterBag2Slot:UpdateTextures()
+check(filled(CharacterBag2Slot), "in combat: a bag put in, full glass")
+WoW.bagTextures[33] = nil
+CharacterBag2Slot:UpdateTextures()
+check(frosted(CharacterBag2Slot), "  taken out, frosted again")
 BagsBar:Layout()
 MicroMenu:SetParent(OverrideActionBar)
 MicroMenu:SetParent(MicroMenuContainer)
@@ -117,6 +139,5 @@ GAB = loadAddon({ db = { skin = false } })
 check(not GAB.Buttons.IsSkinned(CharacterBag0Slot), "skin off: no glass on the bags")
 eq(BagsBar.BorderArt:GetAlpha(), 1, "  the bag bar's art as it was")
 eq(MicroMenu.BorderArt:GetAlpha(), 1, "  the micro menu's art as it was")
-eq(GAB.Micro._test.panel(), nil, "  no panel")
 
 done("test_bags_micro")

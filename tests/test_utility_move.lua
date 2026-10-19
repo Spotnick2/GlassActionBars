@@ -33,8 +33,9 @@ check(Settings.SetUtilityLayout("iconSize", 30), "size 30")
 WoW.tick()
 check(close(U.buttons.cooking:GetWidth(), 45), "  docked and matched: the bar's 45 still")
 Settings.SetDock("utility", "match", false)
+Settings.SetDock("utility", "matchRows", false)
 WoW.tick()
-check(close(U.buttons.cooking:GetWidth(), 30), "  Match off: its own 30")
+check(close(U.buttons.cooking:GetWidth(), 30), "  nothing matched: its own 30")
 Settings.SetUtilityLayout("orientation", "VERTICAL")
 Settings.SetUtilityLayout("rows", 3)
 Settings.SetUtilityLayout("iconPadding", 2)
@@ -45,6 +46,16 @@ check(close(F:GetWidth(), 30) and close(F:GetHeight(), 94), "  horizontal, 3 row
 Settings.SetUtilityLayout("orientation", "VERTICAL")
 Settings.SetUtilityLayout("rows", 2)
 check(close(F:GetWidth(), 62) and close(F:GetHeight(), 62), "  vertical, 2 columns: 2 by 2")
+-- The size matched, the rows not (#48): the bar's 45, our own direction and
+-- count (vertical, 3 columns: 3 wide, 1 high; horizontal would be 1 by 3).
+Settings.SetUtilityLayout("rows", 3)
+Settings.SetDock("utility", "match", true)
+WoW.tick()
+check(close(U.buttons.cooking:GetWidth(), 45), "size matched, rows not: the bar's 45")
+check(F:GetWidth() > F:GetHeight() * 2, "  our own vertical 3 columns kept: 3 wide, 1 high")
+Settings.SetDock("utility", "match", false)
+Settings.SetUtilityLayout("rows", 2)
+WoW.tick()
 
 -- Undocking with no saved spot saves where the dock had it.
 F._rect = { 1066, 1128, 162, 100 }             -- left, right, top, bottom

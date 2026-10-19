@@ -262,6 +262,9 @@ function Settings.SetDock(id, key, value)
     if type(id) ~= "string" or not GAB.Dock.Valid(key, value) then return false end
     local t = rawget(GAB.db, "dock") or {}
     t[id] = t[id] or {}
+    -- The size and the rows are separate choices (#48): the rows' current
+    -- value (a default, or "off" from before the split) is kept first.
+    if key == "match" and t[id].matchRows == nil then t[id].matchRows = GAB.Dock.Setting(id, "matchRows") end
     t[id][key] = value
     GAB.db.dock = t
     GAB.Dock.Request(id)
@@ -369,7 +372,7 @@ local function helpLines()
         "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body, frostGrey, frostAlpha, frostRim, gloss, socketShade)",
         "/gab fade [1-8|stance|pet|all off/mouseover/combat] - fade bars until hovered, or out of combat",
         ("/gab fade alpha 0..1 - how faded a faded bar is (%.2f)"):format(db.fadeAlpha),
-        "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match on/off] - dock a smart bar to an action bar",
+        "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match/rows on/off] - dock a smart bar to an action bar",
         "/gab utility on/off - the Utility bar: Hearthstone, professions, camping (" .. onoff(GAB.Utility.Enabled()) .. ")",
         "/gab follow [on/off] - the stance and pet bars move with Glass Unit Frames (" .. onoff(db.follow) .. ")",
         "/gab look [glass|soft|minimal | hover|press|empty <choice>] - button feedback ("
@@ -455,15 +458,15 @@ local function slash(msg)
             if cl.id:lower() == key then id = cl.id end
         end
         local usage = "/gab dock <bar> <1-8|off> [left|right|top|bottom] [start|center|end], "
-            .. "/gab dock <bar> gap <0-32>, /gab dock <bar> match on/off"
+            .. "/gab dock <bar> gap <0-32>, /gab dock <bar> match on/off (size and spacing), /gab dock <bar> rows on/off"
         if key == "" then
             local list = Dock.Clients()
             if #list == 0 then return say("dock: no smart bars yet") end
             for _, cl in ipairs(list) do
                 local S = function(k) return Dock.Setting(cl.id, k) end
                 if S("bar") then
-                    say(("dock %s (%s): bar %d, %s, %s, gap %g, match %s%s"):format(cl.id, cl.label, S("bar"),
-                        S("side"):lower(), S("align"):lower(), S("gap"), onoff(S("match")),
+                    say(("dock %s (%s): bar %d, %s, %s, gap %g, match %s, rows %s%s"):format(cl.id, cl.label, S("bar"),
+                        S("side"):lower(), S("align"):lower(), S("gap"), onoff(S("match")), onoff(S("matchRows")),
                         Dock.IsHosted(cl.id) and "" or " (not placed yet)"))
                 else
                     say(("dock %s (%s): not docked"):format(cl.id, cl.label))
@@ -479,6 +482,9 @@ local function slash(msg)
         elseif a == "match" and ONOFF[b] ~= nil then
             Settings.SetDock(id, "match", ONOFF[b])
             say("dock " .. id .. ": match " .. b)
+        elseif a == "rows" and ONOFF[b] ~= nil then
+            Settings.SetDock(id, "matchRows", ONOFF[b])
+            say("dock " .. id .. ": rows " .. b)
         elseif tonumber(a) and Dock.Valid("bar", tonumber(a))
             and (b == "" or Dock.Valid("side", b:upper())) and (c == "" or Dock.Valid("align", c:upper())) then
             Settings.SetDock(id, "bar", tonumber(a))

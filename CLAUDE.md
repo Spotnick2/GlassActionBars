@@ -80,8 +80,7 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   (ButtonRipple, masked by ButtonMask) are our textures on `g.top`, driven by one OnUpdate only
   while one moves, from `HookScript` OnEnter/OnLeave/OnHide/OnMouseDown (a click only: key presses
   have no hookable signal, they flash). The empty factor goes through the theme's scale callback
-  and the rim once (`Theme.Repaint` per surface); `Build(..., { keepEmpty = true })` opts a family
-  out (bags). The key text stays where Blizzard puts it: moving it above the buttons was tried and
+  and the rim once (`Theme.Repaint` per surface); every family takes it, the bag slots too (#50). The key text stays where Blizzard puts it: moving it above the buttons was tried and
   taken out (docs/FOREVER-PROBE.md session 5). Textures from `Tools/make_rim.py`.
   Pearl's face (#44, the owner's FFXIV reference; Pearl built only): `Buttons.PEARL` overrides
   `TUNE`'s defaults (`TuneDefault`; a saved tune of a PEARL key is never pruned, the material is
@@ -93,14 +92,13 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `UpdateDividers`) and the end caps' textures (`/gab gryphons`), re-applied on
   `EDIT_MODE_LAYOUTS_UPDATED`.
 - **`Bags.lua`**: the bag bar (#14), full glass through `Buttons.Build`: the backpack, four bag
-  slots, reagent bag and key ring, re-styled after each slot's own `UpdateTextures`, the rim by
+  slots, reagent bag and key ring, re-styled after each slot's own `UpdateTextures`, empty or not by
   `GetInventoryItemTexture` (Blizzard's `HasBagEquipped`); `BagsBar.BorderArt` and its pooled
   dividers (after `Layout` / `UpdateDividers`) faded. Never `SetAlpha` on a bag button itself:
   `ItemButtonMixin` replaces it.
-- **`MicroMenu.lua`**: a glass panel behind the micro menu (#14) in place of `MicroMenu.BorderArt` /
-  `BackgroundArt`. The micro buttons are left alone: their bronze frame is baked into each icon
-  atlas. The panel is its own frame (MicroMenu flattens its children's render layers), one level
-  under, rims at its own level, shown only while MicroMenu is home in `MicroMenuContainer`.
+- **`MicroMenu.lua`**: `MicroMenu.BorderArt` / `BackgroundArt` faded (#14), again on
+  `EDIT_MODE_LAYOUTS_UPDATED`; no panel of ours (taken out, #50). The micro buttons are left
+  alone: their bronze frame is baked into each icon atlas.
 - **`Fade.lua`**: the bar fade (#10), per bar off / mouseover / combat, one faded alpha. One
   addon-owned driver (OnUpdate only while a bar fades) polls the reasons a bar is shown (pointer,
   the main bar's page arrows, its flyout, the action and pet drag grids, Edit Mode, Quick Keybind,
@@ -109,7 +107,9 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
 - **`Dock.lua`**: smart bars docked to Action Bar 1-8 (#7). `Dock.Register{ id, label, frame,
   Layout(geom), OnHosted(isHosted), default }` (internal; #8's `RegisterBar` and #9's Utility bar
   call it). Target = the union of the bar's `shownButtonContainers`; the client anchored to
-  UIParent in its own units; `Layout(geom)` every pass, `geom` nil when not matching ("your own
+  UIParent in its own units; `Layout(geom)` every pass, `geom` carrying size/padding when the
+  player matches them (`match`) and rows/orientation when matching those (`matchRows`, #48; a
+  saved `match = false` from before keeps the rows off), nil when neither ("your own
   geometry": a hosted client keeps arranging its contents); geometry lengths scaled, counts raw; the first placement a
   transaction (`OnHosted(true)`, Layout, place, else `OnHosted(false)`). Passes coalesced, out of
   combat only; re-run on grid/shown-button hooks, Edit Mode's re-stacking, target `OnShow`, scale
@@ -137,11 +137,13 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   frame after a request: a Dock pass, a watched bar's or client's OnShow/OnHide, Edit Mode exit,
   layout/scale/display events, the Utility bar placed by hand.
 - **`API.lua`**: the public provider API (#8); the contract is
-  [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (1, checked
+  [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (2 since #48, checked
   with `==`; not `API_VERSION`: `GlassActionBars.API` is the client adapter), `RegisterBar` (wraps
-  `Dock.Register`), `RequestLayout`, `SkinButton` (regions checked by role, queued in combat), `SetButtonEmpty` (a provider's empty slot),
-  `RegisterButton` (stored; the Utility bar hosts them). Inputs are copied on acceptance; refusals
-  return `false, reason`. Any incompatible change bumps the version and the doc.
+  `Dock.Register`), `RequestLayout`, `SkinButton` (regions checked by role, queued in combat),
+  `SetButtonEmpty` (a provider's empty slot), `RegisterButton` (stored; the Utility bar hosts them).
+  A provider's icon, and the Utility bar's, is rounded to the glass (`Build`'s `maskIcon`, #46):
+  Blizzard's have the template's IconMask. Inputs are copied on acceptance; refusals return
+  `false, reason`. Any incompatible change bumps the version and the doc.
 - **`Utility.lua`**: the Utility bar (#9), Apotheca's profession bar plus the camping items.
   `ACTIONS` (Apotheca's, `measured` marked), `CAMPING` (the authoritative list: 3 kits + 34
   features; a feature needs `CAMPFIRE_AURA`, read through `API.HasPlayerAura`), the `camping`
