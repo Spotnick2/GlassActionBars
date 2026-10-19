@@ -441,6 +441,11 @@ function GetTime() return WoW.now or 0 end
 function GetServerTime() return time() end
 function GetBuildInfo() return "1.60.1", "70374", "Oct 12 2026", 16001 end
 function InCombatLockdown() return WoW.combat == true end
+-- Everything in the stubs is secure; WoW.tainted[name] = "Addon" says otherwise (GABProbe bagsbar, #55).
+function issecurevariable(t, name)
+    local by = WoW.tainted and WoW.tainted[name]
+    return by == nil, by
+end
 -- CVars; SetCVar fires CVAR_UPDATE synchronously, as the client documents it.
 -- WoW.cvarFail makes SetCVar throw; WoW.cvarRefuse makes it return false
 -- and change nothing.

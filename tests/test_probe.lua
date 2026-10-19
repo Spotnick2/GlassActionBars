@@ -146,6 +146,20 @@ check(logHas("buttons' union L 503.0 R 636.0 T 93.0 B 48.0 .-; button row tops 9
 check(logHas('client frame "ProbeDockClient" L 643.0 R 735.0'), "  the client's frame")
 check(logHas('client child "ProbeDockClientButton1" Button L 643.0'), "  its shown children")
 check(logHas("client buttons' union L 643.0 R 688.0 T 100.0 B 55.0 .-; row tops 100.0"), "  its buttons' union")
+-- bagsbar (#55): the bag bar's methods, raw and inherited, and Layout run once.
+SlashCmdList.FOREVERPROBE("gab bagsbar")
+check(logHas("BagsBar.UpdateDividers: raw function, via frame function, mixin .-, secure true"), "/fp gab bagsbar: UpdateDividers read")
+check(logHas("BagsBar.Layout: raw function"), "  Layout read")
+check(logHas("BagsBar:Layout%(%) ran"), "  Layout run, and it ran")
+-- (The stubs answer any unknown method, so "via frame" stays a function here.)
+local saved, savedLayout = rawget(BagsBar, "UpdateDividers"), rawget(BagsBar, "Layout")
+BagsBar.UpdateDividers = nil
+BagsBar.Layout = function() error("attempt to call a nil value") end
+WoW.tainted = { UpdateDividers = "SomeAddon" }
+SlashCmdList.FOREVERPROBE("gab bagsbar")
+check(logHas('BagsBar.UpdateDividers: raw nil, .-secure false "SomeAddon"'), "  gone and tainted: said so")
+check(logHas("BagsBar:Layout%(%) ERROR .-attempt to call a nil value"), "  Layout's error logged")
+BagsBar.UpdateDividers, BagsBar.Layout, WoW.tainted = saved, savedLayout, nil
 SlashCmdList.FOREVERPROBE("steps gab dock")
 rec = ForeverProbeDB.steps.records["GABProbe/dock"]
 check(rec and rec.status == "active", "/fp steps gab dock starts")

@@ -661,6 +661,31 @@ end
 
 Probe:Command("dock", function() readDock() end, "each docked bar against its target: containers, buttons, frames")
 
+-- bagsbar (#55): BagsBar:Layout (re-run on every cursor change) called a nil
+-- UpdateDividers. What the bar's methods are now, raw and inherited, who
+-- tainted them, and Layout run once under pcall (out of combat: it moves the
+-- bag buttons).
+local function readBagsBar()
+    local bar, mixin = rawget(_G, "BagsBar"), rawget(_G, "BagsBarMixin")
+    if not bar then say("no BagsBar") return "no BagsBar" end
+    local out = {}
+    for _, m in ipairs({ "UpdateDividers", "Layout", "IsHorizontal", "ShouldShowExpandToggle" }) do
+        local secure, taint = issecurevariable(bar, m)
+        local line = ("%s: raw %s, via frame %s, mixin %s, secure %s %s"):format(m, type(rawget(bar, m)), type(bar[m]),
+            type(mixin and mixin[m]), Show(secure), Show(taint))
+        say("BagsBar." .. line)
+        out[#out + 1] = line
+    end
+    say("BagsBar.useDividers " .. Show(bar.useDividers) .. ", the same mixin function: "
+        .. Show(mixin ~= nil and rawget(bar, "IsHorizontal") == mixin.IsHorizontal))
+    if InCombatLockdown() then say("in combat: Layout not run") return table.concat(out, "; ") end
+    local ok, err = pcall(bar.Layout, bar)
+    say("BagsBar:Layout() " .. (ok and "ran" or ("ERROR " .. tostring(err))))
+    out[#out + 1] = ok and "Layout ran" or ("Layout ERROR " .. tostring(err))
+    return table.concat(out, "; ")
+end
+Probe:Command("bagsbar", function() readBagsBar() end, "the bag bar's methods and a Layout run (#55)")
+
 Probe:Steps("dock", {
     title = "A docked bar against the action bar's rows (#53)",
     { text = "Dock Apotheca (or the Utility bar) to Action Bar 1 the way you saw the offset, with Edit Mode "
@@ -670,8 +695,12 @@ Probe:Steps("dock", {
       screenshot = "docked bars" },
     { text = "Does the docked bar line up with the action bar's rows and edge? (Note what's off, and by how much.)",
       ask = true },
+    { text = "The bag bar error (#55): pick up an item from your bags and put it back, then press Read.",
+      button = "Read", run = readBagsBar },
     { text = "Press Reload now to save the results.", reload = true },
 })
+
+
 
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
