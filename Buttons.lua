@@ -47,8 +47,12 @@ Buttons.TUNE = {
     dark = { 0.15, "the dark inner line under the rim" },
     wash = { 0.04, "the body's top-down haze, as a fraction of the theme's" },
     body = { 0.25, "the body's tint alpha, as a fraction of the theme's" },
+    -- The frosted empty slot (#34), dialled in game against the owner's reference.
+    frostGrey = { 0.9, "the frosted empty slot's fill: 0 black, 1 white" },
+    frostAlpha = { 0.08, "the frosted empty slot's fill strength" },
+    frostRim = { 0.35, "the frosted empty slot's rim, as a fraction of an empty slot's" },
 }
-Buttons.TUNE_ORDER = { "rim", "empty", "dark", "wash", "body" }
+Buttons.TUNE_ORDER = { "rim", "empty", "dark", "wash", "body", "frostGrey", "frostAlpha", "frostRim" }
 
 function Buttons.Tune(key)
     local saved = GAB.db and type(GAB.db.tune) == "table" and GAB.db.tune[key]
@@ -73,11 +77,16 @@ Buttons.PRESETS = {
     minimal = { hover = "off", press = "flash", emptySlots = "hidden" },
 }
 Buttons.PRESET_ORDER = { "glass", "soft", "minimal" }
-Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1, frosted = 0.35 }   -- an empty slot's glass
+Buttons.EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1 }   -- an empty slot's glass (frosted: the frostRim tune)
 -- Frosted (the reference's empty slots, owner 2026-10-19): a pale neutral fill
 -- in place of the theme's tint, so the slot reads as a light tile over any
 -- background, its rim softer (the factor above).
-Buttons.FROST = { 0.9, 0.91, 0.94, 0.08 }   -- halved after the owner's first look (too strong)
+-- The fill: a cool near-neutral grey (frostGrey, its blue a little higher)
+-- at frostAlpha (8% after the owner's first look: 16% was too strong).
+function Buttons.Frost()
+    local g = Buttons.Tune("frostGrey")
+    return { g, math.min(1, g + 0.01), math.min(1, g + 0.04), Buttons.Tune("frostAlpha") }
+end
 -- The halo: Media/ButtonHalo (Tools/make_rim.py), 16 px of padding round the
 -- button's boundary, 9-sliced at 24; a warm white; the reference's ~0.1 s in.
 Buttons.HALO = { file = "ButtonHalo", pad = 16, margin = 24, color = { 1, 0.94, 0.8 }, fadeIn = 0.1, fadeOut = 0.15 }
@@ -113,7 +122,9 @@ end
 -- family that keeps its own empty look: the bag slots).
 local function emptyFactor(s)
     if s.occupied or s.keepEmpty then return 1 end
-    return Buttons.EMPTY[look("emptySlots")]
+    local mode = look("emptySlots")
+    if mode == "frosted" then return Buttons.Tune("frostRim") end
+    return Buttons.EMPTY[mode]
 end
 
 local function font()
@@ -329,7 +340,7 @@ function Buttons.Build(button, regions, opts)
         -- Frosted replaces only the clear glass's colour: smoked and class
         -- glass keep their tint, so the theme still shows (owner, 2026-10-19).
         if not s.occupied and not s.keepEmpty and look("emptySlots") == "frosted" and GAB.Theme.Current() == "clear" then
-            return Buttons.Tune("wash"), 1, Buttons.FROST   -- the fill's own alpha, unscaled
+            return Buttons.Tune("wash"), 1, Buttons.Frost()   -- the fill's own alpha, unscaled
         end
         local f = emptyFactor(s)
         return Buttons.Tune("wash") * f, Buttons.Tune("body") * f

@@ -363,7 +363,7 @@ local function helpLines()
         "/gab macros on/off - macro names on the buttons (" .. onoff(db.showMacroNames) .. ")",
         "/gab gryphons on/off - the main bar's end caps (" .. onoff(db.endCaps) .. ")",
         "/gab skin on/off - glass, or Blizzard's own art after a /reload (" .. onoff(db.skin) .. ")",
-        "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body)",
+        "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body, frostGrey, frostAlpha, frostRim)",
         "/gab fade [1-8|stance|pet|all off/mouseover/combat] - fade bars until hovered, or out of combat",
         ("/gab fade alpha 0..1 - how faded a faded bar is (%.2f)"):format(db.fadeAlpha),
         "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match on/off] - dock a smart bar to an action bar",
@@ -409,6 +409,9 @@ local function slash(msg)
         say("skin " .. arg .. " after a /reload")
     elseif cmd == "tune" then
         local key, value = arg:match("^(%S*)%s*(.-)$")
+        for _, k in ipairs(GAB.Buttons.TUNE_ORDER) do   -- the message is lowercased: frostgrey is frostGrey
+            if k:lower() == key then key = k end
+        end
         if key == "reset" then
             for _, k in ipairs(GAB.Buttons.TUNE_ORDER) do Settings.SetTune(k, nil) end
             say("tune: the built-in values")
