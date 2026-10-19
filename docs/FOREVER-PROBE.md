@@ -35,8 +35,10 @@ again.
   (375.33); after a `/reload` its anchor read back identical (`TOP UIParent TOP -463.0 -642.0`). No
   blocked action in the three sessions. The fight step was skipped, so the stance bar wasn't
   clicked in combat after a move; the pet bar's fight (same calls) was.
-- **Not measured:** the pet dismissed and summoned out of combat (Next pressed before the bar came
-  back), and the stance bar in combat (above).
+- **The pet dismissed and summoned** (the hunter run, step 7): Next was pressed before the pet bar
+  came back, so that check found no bar; the next one, after the fight, found the returned pet bar at
+  exactly +120, nothing blocked. The resummoned bar was where it belonged.
+- **Not measured:** the stance bar clicked in combat after a move (above).
 - Probe flaws in rev 2, fixed in rev 3: a bar hidden after Edit Mode (shown while it's open)
   failed the place checks, and a step finished by hand while Edit Mode was still open read +0.
 - The probe recorded the start before the pet bar showed and needed the bar visible after the
