@@ -12,8 +12,8 @@
 --   - whether the Utility bar adds and drops the camp features with it;
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
--- Also barmove (#30), look (#34), pearl (#44), icons (#46) and dock (#53): /fp steps gab <name>.
--- Commands: /fp gab aura, camping, bars, dock, clear.
+-- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53) and micro (#57): /fp steps gab <name>.
+-- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, clear.
 
 local ADDON, NS = ...
 local MAX_LOG = 3000
@@ -702,6 +702,125 @@ Probe:Steps("dock", {
 
 
 
+-- ------------------------------------------------------------------
+-- micro (#57): the micro buttons' bronze frame is in their state atlases
+-- (UI-HUD-MicroMenu-<name>-Up/-Down/-Disabled/-Mouseover), behind them a
+-- Background (ButtonBG); the empty bag slots and the key ring show a greyed
+-- icon. Logged: each atlas's size and coords, each bag slot's icon. Tried, in
+-- memory only (a /reload undoes it): each state texture cropped by an inset
+-- inside its atlas, the Background faded; the bag slots' icons faded. Blizzard
+-- sets the atlases again on hover and on state changes, so the pointer stays
+-- off the micro menu for the shots.
+-- ------------------------------------------------------------------
+
+local MICRO_STATES = { "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture", "GetHighlightTexture" }
+
+local function microButtons()
+    local out = {}
+    local menu = rawget(_G, "MicroMenu")
+    for _, b in ipairs(menu and { menu:GetChildren() } or {}) do
+        if b.GetNormalTexture and b:GetNormalTexture() then out[#out + 1] = b end
+    end
+    return out
+end
+
+local function atlasInfo(atlas)
+    local T = rawget(_G, "C_Texture")
+    if not (atlas and T and T.GetAtlasInfo) then return nil end
+    local ok, info = pcall(T.GetAtlasInfo, atlas)
+    if ok and type(info) == "table" then return info end
+end
+
+local function readMicro()
+    local n = 0
+    for _, b in ipairs(microButtons()) do
+        n = n + 1
+        local parts = {}
+        for _, getter in ipairs(MICRO_STATES) do
+            local tex = b[getter](b)
+            local atlas = tex and tex.GetAtlas and tex:GetAtlas()
+            local info = atlasInfo(atlas)
+            parts[#parts + 1] = ("%s %s%s"):format(getter:sub(4, -8), Show(atlas), info and (" %sx%s file %s coords %.4f %.4f %.4f %.4f"):format(
+                Show(info.width), Show(info.height), Show(info.file or info.filename), info.leftTexCoord or 0, info.rightTexCoord or 0,
+                info.topTexCoord or 0, info.bottomTexCoord or 0) or "")
+        end
+        local bg = type(b.Background) == "table" and b.Background or nil
+        say(("%s %sx%s; %s; Background %s"):format(Show(b:GetName()), Show(b:GetWidth()), Show(b:GetHeight()),
+            table.concat(parts, "; "), Show(bg and bg.GetAtlas and bg:GetAtlas())))
+    end
+    local hasKey = rawget(_G, "HasKey")
+    say("HasKey() " .. Show(hasKey and select(2, pcall(hasKey))))
+    local B = gab() and gab().Bags
+    for _, name in ipairs(B and B.BUTTONS or {}) do
+        local b = rawget(_G, name)
+        local icon = b and b.icon
+        if icon then
+            local r, g, bl, a = icon:GetVertexColor()
+            say(("%s shown %s, icon %s atlas %s, alpha %s, desaturated %s, colour %s %s %s, occupied (GAB) %s"):format(name,
+                Show(b:IsShown()), Show(icon:GetTexture()), Show(icon.GetAtlas and icon:GetAtlas()), Show(icon:GetAlpha()),
+                Show(icon.IsDesaturated and icon:IsDesaturated()), Show(r), Show(g), Show(bl), Show(B.occupied(b))))
+        end
+    end
+    return n .. " micro buttons"
+end
+
+-- Crop every micro button's state textures by `k` of their atlas on each side,
+-- the Background faded (k = 0: Blizzard's own, the Background shown).
+local function cropMicro(k)
+    return function()
+        for _, b in ipairs(microButtons()) do
+            for _, getter in ipairs(MICRO_STATES) do
+                local tex = b[getter](b)
+                local info = tex and atlasInfo(tex.GetAtlas and tex:GetAtlas())
+                if info and info.leftTexCoord then
+                    local l, r, t, bt = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
+                    local dx, dy = (r - l) * k, (bt - t) * k
+                    tex:SetTexCoord(l + dx, r - dx, t + dy, bt - dy)
+                end
+            end
+            if type(b.Background) == "table" then b.Background:SetAlpha(k > 0 and 0 or 1) end
+            if type(b.PushedBackground) == "table" then b.PushedBackground:SetAlpha(k > 0 and 0 or 1) end
+        end
+        return "inset " .. k
+    end
+end
+
+-- The bag slots' icons: faded on an empty slot (GAB's occupied false) and on
+-- the key ring (`all`: every icon), or back to 1.
+local function fadeBagIcons(mode)
+    return function()
+        local B, n = gab().Bags, 0
+        for _, name in ipairs(B.BUTTONS) do
+            local b = rawget(_G, name)
+            if b and b.icon then
+                local fade = mode == "empty" and (B.occupied(b) == false or b == rawget(_G, "KeyRingButton"))
+                b.icon:SetAlpha(fade and 0 or 1)
+                if fade then n = n + 1 end
+            end
+        end
+        return mode .. ": " .. n .. " icons faded"
+    end
+end
+
+local microSteps = {
+    title = "Micro buttons and empty bag slots without Blizzard's art (#57)",
+    { text = "Reading the micro buttons' atlases and the bag slots' icons.", auto = true, run = readMicro },
+}
+for _, k in ipairs({ 0.08, 0.12, 0.16, 0.20 }) do
+    microSteps[#microSteps + 1] = { text = "Keep the pointer away from the micro menu and press Crop " .. k
+        .. ": each micro button cut by " .. (k * 100) .. "% on every side, its background faded.", button = "Crop " .. k,
+        run = cropMicro(k), screenshot = "micro buttons cropped " .. k }
+    microSteps[#microSteps + 1] = { text = "At " .. k .. ": is the bronze frame gone, with the symbol whole?", ask = true }
+end
+for _, step in ipairs({
+    { text = "Press Fade: the empty bag slots' and the key ring's icons faded.", button = "Fade",
+      run = fadeBagIcons("empty"), screenshot = "bag icons faded" },
+    { text = "Better without those icons (the slot still takes a bag and opens on click)?", ask = true },
+    { text = "Press Reload now: it puts Blizzard's art back and saves the results.", reload = true },
+}) do microSteps[#microSteps + 1] = step end
+Probe:Steps("micro", microSteps)
+Probe:Command("micro", function() readMicro() end, "the micro buttons' atlases and the bag slots' icons (#57)")
+
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
 boot:SetScript("OnEvent", function(_, event, name)
@@ -719,5 +838,5 @@ boot:SetScript("OnEvent", function(_, event, name)
     say("loaded (" .. GABProbeDB.loads .. " loads). /fp steps gab campfire, or /fp gab for the commands")
 end)
 
-NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCamping,
+NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCamping, cropMicro = cropMicro, fadeBagIcons = fadeBagIcons,
     takeBaseline = takeBaseline, cooldownVerdict = cooldownVerdict }
