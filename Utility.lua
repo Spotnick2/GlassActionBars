@@ -347,11 +347,12 @@ local shownList, lastGeom = {}, nil
 
 local function arrange()
     local g = lastGeom
+    -- Each part the bar's when the dock gives it (the player matches it), else our own.
     local size = g and g.size or Utility.LayoutSetting("iconSize")
     local pad = g and g.padding or Utility.LayoutSetting("iconPadding")
     local rows = math.max(1, g and g.rows or Utility.LayoutSetting("rows"))
     local vertical
-    if g then vertical = g.orientation == 1 else vertical = Utility.LayoutSetting("orientation") == "VERTICAL" end
+    if g and g.orientation then vertical = g.orientation == 1 else vertical = Utility.LayoutSetting("orientation") == "VERTICAL" end
     local n = #shownList
     if n == 0 then frame:SetSize(size, size) return end
     local cols
