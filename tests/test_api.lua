@@ -200,4 +200,16 @@ check(GAB.SetButtonEmpty(qb, true), "  SetButtonEmpty on a waiting button: kept"
 WoW.combat = false
 WoW.fire("PLAYER_REGEN_ENABLED")
 check(GAB.Buttons.IsSkinned(qb) and GAB.Buttons.State(qb).occupied == false, "  applied once the skin is built")
+-- The provider's own PLAYER_REGEN_ENABLED runs before GAB's: it skins again
+-- and answers anew; GAB's flush after it must not bring the older answer back.
+WoW.combat = true
+local rb = CreateFrame("Button", "RacingButton", UIParent)
+check(GAB.SkinButton(rb, { icon = rb:CreateTexture() }), "in combat: another skin waits")
+check(GAB.SetButtonEmpty(rb, true), "  kept: empty")
+WoW.combat = false
+check(GAB.SkinButton(rb, { icon = rb:CreateTexture() }), "out of combat, before GAB's flush: skinned at once")
+eq(GAB.Buttons.State(rb).occupied, false, "  the kept answer applied")
+check(GAB.SetButtonEmpty(rb, false), "  then filled")
+WoW.fire("PLAYER_REGEN_ENABLED")
+eq(GAB.Buttons.State(rb).occupied, true, "  GAB's flush after it: still filled, not the older answer")
 done("test_api")

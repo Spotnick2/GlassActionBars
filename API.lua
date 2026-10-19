@@ -86,17 +86,23 @@ local waiter
 -- The waiting requests, once the glass is built and out of combat.
 local pendingEmpty = {}  -- button -> its last SetButtonEmpty answer, while its skin waits
 
+-- A waiting request is done (built by the flush, or by a newer SkinButton
+-- that got there first): its kept answer applied, once.
+local function settle(button)
+    pending[button] = nil
+    if pendingEmpty[button] ~= nil then
+        GAB.Buttons.SetOccupied(button, not pendingEmpty[button])
+        pendingEmpty[button] = nil
+    end
+end
+
 function GAB.FlushSkinRequests()
     if InCombatLockdown() or not GAB.GlassBuilt() then return end
     for button, regions in pairs(pending) do
-        pending[button] = nil
         if GAB.db.skin ~= false and not GAB.Buttons.IsSkinned(button) then
             API.Try("api:skin", GAB.Buttons.Build, button, regions)
         end
-        if pendingEmpty[button] ~= nil then
-            GAB.Buttons.SetOccupied(button, not pendingEmpty[button])
-            pendingEmpty[button] = nil
-        end
+        settle(button)
     end
 end
 
@@ -143,6 +149,9 @@ function GAB.SkinButton(button, regions, owner)
         return true
     end
     API.Try("api:skin", GAB.Buttons.Build, button, copy)
+    -- Out of combat before GAB's own flush (the provider's PLAYER_REGEN_ENABLED
+    -- ran first): this build takes over the waiting request.
+    if pending[button] and GAB.Buttons.IsSkinned(button) then settle(button) end
     return GAB.Buttons.IsSkinned(button)
 end
 
