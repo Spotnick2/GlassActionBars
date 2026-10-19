@@ -55,7 +55,7 @@ check(s.g.tint._color[1] ~= s.g.tint._color[3], "class tint preserved")
 check(s.socketRim:GetAlpha() > 0, "tint choice retains socket geometry")
 local bag = B.State(CharacterBag0Slot)
 B.SetOccupied(CharacterBag0Slot, false)
-eq(bag.socketRim:GetAlpha(), 0, "keepEmpty family does not become a frosted socket")
+check(bag.socketRim:GetAlpha() > 0 and bag.g.rim:GetAlpha() == 0, "an empty bag slot is a frosted socket too (#50)")
 eq(next(GAB.failures), nil, "no recorded skin failures")
 
 -- Existing materials keep the original colour offsets and no new face.

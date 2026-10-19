@@ -12,6 +12,9 @@
   `/gab material` (after a /reload). With Pearl, the buttons take after Final Fantasy XIV's: a
   frosted empty slot is a grey, recessed tile (a dark top edge, a light bottom lip), and a filled
   one has a soft reflection over the top of its icon (`/gab tune gloss 0` takes it off).
+- **The bag bar and the micro menu**: an empty bag slot now looks like an empty action slot
+  (frosted by default; it follows `/gab look`), and the micro menu has no panel behind it any more:
+  its buttons sit on the world, with Blizzard's dark panel still gone.
 - **Glass UI**: with Glass UI's "Use Glass UI appearance" on for Glass Action Bars, its material is
   Glass UI's, and its tint and button feedback follow Glass UI's look live; anything you set in
   Glass Action Bars stays yours (a "Glass UI" choice on each control goes back to following it).

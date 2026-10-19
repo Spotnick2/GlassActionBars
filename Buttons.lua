@@ -134,10 +134,9 @@ function Buttons.Preset()
     return "custom"
 end
 
--- An empty slot's glass, as a factor (1 on a slot with an action, and on a
--- family that keeps its own empty look: the bag slots).
+-- An empty slot's glass, as a factor (1 on a slot with an action).
 local function emptyFactor(s)
-    if s.occupied or s.keepEmpty then return 1 end
+    if s.occupied then return 1 end
     local mode = look("emptySlots")
     if mode == "frosted" then return Buttons.Tune("frostRim") end
     return Buttons.EMPTY[mode]
@@ -165,7 +164,7 @@ end
 -- socket instead of the raised rim, a filled one the reflection.
 local function paintRim(s)
     local f = s.occupied and 1 or Buttons.Tune("empty") * emptyFactor(s)
-    local recessed = s.socketRim and not s.occupied and not s.keepEmpty and look("emptySlots") == "frosted"
+    local recessed = s.socketRim and not s.occupied and look("emptySlots") == "frosted"
     s.g.rim:SetAlpha(recessed and 0 or Buttons.Tune("rim") * f)
     s.g.dark:SetAlpha(recessed and 0 or Buttons.Tune("dark") * f)
     if s.socketRim then
@@ -373,9 +372,8 @@ end
 
 -- The glass on one button. `regions` names its parts: icon, cooldown,
 -- count, hotkey, name, normal, pushed, highlight, slotArt, slotBackground
--- (any may be absent). `opts.keepEmpty`: the family keeps its own empty look
--- (the empty-slots setting skips it). Returns the button's state; a second
--- call returns the same one.
+-- (any may be absent). Returns the button's state; a second call returns the
+-- same one.
 function Buttons.Build(button, regions, opts)
     if skins[button] then return skins[button] end
     local body = CreateFrame("Frame", nil, button)
@@ -386,7 +384,7 @@ function Buttons.Build(button, regions, opts)
     g.grain:SetAlpha(0)
     rimTexture(g.rim)      -- our rim on the surface's own rim region (ours to retexture)
     local s = { button = button, body = body, g = g, regions = regions or {}, occupied = true,
-                small = (API.Plain(button:GetWidth()) or 45) < 40, keepEmpty = opts and opts.keepEmpty == true }
+                small = (API.Plain(button:GetWidth()) or 45) < 40 }
     skins[button] = s
     API.Try("skin:pearl", makePearlFace, s)
     -- The body's paint first, and every later step on its own: a step that
@@ -398,7 +396,7 @@ function Buttons.Build(button, regions, opts)
     GAB.Theme.Register(g, function()
         -- Frosted replaces only the clear glass's colour: smoked and class
         -- glass keep their tint, so the theme still shows (owner, 2026-10-19).
-        if not s.occupied and not s.keepEmpty and look("emptySlots") == "frosted" and GAB.Theme.Current() == "clear" then
+        if not s.occupied and look("emptySlots") == "frosted" and GAB.Theme.Current() == "clear" then
             return Buttons.Tune("wash"), 1, Buttons.Frost()   -- the fill's own alpha, unscaled
         end
         local f = emptyFactor(s)
@@ -437,7 +435,7 @@ function Buttons.SetOccupied(button, occupied)
     s.occupied = occupied == true
     paintRim(s)
     -- The body's paint carries the empty-slots factor.
-    if was ~= s.occupied and not s.keepEmpty then GAB.Theme.Repaint(s.g) end
+    if was ~= s.occupied then GAB.Theme.Repaint(s.g) end
 end
 
 -- The feedback settings changed: every button's highlight, halo, pressed
@@ -459,7 +457,7 @@ function Buttons.RefreshFeedback()
             end
             pushedAlpha(s)
             paintRim(s)
-            if not s.keepEmpty then GAB.Theme.Repaint(s.g) end
+            GAB.Theme.Repaint(s.g)
         end)
     end
 end

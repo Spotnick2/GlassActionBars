@@ -21,11 +21,11 @@ the full rim and an empty one a quieter one; pressing a button lights its rim. T
 frame art and dividers fade away, and so do the gryphons unless you keep them.
 
 **The bag bar and the micro menu match.** The backpack, bag slots, reagent bag and key ring get
-the same glass (a slot with a bag gets the full rim, an empty one the quieter one). The micro
-menu sits on a subtle glass panel instead of Blizzard's dark one, and its buttons keep their own
-icons and states.
+the same glass; an empty bag slot looks like an empty action slot (frosted by default). Its empty
+silhouette stays, and it still takes clicks and dropped bags. The micro menu loses Blizzard's dark
+panel, and its buttons keep their own icons and states.
 
-![The micro menu on a faint glass panel above the bag bar: the backpack and one bag with full rims, the empty bag slots with quieter ones](https://raw.githubusercontent.com/Spotnick2/GlassActionBars/main/docs/images/bags-micro.png)
+![The micro menu above the bag bar, the backpack and bags on glass](https://raw.githubusercontent.com/Spotnick2/GlassActionBars/main/docs/images/bags-micro.png)
 
 **Blizzard's bars, not a replacement.** Paging, stances and forms, key bindings, Edit Mode
 layouts, cooldowns, range and proc glows all stay the game's own, in and out of combat.

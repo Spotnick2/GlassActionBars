@@ -133,7 +133,7 @@ _, _, own = scale()
 eq(own, nil, "  filled again: the theme's glass")
 local bag = B.State(CharacterBag0Slot)
 B.SetOccupied(CharacterBag0Slot, false)
-check(close(bag.g.rim:GetAlpha(), B.Tune("rim") * B.Tune("empty")), "a bag slot keeps its own empty look")
+check(bag.g.rim:GetAlpha() == 0 and bag.socketRim:GetAlpha() > 0, "an empty bag slot takes the empty-slots look too (#50)")
 Settings.SetLook("emptySlots", "full")
 
 -- Key text stays Blizzard's (moving it above was tried and taken out, session 5).
