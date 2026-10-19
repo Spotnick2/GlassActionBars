@@ -110,9 +110,9 @@ local hk = b.HotKey
 Settings.SetLook("keyPosition", "above")
 p = hk._points
 check(#p == 1 and p[1][1] == "BOTTOMLEFT" and p[1][2] == b and p[1][3] == "TOPLEFT", "above: over the top-left corner")
-check(hk._width == 90 and hk._height == 14 and hk._justifyH == "LEFT", "  a wide, left-justified box")
+check(hk._width == 45 and hk._height == 14 and hk._justifyH == "LEFT", "  a left-justified box as wide as the button (a long label shortens)")
 b:UpdateHotkeys()
-check(#hk._points == 1 and hk._points[1][1] == "BOTTOMLEFT" and hk._width == 90, "  kept through Blizzard's UpdateHotkeys")
+check(#hk._points == 1 and hk._points[1][1] == "BOTTOMLEFT" and hk._width == 45, "  kept through Blizzard's UpdateHotkeys")
 Settings.SetLook("keySize", "large")
 check(hk._height == 18 and hk._font[2] == 12 + 4 + select(2, (function()
     local f = GAB.Glass.FONTS[GAB.Glass.fontKey] or GAB.Glass.FONTS.arial
@@ -142,7 +142,7 @@ Settings.SetLook("keyPosition", "inside")
 check(Settings.SetLookPreset("soft"), "the Soft preset")
 eq(B.Preset(), "soft", "  matches")
 check(B.Look("hover") == "halo" and B.Look("press") == "ripple" and B.Look("emptySlots") == "faint"
-    and B.Look("keyPosition") == "above" and B.Look("keySize") == "large", "  all five set")
+    and B.Look("keyPosition") == "inside" and B.Look("keySize") == "normal", "  all five set (key text inside: the owner's choice)")
 eq(Settings.SetLookPreset("loud"), false, "an unknown preset refused")
 eq(Settings.SetLook("hover", "sparkle"), false, "an unknown choice refused")
 eq(Settings.SetLook("glitter", "on"), false, "an unknown key refused")

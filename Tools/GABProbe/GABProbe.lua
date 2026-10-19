@@ -407,7 +407,7 @@ end
 local lookFights, lookMark = 0, nil
 Probe:Steps("look", {
     title = "Button feedback, the Soft preset (#34)",
-    { text = "Press Soft: GAB switches to its Soft look (halo, ripple, key text above, faint empty slots).",
+    { text = "Press Soft: GAB switches to its Soft look (halo, ripple, faint empty slots).",
       button = "Soft", run = function() settings().SetLookPreset("soft"); return buttons().Preset() end,
       check = function() return buttons().Preset() == "soft", "the Soft preset" end,
       screenshot = "the Soft look" },
@@ -421,7 +421,7 @@ Probe:Steps("look", {
     { text = "Click an action button with the mouse (out of combat). Did a soft circle swell from the pointer and fade?",
       ask = true },
     { text = "Press one of your action bar key bindings. Did that button flash?", ask = true },
-    { text = "Are the key texts above the buttons, large, and readable (not clipped, not over the bar above)?",
+    { text = "Are the key texts still readable?",
       ask = true },
     { text = "Are the empty slots faint, and the bag slots unchanged?", ask = true },
     { text = "Do the stance or pet buttons and the Utility bar show the same halo and ripple?", ask = true },

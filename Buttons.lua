@@ -70,7 +70,7 @@ Buttons.LOOK = {
 Buttons.LOOK_ORDER = { "hover", "press", "emptySlots", "keyPosition", "keySize" }
 Buttons.PRESETS = {
     glass = { hover = "glow", press = "flash", emptySlots = "full", keyPosition = "inside", keySize = "normal" },
-    soft = { hover = "halo", press = "ripple", emptySlots = "faint", keyPosition = "above", keySize = "large" },
+    soft = { hover = "halo", press = "ripple", emptySlots = "faint", keyPosition = "inside", keySize = "normal" },
     minimal = { hover = "off", press = "flash", emptySlots = "hidden", keyPosition = "inside", keySize = "normal" },
 }
 Buttons.PRESET_ORDER = { "glass", "soft", "minimal" }
@@ -164,7 +164,7 @@ local function placeHotkey(s)
         local w = API.Plain(s.button:GetWidth())
         hk:ClearAllPoints()
         hk:SetPoint("BOTTOMLEFT", s.button, "TOPLEFT", 0, 1)
-        hk:SetSize((type(w) == "number" and w or 45) * 2, look("keySize") == "large" and 18 or 14)
+        hk:SetSize(type(w) == "number" and w or 45, look("keySize") == "large" and 18 or 14)
         hk:SetJustifyH("LEFT")
         s.hkMoved = true
     elseif s.hkMoved and s.hkOrig then

@@ -6,13 +6,22 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
-## Session 5: button feedback (#34, pending)
+## Session 5: button feedback (#34), 2026-10-19, build 70450
 
-`pwsh Tools\deploy.ps1 -Probe`, `/reload`, then `/fp steps gab look`: the Soft preset; the halo on
-a hovered button (measured: its alpha reaches 1 under the pointer), the ripple on a click, the
-flash on a key press, the key text above, faint empty slots, on the stance/pet buttons and the
-Utility bar, and all of it in a fight with nothing blocked.
-
+`/fp steps gab look` on the owner's character, the Soft preset.
+- **The halo:** its alpha reached 1 under the pointer (measured), a warm glow round the button in the
+  screenshot; it faded in and out (owner: yes). Also on the stance/pet buttons and the Utility bar.
+- **The ripple** on a mouse click: yes, out of combat and in a fight.
+- **The flash on a key press:** seen on a spell with a cast time, not sure on an instant one. It is
+  Blizzard's pushed state, shown only while the key is held, as without GAB; a key press has no
+  signal an addon can hook here (session 1), so it stays as it is.
+- **Key text above:** works, but on the owner's tightly stacked bars each row's numbers sit on the
+  edge of the row above, and long labels ("Mouse Button 4") ran into each other in a box twice the
+  button's width. The owner prefers it inside: Soft keeps the key text inside, and "above" now
+  uses a box as wide as the button, so a long label shortens.
+- **Empty slots faint:** the owner was unsure; the screenshot shows faint frosted squares, as meant.
+- **A fight** with the halo, ripple and flash: nothing blocked (owner: yes; no `ADDON_ACTION_BLOCKED`
+  in ForeverProbe's log for the run).
 ## Session 4: moving the stance and pet bars (#30), 2026-10-18, build 70450
 
 `/fp steps gab barmove` (procedure rev 1) on the owner's hunter, pet out, GUF's link off. GAB's

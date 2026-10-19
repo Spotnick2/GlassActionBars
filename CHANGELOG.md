@@ -11,7 +11,7 @@
   pointer (off, Blizzard's glow, or a warm **halo** that fades in), a click (off, the flash, or a
   **ripple** from the pointer), how empty slots show (hidden, faint, half, full), and the key text
   inside the button or **above** it, normal or large. Three presets set them all: **Glass** (the
-  look so far), **Soft** and **Minimal**.
+  look so far), **Soft** (halo, ripple, faint empty slots) and **Minimal**.
 - **The Utility bar**: your Hearthstone, Cooking, First Aid, Fishing, your professions and their
   actions (Disenchant, Smelting, Find Herbs, Pick Lock...), and your **camping** items: a campfire
   kit whenever you carry one, the camp features (Camp Chair, Mana Well, Fish Bowl...) when you are
