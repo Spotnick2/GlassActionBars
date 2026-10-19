@@ -109,7 +109,9 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
 - **`Dock.lua`**: smart bars docked to Action Bar 1-8 (#7). `Dock.Register{ id, label, frame,
   Layout(geom), OnHosted(isHosted), default }` (internal; #8's `RegisterBar` and #9's Utility bar
   call it). Target = the union of the bar's `shownButtonContainers`; the client anchored to
-  UIParent in its own units; `Layout(geom)` every pass, `geom` nil when not matching ("your own
+  UIParent in its own units; `Layout(geom)` every pass, `geom` carrying size/padding when the
+  player matches them (`match`) and rows/orientation when matching those (`matchRows`, #48; a
+  saved `match = false` from before keeps the rows off), nil when neither ("your own
   geometry": a hosted client keeps arranging its contents); geometry lengths scaled, counts raw; the first placement a
   transaction (`OnHosted(true)`, Layout, place, else `OnHosted(false)`). Passes coalesced, out of
   combat only; re-run on grid/shown-button hooks, Edit Mode's re-stacking, target `OnShow`, scale
@@ -137,7 +139,7 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   frame after a request: a Dock pass, a watched bar's or client's OnShow/OnHide, Edit Mode exit,
   layout/scale/display events, the Utility bar placed by hand.
 - **`API.lua`**: the public provider API (#8); the contract is
-  [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (1, checked
+  [docs/PUBLIC-API.md](docs/PUBLIC-API.md). `GlassActionBars.PUBLIC_API_VERSION` (2 since #48, checked
   with `==`; not `API_VERSION`: `GlassActionBars.API` is the client adapter), `RegisterBar` (wraps
   `Dock.Register`), `RequestLayout`, `SkinButton` (regions checked by role, queued in combat),
   `RegisterButton` (stored; the Utility bar hosts them). Inputs are copied on acceptance; refusals

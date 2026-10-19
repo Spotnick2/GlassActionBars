@@ -37,7 +37,8 @@ Dock.SIDES = { "LEFT", "RIGHT", "TOP", "BOTTOM" }
 Dock.ALIGNS = { "START", "CENTER", "END" }
 Dock.GAPS = { 0, 2, 4, 8 }
 Dock.MAX_GAP = 32
-Dock.DEFAULT = { bar = false, side = "RIGHT", align = "CENTER", gap = 4, match = true }
+-- match: the bar's button size and spacing; matchRows: its rows and direction (#48).
+Dock.DEFAULT = { bar = false, side = "RIGHT", align = "CENTER", gap = 4, match = true, matchRows = true }
 local BUTTON = 45   -- a stock action button's width at 100%
 
 -- Edit Mode's Action Bar 1-8: the bar frame and its buttons' prefix.
@@ -58,7 +59,7 @@ function Dock.Valid(key, v)
     if key == "side" then return isSide[v] == true end
     if key == "align" then return isAlign[v] == true end
     if key == "gap" then return type(v) == "number" and v >= 0 and v <= Dock.MAX_GAP end
-    if key == "match" then return type(v) == "boolean" end
+    if key == "match" or key == "matchRows" then return type(v) == "boolean" end
     return false
 end
 
@@ -71,6 +72,9 @@ function Dock.Setting(id, key)
     local t = GAB.db and rawget(GAB.db, "dock")
     local s = t and t[id]
     if type(s) == "table" and s[key] ~= nil then return s[key] end
+    -- Before #48 `match` covered the rows too: a player who turned it off
+    -- matched nothing, and keeps the rows unmatched.
+    if key == "matchRows" and type(s) == "table" and s.match == false then return false end
     local c = clients[id]
     local d = c and c.def.default
     if type(d) == "table" and d[key] ~= nil and Dock.Valid(key, d[key]) then return d[key] end
@@ -158,6 +162,18 @@ local function geometry(n, frame)
 end
 Dock.Geometry = geometry
 
+-- What the client is given (#48): size and padding when the player matches
+-- them, rows and orientation when matching those; nil when neither (or the
+-- bar's geometry is unreadable).
+local function matched(id, n, frame)
+    local size, rows = Dock.Setting(id, "match"), Dock.Setting(id, "matchRows")
+    if not (size or rows) then return nil end
+    local g = geometry(n, frame)
+    if not g then return nil end
+    return { size = size and g.size or nil, padding = size and g.padding or nil,
+             rows = rows and g.rows or nil, orientation = rows and g.orientation or nil }
+end
+
 -- Put the client beside the rect. False when its size or scale is unreadable.
 local function place(c, rect)
     local f, id = c.def.frame, c.def.id
@@ -211,7 +227,7 @@ local function pass(id)
     -- ("your own geometry") when not matching or unreadable. A hosted client
     -- gives up its position, never the arranging of its own contents.
     if ok then
-        local g = Dock.Setting(id, "match") and geometry(n, c.def.frame) or nil
+        local g = matched(id, n, c.def.frame)
         c.inLayout = true
         ok = call(c, "Layout", g)
         c.inLayout = false

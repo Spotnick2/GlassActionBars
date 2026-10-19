@@ -33,11 +33,11 @@ local function provider(id, extra)
     return f, log, def
 end
 
-local early, earlyLog, earlyDef = provider("early", { default = { bar = 1, side = "UP", gap = 6 } })
+local early, earlyLog, earlyDef = provider("early", { default = { bar = 1, side = "UP", gap = 6, matchRows = false } })
 local GAB = loadAddon({ beforeLogin = function(G)
     check(G.RegisterBar(earlyDef), "RegisterBar before login: accepted")
 end })
-eq(GAB.PUBLIC_API_VERSION, 1, "PUBLIC_API_VERSION 1")
+eq(GAB.PUBLIC_API_VERSION, 2, "PUBLIC_API_VERSION 2 (#48: geom carries what the player matches)")
 eq(next(GAB.failures), nil, "nothing failed")
 
 -- The early provider: docked by its default once logged in; the bad default
@@ -47,6 +47,8 @@ eq(earlyLog[1], "hosted", "queued before login: hosted after it")
 eq(earlyLog[2], "layout", "  then laid out")
 eq(GAB.Dock.Setting("early", "side"), "RIGHT", "  an invalid default side dropped")
 eq(GAB.Dock.Setting("early", "gap"), 6, "  a valid default gap kept")
+eq(GAB.Dock.Setting("early", "matchRows"), false, "  a default matchRows kept (#48)")
+check(earlyLog.geom and earlyLog.geom.size and earlyLog.geom.rows == nil, "  so Layout gets the size, not the rows")
 local p = early._points[#early._points]
 check(p and close(p[4], 1062 + 6), "  placed right of bar 1, 6 apart")
 
@@ -89,9 +91,10 @@ eq(#ownLog, 0, "  not docked by default: no callback")
 GAB.Settings.SetDock("own", "bar", 1)
 GAB.Settings.SetDock("own", "side", "LEFT")
 GAB.Settings.SetDock("own", "match", false)
+GAB.Settings.SetDock("own", "matchRows", false)
 WoW.tick()
 eq(ownLog[1], "hosted", "docked: hosted")
-eq(ownLog[2], "layout(nil)", "  match off: Layout(nil)")
+eq(ownLog[2], "layout(nil)", "  nothing matched: Layout(nil)")
 p = own._points[#own._points]
 check(close(p[4], 500 - 4 - 60), "  left of bar 1 by its own width")
 own._width = 90                                 -- a button appeared
@@ -100,6 +103,7 @@ WoW.tick()
 p = own._points[#own._points]
 check(close(p[4], 500 - 4 - 90), "contents changed + RequestLayout: re-placed by the new width")
 GAB.Settings.SetDock("own", "match", true)
+GAB.Settings.SetDock("own", "matchRows", true)
 WoW.tick()
 eq(ownLog[#ownLog], "layout", "match on again: the bar's geometry")
 check(close(ownLog.geom.size, 45), "  45 at 100%")

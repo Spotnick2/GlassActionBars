@@ -20,7 +20,7 @@ GlassActionBars = GlassActionBars or {}
 local GAB = GlassActionBars
 local API = GAB.API
 
-GAB.PUBLIC_API_VERSION = 1
+GAB.PUBLIC_API_VERSION = 2   -- 2 (#48): Layout's geom carries only what the player matches
 
 local RESERVED = { utility = true }   -- the native Utility bar's dock id
 
@@ -56,7 +56,7 @@ function GAB.RegisterBar(def)
     local default
     if type(def.default) == "table" then
         default = {}
-        for _, k in ipairs({ "bar", "side", "align", "gap", "match" }) do
+        for _, k in ipairs({ "bar", "side", "align", "gap", "match", "matchRows" }) do
             if GAB.Dock.Valid(k, def.default[k]) then default[k] = def.default[k] end
         end
     end

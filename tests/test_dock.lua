@@ -46,7 +46,7 @@ local function client(id, opts)
             log.geom = g
             if opts.layoutThrows then error("Layout broke") end
             if opts.relayout then Dock.RequestLayout(id) end
-            if g then f._width, f._height = g.size * 2 + g.padding, g.size end   -- nil: its own size
+            if g and g.size then f._width, f._height = g.size * 2 + g.padding, g.size end   -- no size: its own
         end,
     }
     check(Dock.Register(def), "register " .. id)
@@ -105,11 +105,13 @@ end
 Settings.SetDock("alpha", "side", "RIGHT")
 Settings.SetDock("alpha", "align", "CENTER")
 Settings.SetDock("alpha", "match", false)
+Settings.SetDock("alpha", "matchRows", false)
 A._height = 20
 WoW.tick()
 x, y = at(A)
 check(close(y, 67.5), "centred on the bar's middle: " .. tostring(y))
 Settings.SetDock("alpha", "match", true)
+Settings.SetDock("alpha", "matchRows", true)
 Settings.SetDock("alpha", "side", "RIGHT")
 Settings.SetDock("alpha", "align", "START")
 Settings.SetDock("alpha", "gap", 8)
@@ -145,13 +147,42 @@ check(close(x, 1070 / 2), "  placed in its own units")
 A._escale = nil
 MAIN._settings[0], MAIN._settings[1] = 0, 1
 
--- Match off: Layout(nil), the client's own geometry (it still arranges its contents).
+-- Nothing matched: Layout(nil), the client's own geometry (it still arranges its contents).
 local layouts, own = count(logA, "layout"), count(logA, "layout(nil)")
 Settings.SetDock("alpha", "match", false)
+Settings.SetDock("alpha", "matchRows", false)
 WoW.tick()
-eq(count(logA, "layout"), layouts, "match off: no matched geometry")
+eq(count(logA, "layout"), layouts, "nothing matched: no matched geometry")
 eq(count(logA, "layout(nil)"), own + 1, "  Layout(nil) instead")
+
+-- The split (#48): each pair only when the player matches it.
 Settings.SetDock("alpha", "match", true)
+WoW.tick()
+local g = logA.geom
+check(g and g.size and g.padding and g.rows == nil and g.orientation == nil, "size and spacing only: no rows, no direction")
+Settings.SetDock("alpha", "match", false)
+Settings.SetDock("alpha", "matchRows", true)
+WoW.tick()
+g = logA.geom
+check(g and g.size == nil and g.padding == nil and g.rows == 1 and g.orientation == 0, "rows only: rows and direction, no size")
+Settings.SetDock("alpha", "match", true)
+WoW.tick()
+g = logA.geom
+check(g and g.size and g.padding and g.rows and g.orientation, "both: all four")
+
+-- Before the split `match` covered the rows (#48): a saved match off keeps
+-- them off, also once the size is matched again; a fresh profile turning the
+-- size off keeps its rows matched.
+local kept = GAB.db.dock.alpha
+GAB.db.dock.alpha = { bar = 1, match = false }
+eq(Dock.Setting("alpha", "matchRows"), false, "legacy match off: rows off")
+Settings.SetDock("alpha", "match", true)
+eq(Dock.Setting("alpha", "matchRows"), false, "  size on again: rows stay off")
+GAB.db.dock.alpha = { bar = 1 }
+Settings.SetDock("alpha", "match", false)
+eq(Dock.Setting("alpha", "matchRows"), true, "fresh: size off leaves rows on")
+check(Dock.Valid("matchRows", false) and not Dock.Valid("matchRows", "no"), "matchRows: a boolean")
+GAB.db.dock.alpha = kept
 WoW.tick()
 
 -- Coalescing: many requests in a frame, one pass; RequestLayout from inside
@@ -321,6 +352,14 @@ SlashCmdList.GLASSACTIONBARS("dock beta gap 6")
 eq(Dock.Setting("beta", "gap"), 6, "/gab dock beta gap 6")
 SlashCmdList.GLASSACTIONBARS("dock beta match off")
 eq(Dock.Setting("beta", "match"), false, "/gab dock beta match off")
+eq(Dock.Setting("beta", "matchRows"), true, "  the rows still matched (#48)")
+SlashCmdList.GLASSACTIONBARS("dock beta rows off")
+eq(Dock.Setting("beta", "matchRows"), false, "/gab dock beta rows off")
+SlashCmdList.GLASSACTIONBARS("dock beta match on")
+eq(Dock.Setting("beta", "matchRows"), false, "  match on leaves the rows off")
+newChat()
+SlashCmdList.GLASSACTIONBARS("dock")
+check(chatHas("match on, rows off"), "  /gab dock shows both")
 SlashCmdList.GLASSACTIONBARS("dock beta off")
 eq(Dock.Setting("beta", "bar"), false, "/gab dock beta off")
 newChat()
@@ -337,6 +376,16 @@ local sections = GAB.Options._test.dockSections
 check(sections.beta ~= nil, "the page: a section for beta")
 check(sections.beta.gapText:GetText() == "now 6", "  a gap of 6 shows as 'now 6'")
 check(not sections.beta.gap[1]:GetChecked() and not sections.beta.gap[4]:GetChecked(), "  no preset checked for 6")
+-- Two checkboxes (#48): size and spacing, rows and direction, each its own.
+check(sections.beta.match:GetChecked() and not sections.beta.matchRows:GetChecked(), "  match and rows boxes as set")
+sections.beta.match:SetChecked(false)
+sections.beta.match:GetScript("OnClick")(sections.beta.match)
+eq(Dock.Setting("beta", "match"), false, "  the size box: size off")
+eq(Dock.Setting("beta", "matchRows"), false, "  the rows unchanged")
+sections.beta.matchRows:SetChecked(true)
+sections.beta.matchRows:GetScript("OnClick")(sections.beta.matchRows)
+eq(Dock.Setting("beta", "matchRows"), true, "  the rows box: rows on")
+eq(Dock.Setting("beta", "match"), false, "  the size unchanged")
 GAB.Options.dockPage:Hide()
 client("late")
 GAB.Options.dockPage:Show()
@@ -366,6 +415,10 @@ eq(d.later.bar, 4, "load: a valid key kept, for an id not registered yet")
 eq(d.later.side, nil, "  a bad side dropped")
 eq(d.later.gap, nil, "  a gap out of range dropped")
 eq(d.later.match, nil, "  a non-boolean match dropped")
+GlassActionBarsDB = { dock = { later = { matchRows = false, bar = 4 }, bad = { matchRows = "no", bar = 2 } } }
+d = rawget(GAB._test.ensureDefaults(), "dock")
+eq(d.later.matchRows, false, "load: a saved matchRows kept")
+eq(d.bad.matchRows, nil, "  a non-boolean matchRows dropped")
 eq(d.junk, nil, "  a non-table dropped")
 eq(d.empty, nil, "  an empty table dropped")
 
