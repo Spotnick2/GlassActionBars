@@ -6,6 +6,33 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
+## Session 6: the dock's target and the bag bar error (#53, #55), 2026-10-19, build 70450
+
+`/fp steps gab dock` (run #263), `main` at 8ec6873 plus the probe. UIParent scale 0.64.
+- **Apotheca docked to Action Bar 8** (`MultiBar7`, 4 x 3), right, centred, gap 0, size matched,
+  rows not. It sits exactly on the bar: no offset.
+  - Every shown container is its button, to within 0.1 (UIParent units): `dL 0.0`, `dT 0.0`.
+    The containers' union, the dock's target, is the buttons' union: L 1258.5 R 1425.9
+    T 132.7 B 7.5.
+  - Apotheca's frame is its buttons' union, L 1425.9 R 1508.7 T 132.6 B 7.6. Its rows (tops
+    132.6 / 90.3 / 48.1) are the bar's (132.7 / 90.4 / 48.0); its left edge is the bar's right.
+  - The owner: lines up (screenshot checked).
+  - The ~7 px seen earlier was on Action Bar 1, before #47 / #49 and Apotheca #71. Not seen on
+    bar 8 now; bar 1 itself wasn't measured in this run.
+- **The bag bar error (#55):** `attempt to call a nil value` at `BagsBar.lua:125`
+  (`self:UpdateDividers()` in `BagsBarMixin:Layout`), on each cursor change, 50x in the previous
+  session (BugGrabber session 18, last at 19:34). In this run:
+  - `UpdateDividers`, `Layout`, `IsHorizontal` and `ShouldShowExpandToggle` are each the bar's own
+    field, the mixin's function (the same function), and secure (`issecurevariable` true, no
+    taint). GAB post-hooks `Layout` and `UpdateDividers` only.
+  - `BagsBar:Layout()` under `pcall` ran.
+  - Whether a pickup errored in this session isn't known: BugSack was cleared before the run.
+  - The same shape as session 1's paging error (`ActionBarController.lua:151`,
+    `StanceBar:Update()` nil, a method hooked with `hooksecurefunc`, not reproduced since).
+    Twice now, a method Blizzard calls on its own frame read nil for a session, the method hooked
+    with `hooksecurefunc` by this addon or its probe. Unexplained; if it comes back, run
+    `/fp gab bagsbar` in that session, before any `/reload`.
+
 ## Session 5: button feedback (#34), 2026-10-19, build 70450
 
 `/fp steps gab look` on the owner's character, the Soft preset.

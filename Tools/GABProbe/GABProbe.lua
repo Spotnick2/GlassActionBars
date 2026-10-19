@@ -12,8 +12,8 @@
 --   - whether the Utility bar adds and drops the camp features with it;
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
--- Also barmove (#30), look (#34), pearl (#44) and icons (#46): /fp steps gab <name>.
--- Commands: /fp gab aura, /fp gab camping, /fp gab clear.
+-- Also barmove (#30), look (#34), pearl (#44), icons (#46) and dock (#53): /fp steps gab <name>.
+-- Commands: /fp gab aura, camping, bars, dock, clear.
 
 local ADDON, NS = ...
 local MAX_LOG = 3000
@@ -541,6 +541,166 @@ for _, step in ipairs({
     { text = "Press Reload now to save the results.", reload = true },
 }) do iconSteps[#iconSteps + 1] = step end
 Probe:Steps("icons", iconSteps)
+
+-- ------------------------------------------------------------------
+-- dock (#53): a docked bar sits ~7 px off the target bar's rows. Dock.lua
+-- places by the union of the bar's shownButtonContainers; this logs, in
+-- UIParent units, the bar, each shown container beside its button, that
+-- union, and each docked client's frame beside its shown buttons, so the
+-- offset can be pinned on one of them.
+-- ------------------------------------------------------------------
+
+local function plain(v) if not secret(v) and type(v) == "number" then return v end end
+
+-- A frame's rect in UIParent units, { l, r, t, b }, or nil (unreadable).
+local function rectOf(f)
+    if not f then return nil end
+    local ok, s, l, r, t, b = pcall(function() return f:GetEffectiveScale(), f:GetLeft(), f:GetRight(), f:GetTop(), f:GetBottom() end)
+    local ui = plain(UIParent:GetEffectiveScale())
+    s, l, r, t, b = plain(s), plain(l), plain(r), plain(t), plain(b)
+    if not (ok and ui and s and l and r and t and b) then return nil end
+    local k = s / ui
+    return { l * k, r * k, t * k, b * k }
+end
+
+local function fmt(r)
+    if not r then return "unreadable" end
+    return ("L %.1f R %.1f T %.1f B %.1f (%.1f x %.1f)"):format(r[1], r[2], r[3], r[4], r[2] - r[1], r[3] - r[4])
+end
+
+local function grow(u, r)
+    if not r then return u end
+    if not u then return { r[1], r[2], r[3], r[4] } end
+    return { math.min(u[1], r[1]), math.max(u[2], r[2]), math.max(u[3], r[3]), math.min(u[4], r[4]) }
+end
+
+-- Distinct row tops, rounded to 0.1, high to low: "T1 / T2 ...".
+local function rowTops(rects)
+    local seen, tops = {}, {}
+    for _, r in ipairs(rects) do
+        local t = math.floor(r[3] * 10 + 0.5) / 10
+        if not seen[t] then seen[t] = true; tops[#tops + 1] = t end
+    end
+    table.sort(tops, function(a, b) return a > b end)
+    for i, t in ipairs(tops) do tops[i] = ("%.1f"):format(t) end
+    return table.concat(tops, " / ")
+end
+
+-- One docked client against its bar. Returns a one-line summary.
+local function readClient(id)
+    local D = gab().Dock
+    local n = D.Setting(id, "bar")
+    if not n then say(id .. ": not docked") return id .. " not docked" end
+    local names = D.BARS[n]
+    local bar = rawget(_G, names[1])
+    say(("%s: docked to bar %d (%s), side %s, align %s, gap %s, match %s, rows %s, hosted %s"):format(id, n, names[1],
+        Show(D.Setting(id, "side")), Show(D.Setting(id, "align")), Show(D.Setting(id, "gap")),
+        Show(D.Setting(id, "match")), Show(D.Setting(id, "matchRows")), Show(D.IsHosted(id))))
+    say("  bar frame " .. fmt(rectOf(bar)))
+    local buttons, btnRects = nil, {}
+    local list = bar and bar.shownButtonContainers
+    for i, c in ipairs(type(list) == "table" and list or {}) do
+        local cr = rectOf(c)
+        local cname = Show(c.GetName and c:GetName())
+        -- The container's own button (ActionBar.lua:30: its child, centred, with .container).
+        local btn
+        for j = 1, 12 do
+            local b = rawget(_G, names[2] .. j)
+            if b and (b.container == c or b:GetParent() == c) then btn = b break end
+        end
+        local br = rectOf(btn)
+        if br then buttons = grow(buttons, br); btnRects[#btnRects + 1] = br end
+        local d = (cr and br) and ("  dL %.1f dT %.1f"):format(br[1] - cr[1], br[3] - cr[3]) or ""
+        say(("  container %d %s %s; button %s %s%s"):format(i, cname, fmt(cr), Show(btn and btn:GetName()), fmt(br), d))
+    end
+    local union = D.TargetRect(n)
+    local ur = union and { union.left, union.right, union.top, union.bottom }
+    say("  containers' union (the dock's target) " .. fmt(ur))
+    say("  buttons' union " .. fmt(buttons) .. "; button row tops " .. rowTops(btnRects))
+    local frame   -- Dock.Frames() is in Dock.Clients() order
+    for i, c in ipairs(D.Clients()) do if c.id == id then frame = D.Frames()[i] end end
+    local g = frame and D.Geometry(n, frame)
+    if g then say(("  geometry (client units): size %.2f padding %.2f rows %s orientation %s"):format(g.size, g.padding, Show(g.rows), Show(g.orientation))) end
+    local fr = rectOf(frame)
+    say("  client frame " .. Show(frame and frame:GetName()) .. " " .. fmt(fr))
+    -- Every shown child logged; the buttons' union is what lines up with the bar.
+    local kids, kidRects = nil, {}
+    for _, k in ipairs(frame and { frame:GetChildren() } or {}) do
+        if k:IsShown() == true then
+            local kr, kind = rectOf(k), k:GetObjectType()
+            say(("  client child %s %s %s"):format(Show(k:GetName()), kind, fmt(kr)))
+            if kr and (kind == "Button" or kind == "CheckButton") then kids = grow(kids, kr); kidRects[#kidRects + 1] = kr end
+        end
+    end
+    say("  client buttons' union " .. fmt(kids) .. "; row tops " .. rowTops(kidRects))
+    local summary = id .. ": target " .. fmt(ur) .. "; buttons " .. fmt(buttons) .. "; client " .. fmt(fr)
+        .. "; client buttons " .. fmt(kids)
+    if buttons and kids then
+        summary = summary .. ("; client buttons top - bar buttons top %.1f, client left - bar buttons right %.1f"):format(kids[3] - buttons[3], kids[1] - buttons[2])
+    end
+    return summary
+end
+
+local function readDock()
+    local D = gab() and gab().Dock
+    if not D then say("Glass Action Bars isn't loaded") return "no GAB" end
+    say(("UIParent scale %s"):format(Show(UIParent:GetEffectiveScale())))
+    local out = {}
+    for _, c in ipairs(D.Clients()) do out[#out + 1] = readClient(c.id) end
+    if #out == 0 then say("no dock clients registered") end
+    return table.concat(out, " || ")
+end
+
+local function anyDocked()
+    local D = gab() and gab().Dock
+    for _, c in ipairs(D and D.Clients() or {}) do
+        if D.Setting(c.id, "bar") and D.IsHosted(c.id) then return true end
+    end
+    return false, "nothing docked yet"
+end
+
+Probe:Command("dock", function() readDock() end, "each docked bar against its target: containers, buttons, frames")
+
+-- bagsbar (#55): BagsBar:Layout (re-run on every cursor change) called a nil
+-- UpdateDividers. What the bar's methods are now, raw and inherited, who
+-- tainted them, and Layout run once under pcall (out of combat: it moves the
+-- bag buttons).
+local function readBagsBar()
+    local bar, mixin = rawget(_G, "BagsBar"), rawget(_G, "BagsBarMixin")
+    if not bar then say("no BagsBar") return "no BagsBar" end
+    local out = {}
+    for _, m in ipairs({ "UpdateDividers", "Layout", "IsHorizontal", "ShouldShowExpandToggle" }) do
+        local secure, taint = issecurevariable(bar, m)
+        local line = ("%s: raw %s, via frame %s, mixin %s, secure %s %s"):format(m, type(rawget(bar, m)), type(bar[m]),
+            type(mixin and mixin[m]), Show(secure), Show(taint))
+        say("BagsBar." .. line)
+        out[#out + 1] = line
+    end
+    say("BagsBar.useDividers " .. Show(bar.useDividers) .. ", the same mixin function: "
+        .. Show(mixin ~= nil and rawget(bar, "IsHorizontal") == mixin.IsHorizontal))
+    if InCombatLockdown() then say("in combat: Layout not run") return table.concat(out, "; ") end
+    local ok, err = pcall(bar.Layout, bar)
+    say("BagsBar:Layout() " .. (ok and "ran" or ("ERROR " .. tostring(err))))
+    out[#out + 1] = ok and "Layout ran" or ("Layout ERROR " .. tostring(err))
+    return table.concat(out, "; ")
+end
+Probe:Command("bagsbar", function() readBagsBar() end, "the bag bar's methods and a Layout run (#55)")
+
+Probe:Steps("dock", {
+    title = "A docked bar against the action bar's rows (#53)",
+    { text = "Dock Apotheca (or the Utility bar) to Action Bar 1 the way you saw the offset, with Edit Mode "
+        .. "closed. This step completes when something is docked.",
+      wait = anyDocked, timeout = 300 },
+    { text = "Reading the bar, its containers and buttons, and each docked bar.", auto = true, run = readDock,
+      screenshot = "docked bars" },
+    { text = "Does the docked bar line up with the action bar's rows and edge? (Note what's off, and by how much.)",
+      ask = true },
+    { text = "The bag bar error (#55): pick up an item from your bags and put it back, then press Read.",
+      button = "Read", run = readBagsBar },
+    { text = "Press Reload now to save the results.", reload = true },
+})
+
+
 
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
