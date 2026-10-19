@@ -129,7 +129,7 @@ check(close(tint._color[1], 0.53 * 0.6), "class: the class colour, shaded")
 GAB.Settings.SetTheme("clear")
 check(close(tint._color[4], Glass.STYLE.tint[4] * body), "clear: as built (times the body factor)")
 eq(GAB.Settings.SetTheme("neon"), false, "an unknown theme is refused")
-eq(GAB.db.theme, "clear", "  and changes nothing")
+eq(GAB.Theme.Current(), "clear", "  and changes nothing")
 
 -- /gab tune: the look's numbers, live, saved, validated.
 local dark = T.skins[ActionButton1].g.dark

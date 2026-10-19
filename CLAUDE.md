@@ -46,7 +46,7 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 
 ## Layout
 
-TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Theme.lua` ->
+TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Look.lua` -> `Theme.lua` ->
 `Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Fade.lua` -> `Dock.lua` ->
 `Follow.lua` -> `Edges.lua` -> `API.lua` -> `Utility.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
 `Glass.lua` and `Options.lua`.
@@ -55,8 +55,17 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   absent: `IsSecret`, `Plain`, `NoteCombat` / `InCombat`, `Fail(key, err)` (the **one** failure
   recorder, read by `/gab failures`), `Try`, `RegisterEvents` (reports failures), `AddOnVersion`,
   `ClassColor`, `SafeFrame`; `MEASURED_ON_BUILD`.
-- **`Glass.lua`**: `GlassActionBars.Glass = LibStub("LibGlass-1.0"):New({ preset = "clean" })`, and
-  `GlassActionBars.MEDIA` for our own textures. Material changes are LibGlass PRs.
+- **`Glass.lua`**: the LibGlass instance, built once at PLAYER_LOGIN by `GAB.BuildGlass(preset)` (Look.lua
+  picks the preset); `GAB.Glass` is a stand-in that reaches it once built (nothing reads it
+  before login). Pearl (r11, the default on trial), Clean or Classic; an unknown preset builds Clean
+  and says why. `GlassActionBars.MEDIA` for our own textures. Material changes are LibGlass PRs.
+- **`Look.lua`**: the look (#39; Glass UI's SUITE.md, SUITE-LOOK.md). At PLAYER_LOGIN, before any
+  glass: asks `GlassUI.Suite.Theme` (API 1 exactly; no TOC line) once per session. Following: the
+  suite's material, and each look key (`theme` = Glass UI's `tint`, `hover`, `press`,
+  `emptySlots`) is the player's own in `GlassActionBarsDB.look` (never pruned) else the suite's,
+  live from `GlassUI.Suite.LookChanged`; not following: own material (`db.material`) and own look
+  else `Look.DEFAULTS`. `Look.Get(key)` is the one read. `Suite.Report`: built, look, own,
+  tenants (`SkinButton`'s owners). The live refresh is colours and alphas only (combat-safe).
 - **`Theme.lua`**: clear / smoked / class glass (GlassMiniMap's), repainted live on every
   registered surface; only body regions (tint, wash), never the rims.
 - **`Buttons.lua`**: the skin. `Build(button, regions)` (shared by every family, and later by the

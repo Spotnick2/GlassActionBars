@@ -32,9 +32,10 @@ Theme.pending = false
 
 function Theme.IsValid(name) return Theme.PRESETS[name] ~= nil end
 
--- The theme in use.
+-- The theme in use: the player's, else Glass UI's while following, else
+-- clear (Look.lua; Glass UI calls it the tint).
 function Theme.Current()
-    local name = GAB.db and GAB.db.theme
+    local name = GAB.Look and GAB.Look.Get("theme")
     return Theme.PRESETS[name] and name or "clear"
 end
 

@@ -90,10 +90,10 @@ function Buttons.ValidLook(key, v)
     return false
 end
 
+-- The value in effect: the player's, else Glass UI's while following, else
+-- the Glass preset's (Look.lua).
 local function look(key)
-    local v = GAB.db and GAB.db[key]
-    if Buttons.ValidLook(key, v) then return v end
-    return Buttons.PRESETS.glass[key]
+    return GAB.Look.Get(key)
 end
 Buttons.Look = look
 
@@ -272,6 +272,15 @@ local function rimTexture(t)
     t:SetTextureSliceMode((modes and modes.Stretched) or 0)
 end
 
+-- The pressed look's alpha: the live part (a region's alpha only, safe in combat).
+local function pushedAlpha(s)
+    local p = s.regions.pushed
+    if p then p:SetAlpha(look("press") == "off" and 0 or 1) end
+end
+
+-- The pressed look's setup: texture and anchors on a protected button's
+-- region, at Build and after Blizzard's UpdateButtonArt only, never from the
+-- live refresh (Glass UI's look may change in combat: SUITE-LOOK.md).
 local function stylePushed(s)
     local p = s.regions.pushed
     if not p then return end
@@ -280,7 +289,7 @@ local function stylePushed(s)
     p:SetAllPoints(s.button)
     p:SetVertexColor(1, 1, 1, 1)
     p:SetBlendMode("ADD")
-    p:SetAlpha(look("press") == "off" and 0 or 1)
+    pushedAlpha(s)
 end
 
 -- The fades first, each on its own, then the pressed look: one refusal
@@ -362,7 +371,8 @@ function Buttons.SetOccupied(button, occupied)
 end
 
 -- The feedback settings changed: every button's highlight, halo, pressed
--- look and empty glass, at once.
+-- look and empty glass, at once. Colours and alphas only, safe in combat
+-- (Glass UI's LookChanged may come in a fight).
 function Buttons.RefreshFeedback()
     for _, s in pairs(skins) do
         API.Try("skin:feedback", function()
@@ -377,10 +387,9 @@ function Buttons.RefreshFeedback()
                 rippling[s] = nil
                 s.ripple:Hide()
             end
-            stylePushed(s)
+            pushedAlpha(s)
             paintRim(s)
             if not s.keepEmpty then GAB.Theme.Repaint(s.g) end
-            styleText(s)
         end)
     end
 end
