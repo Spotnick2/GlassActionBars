@@ -271,6 +271,10 @@ for _, state in ipairs({ "Normal", "Pushed", "Highlight", "Checked", "Disabled" 
     Methods["Get" .. state .. "Texture"] = function(b) return b[key] end
 end
 function Methods.SetTexture(t, file) t._file = file; return true end
+-- A cooldown widget: what it was last given.
+function Methods.SetCooldown(cd, start, dur) cd._cd = { start, dur } end
+function Methods.SetCooldownFromDurationObject(cd, d) cd._cd = { duration = d } end
+function Methods.Clear(cd) cd._cd = "cleared" end
 function Methods.SetDesaturated(t, on) t._desaturated = on == true end
 function Methods.SetColorTexture(t, r, g, b, a) t._color = { r, g, b, a } end
 function Methods.SetVertexColor(t, r, g, b, a) t._vertex = { r, g, b, a } end
@@ -375,6 +379,39 @@ Enum = { UITextureSliceMode = { Stretched = 0, Tiled = 1 },
     -- Measured by Apotheca on 70291 (its docs/FOREVER-PROBE.md).
     EditModeActionBarSetting = { Orientation = 0, NumRows = 1, NumIcons = 2, IconSize = 3, IconPadding = 4,
         VisibleSetting = 5, HideBarArt = 6, DeprecatedSnapToSide = 7, HideBarScrolling = 8, AlwaysShowButtons = 9 } }
+-- Spells, items, auras and bindings (the Utility bar), scripted by a test:
+-- WoW.known[spellID] = true; WoW.items[itemID] = count; WoW.auras[spellID] =
+-- true | a secret | "throw"; WoW.bindings[action] = key; WoW.durations[spellID]
+-- = a duration object; WoW.itemCooldowns[itemID] = { start, duration }.
+WoW.known, WoW.items, WoW.auras, WoW.bindings, WoW.durations, WoW.itemCooldowns = {}, {}, {}, {}, {}, {}
+C_SpellBook = { IsSpellKnown = function(id) return WoW.known[id] == true end }
+C_Item = {
+    GetItemCount = function(id) return WoW.items[id] or 0 end,
+    GetItemIconByID = function(id) return 100000 + id end,
+    GetItemSpell = function(id)
+        if id == 6948 then return "Hearthstone", 8690 end
+        if (WoW.itemSpells or {})[id] then return "Use", WoW.itemSpells[id] end
+    end,
+    GetItemNameByID = function(id) return (WoW.itemNames or {})[id] end,
+}
+C_Spell = {
+    GetSpellTexture = function(id) return 200000 + id end,
+    GetSpellName = function(id) return (WoW.spellNames or {})[id] end,
+    GetSpellCooldownDuration = function(id) return WoW.durations[id] end,
+}
+C_Container = { GetItemCooldown = function(id)
+    local c = WoW.itemCooldowns[id]
+    if c then return c[1], c[2], 1 end
+    return 0, 0, 1
+end }
+C_UnitAuras = { GetPlayerAuraBySpellID = function(id)
+    local a = WoW.auras[id]
+    if a == "throw" then error("aura read refused") end
+    if a == true then return { spellId = id } end
+    return a
+end }
+function GetBindingKey(action) return WoW.bindings[action] end
+
 -- Errors handed to the client's error handler (a Lua error popup in game).
 WoW.errors = {}
 function geterrorhandler() return function(err) table.insert(WoW.errors, err) end end

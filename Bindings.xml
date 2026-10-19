@@ -1,0 +1,30 @@
+<Bindings>
+	<!-- The Utility bar (#9, Utility.lua): one CLICK binding per action and per
+	     Campfire Kit (Utility.BINDING_KEYS), clicking its secure button
+	     GlassActionBarsUtil_<key>. The labels are BINDING_NAME_* globals set in
+	     Utility.lua. An action not on the bar has no attributes, so its key
+	     does nothing. tests/test_utility.lua checks this list. -->
+	<Binding name="CLICK GlassActionBarsUtil_hearthstone:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_cooking:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_firstaid:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_fishing:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_baittackle:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_alchemy:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_blacksmithing:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_enchanting:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_engineering:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_leatherworking:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_tailoring:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_skinning:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_mining:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_herbalism:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_smelting:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_poisons:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_disenchant:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_findherbs:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_findminerals:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_picklock:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_camp_basic:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_camp_journeyman:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_camp_expert:LeftButton" category="Glass Action Bars"/>
+</Bindings>

@@ -7,6 +7,15 @@
   spell or item to it, open its flyout, use Edit Mode or Quick Keybind mode, or have the spellbook
   open. Choose how faded it is: hidden, faint or half. On the new **Bar fade** options page, or
   `/gab fade`.
+- **The Utility bar**: your Hearthstone, Cooking, First Aid, Fishing, your professions and their
+  actions (Disenchant, Smelting, Find Herbs, Pick Lock...), and your **camping** items: a campfire
+  kit whenever you carry one, the camp features (Camp Chair, Mana Well, Fish Bowl...) when you are
+  near a campfire. Each button shows only what this character can use. It docks right of the main
+  action bar and matches its buttons; every action and campfire kit has a key binding (Esc >
+  Options > Keybindings > Glass Action Bars). Choose and order its buttons on the new **Utility
+  bar** options page; `/gab utility on/off`.
+- **Dock**: smart bars dock beside one of Edit Mode's Action Bars 1-8 and follow it (the new
+  **Dock** options page, `/gab dock`).
 
 ## v0.1.0
 

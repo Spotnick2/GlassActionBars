@@ -45,7 +45,7 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 
 TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Theme.lua` ->
 `Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Fade.lua` -> `Dock.lua` ->
-`API.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
+`API.lua` -> `Utility.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
 `Glass.lua` and `Options.lua`.
 
 - **`Compat.lua`**: `GlassActionBars.API`, the only route to client APIs that moved or may be
@@ -94,6 +94,16 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `Dock.Register`), `RequestLayout`, `SkinButton` (regions checked by role, queued in combat),
   `RegisterButton` (stored; the Utility bar hosts them). Inputs are copied on acceptance; refusals
   return `false, reason`. Any incompatible change bumps the version and the doc.
+- **`Utility.lua`**: the Utility bar (#9), Apotheca's profession bar plus the camping items.
+  `ACTIONS` (Apotheca's, `measured` marked), `CAMPING` (the authoritative list: 3 kits + 34
+  features; a feature needs `CAMPFIRE_AURA`, read through `API.HasPlayerAura`), the `camping`
+  group in the order. Secure buttons `GlassActionBarsUtil_<key>` made at load with their own
+  regions, skinned at login; `Bindings.xml` (shipped by deploy.ps1 and the package allowlist) has a
+  CLICK binding per action and kit. Reconcile coalesced, deferred in combat. The dock client
+  `utility` (default right of bar 1); `Layout(geom|nil)`, own geometry on undock. Cooldowns: the
+  Hearthstone by its use spell's duration object, other items by `GetItemCooldown`. Settings in
+  `GlassActionBarsDB.utility`, created by the first change only (Apotheca's import marker);
+  provider buttons will be `provider:<id>` keys.
 - **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using
