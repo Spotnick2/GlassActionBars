@@ -75,7 +75,11 @@ eq(T.skins[ActionButton1].small, false, "action buttons are not")
 local function rim(b) return T.skins[b].g.rim:GetAlpha() end
 local full = GAB.Buttons.Tune("rim")
 -- An empty slot's rim: the tune's fraction, times the empty-slots setting's factor (#34).
-local emptyF = GAB.Buttons.Tune("empty") * GAB.Buttons.EMPTY[GAB.Buttons.Look("emptySlots")]
+local function emptyFactor()   -- the empty-slots setting's factor; frosted's is the frostRim tune
+    local mode = GAB.Buttons.Look("emptySlots")
+    return mode == "frosted" and GAB.Buttons.Tune("frostRim") or GAB.Buttons.EMPTY[mode]
+end
+local emptyF = GAB.Buttons.Tune("empty") * emptyFactor()
 check(close(rim(ActionButton1), full), "a slot with an action: full rim")
 check(close(rim(ActionButton2), full * emptyF), "an empty slot: faint rim")
 WoW.actions[2] = true
@@ -135,7 +139,7 @@ eq(GAB.Theme.Current(), "clear", "  and changes nothing")
 local dark = T.skins[ActionButton1].g.dark
 eq(GAB.Settings.SetTune("rim", 0.5), true, "tune rim 0.5")
 check(close(rim(ActionButton1), 0.5), "  the rim repainted live")
-check(close(rim(ActionButton2), 0.5 * GAB.Buttons.EMPTY[GAB.Buttons.Look("emptySlots")] * GAB.Buttons.Tune("empty")), "  empty slots too")
+check(close(rim(ActionButton2), 0.5 * emptyFactor() * GAB.Buttons.Tune("empty")), "  empty slots too")
 eq(GlassActionBarsDB.tune.rim, 0.5, "  saved")
 GAB.Settings.SetTune("dark", 0.2)
 check(close(dark:GetAlpha(), 0.2), "tune dark: the inner line")
