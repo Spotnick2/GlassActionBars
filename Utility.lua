@@ -515,6 +515,26 @@ local function clear(b)
     b:Hide()
 end
 
+-- Over the stock action buttons: docked beside a bar, the bar may overlap
+-- another one (a 4-column bar's third row, in the owner's layout), and a
+-- stock button above ours took its clicks and tooltips. A button you can see
+-- is a button you can click. Out of combat only (it parents secure buttons).
+local function raise()
+    local top = 0
+    for _, b in ipairs(GAB.Dock.BARS) do
+        for i = 1, 12 do
+            local button = rawget(_G, b[2] .. i)
+            local level = button and API.Plain(button:GetFrameLevel())
+            if type(level) == "number" and level > top then top = level end
+        end
+    end
+    local want = top + 2
+    if API.Plain(frame:GetFrameLevel()) == want then return end
+    frame:SetFrameLevel(want)
+    for _, b in pairs(buttons) do GAB.Buttons.Restyle(b) end   -- the glass follows the new level
+end
+Utility.Raise = raise
+
 local pending, cleared = false, false
 function Utility.Reconcile()
     if InCombatLockdown() then
@@ -522,6 +542,7 @@ function Utility.Reconcile()
         return
     end
     pending = false
+    API.Try("utility:raise", raise)
     if not Utility.Enabled() then
         if not cleared then
             for _, b in pairs(buttons) do clear(b) end
