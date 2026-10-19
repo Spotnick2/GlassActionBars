@@ -48,13 +48,16 @@ local function ensureDefaults()
         if db[k] == v then db[k] = nil end
     end
     if db.material ~= nil and not GAB.IsMaterial(db.material) then db.material = nil end
-    -- /gab tune: only known keys with a number in 0..1 survive.
+    -- /gab tune: only known keys with a number in 0..1 survive. A key Pearl
+    -- sets its own default for (#44) is kept whatever its value: the material
+    -- is only known at login (Glass UI's, maybe), so no value is "the default".
     if db.tune ~= nil then
         if type(db.tune) ~= "table" then db.tune = nil else
             for k, v in pairs(db.tune) do
                 local known = GAB.Buttons.TUNE[k]
-                if not known or type(v) ~= "number" or not (v >= 0 and v <= 1) or v == known[1] then
-                    db.tune[k] = nil   -- unknown, out of range, or the built-in value
+                if not known or type(v) ~= "number" or not (v >= 0 and v <= 1)
+                        or (GAB.Buttons.PEARL[k] == nil and v == known[1]) then
+                    db.tune[k] = nil   -- unknown, out of range, or the one built-in value
                 end
             end
             if next(db.tune) == nil then db.tune = nil end
@@ -363,7 +366,7 @@ local function helpLines()
         "/gab macros on/off - macro names on the buttons (" .. onoff(db.showMacroNames) .. ")",
         "/gab gryphons on/off - the main bar's end caps (" .. onoff(db.endCaps) .. ")",
         "/gab skin on/off - glass, or Blizzard's own art after a /reload (" .. onoff(db.skin) .. ")",
-        "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body, frostGrey, frostAlpha, frostRim)",
+        "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body, frostGrey, frostAlpha, frostRim, gloss, socketShade)",
         "/gab fade [1-8|stance|pet|all off/mouseover/combat] - fade bars until hovered, or out of combat",
         ("/gab fade alpha 0..1 - how faded a faded bar is (%.2f)"):format(db.fadeAlpha),
         "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match on/off] - dock a smart bar to an action bar",

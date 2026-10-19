@@ -141,6 +141,53 @@ def button_mask():
     return rgba
 
 
+def button_socket_rim():
+    """Pearl empty socket: the lower lip catches light, the upper edge recedes.
+
+    Same fixed corner geometry and 8 px slices as ButtonRim. No inner halo.
+    This is button skin art; the shared LibGlass material remains unchanged.
+    """
+    d = rounded_rect_sdf(SIZE, SIZE, INSET, RADIUS)
+    y = (np.arange(SIZE, dtype=np.float64) + 0.5)[:, None] / SIZE
+    weight = 0.18 + 0.82 * smoothstep(0.10, 0.95, y)
+    rgba = np.ones((SIZE, SIZE, 4))
+    rgba[..., 3] = band(d, -1.15, 0, soft=0.55) * weight
+    return rgba
+
+
+def button_socket_shade():
+    """White alpha texture, painted black at runtime: a narrow upper inset."""
+    d = rounded_rect_sdf(SIZE, SIZE, INSET, RADIUS)
+    y = (np.arange(SIZE, dtype=np.float64) + 0.5)[:, None] / SIZE
+    rgba = np.ones((SIZE, SIZE, 4))
+    rgba[..., 3] = band(d, -2.4, -0.3, soft=0.65) * (1 - smoothstep(0.10, 0.70, y))
+    return rgba
+
+
+def button_gloss():
+    """Pearl's reflection on a filled button (#44): a soft highlight at the top.
+
+    It supports the rim's bevel, which gives most of the glass look: brightest
+    just under the top edge in the middle, tapering to the sides, its lower
+    edge an arc (the sides fade sooner, a curved face), fading smoothly into the
+    icon by about a quarter of the way down, no plateau and no edge. Tried and
+    rejected: a bell fading out from 12% evenly across (a faint grey haze), and
+    an even band down to 30% with a definite edge (a grey cap that lifted dark
+    icons into a slab and washed out bright ones; owner, 2026-10-19). The mask
+    at runtime rounds the corners. A static bitmap (not SetGradient, so
+    SetAlpha works on Forever), BLEND white, its strength the gloss tune.
+    """
+    n = 64
+    y = (np.arange(n, dtype=np.float64) + 0.5)[:, None] / n
+    u = (np.arange(n, dtype=np.float64) + 0.5)[None, :] / n * 2 - 1   # -1 left .. 1 right
+    arc = y + 0.10 * u ** 2                                           # the sides fade sooner
+    down = (1 - smoothstep(0.0, 0.27, arc)) ** 1.5                    # concentrated at the top
+    across = 0.35 + 0.65 * (1 - smoothstep(0.2, 1.0, np.abs(u)))      # tapering to the sides
+    rgba = np.ones((n, n, 4))
+    rgba[..., 3] = down * across
+    return rgba
+
+
 def main():
     rim = button_rim()
     inner = rim[9:SIZE - 9, 9:SIZE - 9, 3]
@@ -151,6 +198,9 @@ def main():
     write_tga("ButtonHalo", halo)
     write_tga("ButtonRipple", button_ripple())
     write_tga("ButtonMask", button_mask())
+    write_tga("ButtonSocketRim", button_socket_rim())
+    write_tga("ButtonSocketShade", button_socket_shade())
+    write_tga("ButtonGloss", button_gloss())
 
 
 if __name__ == "__main__":
