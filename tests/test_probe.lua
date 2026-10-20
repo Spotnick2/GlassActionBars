@@ -191,6 +191,22 @@ eq(MainMenuBarBackpackButton.icon:GetAlpha(), 1, "  the backpack's kept")
 T.fadeBagIcons("all")()
 eq(CharacterBag1Slot.icon:GetAlpha(), 1, "  back")
 C_Texture = nil
+-- microfn: each micro button's atlas setters, raw and inherited, and the game
+-- menu button's SetNormalAtlas run once.
+check(MainMenuMicroButton ~= nil, "(the stubs have the game menu button)")
+SlashCmdList.FOREVERPROBE("gab microfn")
+check(logHas('"CharacterMicroButton": SetNormalAtlas raw .-, via frame function, metatable .-, secure true'),
+    "/fp gab microfn: the character button's setters read")
+check(logHas('"MainMenuMicroButton": .-SetHighlightAtlas raw'), "  the game menu button's, to the last setter")
+check(logHas("MainMenuMicroButton:SetNormalAtlas%(.-%) ran"), "  its SetNormalAtlas run, and it ran")
+local savedSet = rawget(MainMenuMicroButton, "SetNormalAtlas")
+rawset(MainMenuMicroButton, "SetNormalAtlas", function() error("attempt to call a nil value") end)
+WoW.tainted = { SetNormalAtlas = "SomeAddon" }
+SlashCmdList.FOREVERPROBE("gab microfn")
+check(logHas('"MainMenuMicroButton": SetNormalAtlas raw function, .-secure false "SomeAddon"'), "  tainted: said so")
+check(logHas("MainMenuMicroButton:SetNormalAtlas%(.-%) ERROR .-attempt to call a nil value"), "  its error logged")
+rawset(MainMenuMicroButton, "SetNormalAtlas", savedSet)
+WoW.tainted = nil
 SlashCmdList.FOREVERPROBE("steps gab micro")
 rec = ForeverProbeDB.steps.records["GABProbe/micro"]
 check(rec and rec.status == "active", "/fp steps gab micro starts")
