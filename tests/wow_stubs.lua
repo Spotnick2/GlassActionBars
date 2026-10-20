@@ -182,6 +182,7 @@ function Methods.GetTop(w) return w._rect and w._rect[3] end
 function Methods.GetBottom(w) return w._rect and w._rect[4] end
 function Methods.GetEffectiveScale(w) return w._escale or 1 end
 function Methods.SetAlpha(w, a) if not w._gradient then w._alpha = a end end
+function Methods.SetTexCoord(w, ...) w._texcoord = { ... } end
 function Methods.GetAlpha(w) return w._alpha or 1 end
 function Methods.GetParent(w) return w._parent end
 function Methods.SetParent(w, p) w._parent = p end
@@ -802,6 +803,11 @@ BagsBar:Layout()
 
 WoW.bagTextures = {}
 function GetInventoryItemTexture(unit, slot) if unit == "player" then return WoW.bagTextures[slot] end end
+-- The key ring holds keys: WoW.hasKey (false by default; "throw" refuses, a secret is returned as is).
+function HasKey()
+    if WoW.hasKey == "throw" then error("HasKey refused") end
+    return WoW.hasKey or false
+end
 
 local function bagButton(name, id)
     local b = CreateFrame("Button", name, BagsBar)
@@ -841,7 +847,31 @@ MicroMenu._level = 51
 MicroMenu.BorderArt = Methods.CreateTexture(MicroMenu, nil, "BACKGROUND")
 MicroMenu.BackgroundArt = Methods.CreateTexture(MicroMenu, nil, "BACKGROUND")
 CharacterMicroButton = CreateFrame("Button", "CharacterMicroButton", MicroMenu)
+CharacterMicroButton._width, CharacterMicroButton._height = 32, 40
 CharacterMicroButton.Background = Methods.CreateTexture(CharacterMicroButton, nil, "BACKGROUND")
+CharacterMicroButton.PushedBackground = Methods.CreateTexture(CharacterMicroButton, nil, "BACKGROUND")
+CharacterMicroButton.Shadow = Methods.CreateTexture(CharacterMicroButton, nil, "BORDER")
+CharacterMicroButton.PushedShadow = Methods.CreateTexture(CharacterMicroButton, nil, "OVERLAY")
+-- A micro button (MainMenuBarMicroButtons.xml): 32 x 40, its four state
+-- textures set by atlas through Set<State>Atlas (which, here, also clears the
+-- texture's crop, so a crop not applied again shows), ButtonBG behind, and an
+-- alert's FlashContent on some.
+local function microButton(name, flash)
+    local b = CreateFrame("Button", name, MicroMenu)
+    b._width, b._height = 32, 40
+    for _, st in ipairs({ "Normal", "Pushed", "Disabled", "Highlight" }) do
+        local t = Methods.CreateTexture(b, nil, st == "Highlight" and "HIGHLIGHT" or "ARTWORK")
+        t._atlas = "UI-HUD-MicroMenu-" .. name .. "-" .. st
+        rawset(b, "Get" .. st .. "Texture", function() return t end)
+        rawset(b, "Set" .. st .. "Atlas", function(_, atlas) t._atlas = atlas; t._texcoord = nil end)
+    end
+    b.Background = Methods.CreateTexture(b, nil, "BACKGROUND")
+    b.PushedBackground = Methods.CreateTexture(b, nil, "BACKGROUND")
+    if flash then b.FlashContent = Methods.CreateTexture(b, nil, "OVERLAY") end
+    return b
+end
+SpellbookMicroButton = microButton("SpellbookMicroButton", true)
+MainMenuMicroButton = microButton("MainMenuMicroButton")
 OverrideActionBar = CreateFrame("Frame", "OverrideActionBar", UIParent)
 
 --------------------------------------------------------------------------------

@@ -21,9 +21,10 @@ the full rim and an empty one a quieter one; pressing a button lights its rim. T
 frame art and dividers fade away, and so do the gryphons unless you keep them.
 
 **The bag bar and the micro menu match.** The backpack, bag slots, reagent bag and key ring get
-the same glass; an empty bag slot looks like an empty action slot (frosted by default). Its empty
-silhouette stays, and it still takes clicks and dropped bags. The micro menu loses Blizzard's dark
-panel, and its buttons keep their own icons and states.
+the same glass; an empty bag slot, or a key ring with no keys, is a plain frosted tile like an
+empty action slot, and still takes clicks and dropped bags. The micro menu loses Blizzard's
+bronze frames and dark panel: each button sits on its own glass tile, or all of them on one glass
+pill (`/gab micro tiles/pill`, or the options page).
 
 ![The micro menu above the bag bar, the backpack and bags on glass](https://raw.githubusercontent.com/Spotnick2/GlassActionBars/main/docs/images/bags-micro.png)
 

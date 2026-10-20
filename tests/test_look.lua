@@ -68,6 +68,7 @@ b:GetScript("OnMouseDown")(b, "LeftButton")
 eq(s.ripple, nil, "  no ripple on a click")
 Settings.SetLook("press", "ripple")
 b._rect = { 100, 145, 200, 155 }                -- left, right, top, bottom
+s.body._rect, s.body._width = b._rect, 45       -- the glass covers the button (the stubs don't resolve anchors)
 WoW.cursor = { 110, 160 }
 b:GetScript("OnMouseDown")(b, "LeftButton")
 check(s.ripple and s.ripple:IsShown(), "ripple: shown on a click")
@@ -79,6 +80,7 @@ check(close(s.ripple:GetWidth(), 45 * (0.3 + 1.3 * 0.5)) and close(s.ripple:GetA
 WoW.tick(0.2)
 check(not s.ripple:IsShown(), "  gone after 0.3 s")
 b._rect = { WoW.Secret("left"), 145, 200, 155 }
+s.body._rect = b._rect
 b:GetScript("OnMouseDown")(b, "LeftButton")
 eq(s.ripple._points[1][3], "CENTER", "  an unreadable place: from the centre")
 eq(#s.ripple._masks, 1, "  masked to the button's rounded square")

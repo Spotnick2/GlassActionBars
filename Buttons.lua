@@ -229,19 +229,20 @@ local function makeHalo(s)
     t:SetTextureSliceMargins(H.margin, H.margin, H.margin, H.margin)
     local modes = Enum and Enum.UITextureSliceMode
     t:SetTextureSliceMode((modes and modes.Stretched) or 0)
-    t:SetPoint("TOPLEFT", s.button, "TOPLEFT", -H.pad, H.pad)
-    t:SetPoint("BOTTOMRIGHT", s.button, "BOTTOMRIGHT", H.pad, -H.pad)
+    t:SetPoint("TOPLEFT", s.body, "TOPLEFT", -H.pad, H.pad)
+    t:SetPoint("BOTTOMRIGHT", s.body, "BOTTOMRIGHT", H.pad, -H.pad)
     t:SetVertexColor(H.color[1], H.color[2], H.color[3], 1)
     t:SetBlendMode("ADD")
     t:SetAlpha(0)
     s.halo = t
 end
 
--- A click: the ripple from the pointer, inside the button's rounded square.
--- One ripple per button, made on its first click.
+-- A click: the ripple from the pointer, inside the glass's rounded square
+-- (the body: the button, or inside it for an inset skin). One ripple per
+-- button, made on its first click.
 local function ripple(s)
     if look("press") ~= "ripple" then return end
-    local b, R = s.button, Buttons.RIPPLE
+    local b, R = s.body, Buttons.RIPPLE
     if not s.ripple then
         local mask = s.g.top:CreateMaskTexture()
         mask:SetTexture(GAB.MEDIA .. R.mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
@@ -318,9 +319,9 @@ local function makePearlFace(s)
     if GAB.GlassPreset ~= "pearl" then return end
     local mask = s.g.top:CreateMaskTexture()   -- the rounded square, as the ripple's
     mask:SetTexture(GAB.MEDIA .. Buttons.RIPPLE.mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    mask:SetAllPoints(s.button)
+    mask:SetAllPoints(s.body)
     local gloss = s.g.top:CreateTexture(nil, "ARTWORK", nil, 0)   -- under the rim (OVERLAY) and the halo
-    gloss:SetAllPoints(s.button)
+    gloss:SetAllPoints(s.body)
     gloss:SetTexture(GAB.MEDIA .. "ButtonGloss")
     gloss:AddMaskTexture(mask)
     gloss:SetAlpha(0)
@@ -384,12 +385,19 @@ end
 -- count, hotkey, name, normal, pushed, highlight, slotArt, slotBackground
 -- (any may be absent). `opts.maskIcon`: round the icon to the glass's shape
 -- (#46), for icons that aren't Blizzard's (theirs have the template's
--- IconMask). Returns the button's state; a second call returns the
--- same one.
+-- IconMask). `opts.inset`: the glass that many units inside the button on
+-- each side (the micro buttons overlap, #57); its reflection and ripple
+-- follow it. Returns the button's state; a second call returns the same one.
 function Buttons.Build(button, regions, opts)
     if skins[button] then return skins[button] end
     local body = CreateFrame("Frame", nil, button)
-    body:SetAllPoints(button)
+    local inset = opts and tonumber(opts.inset)
+    if inset then
+        body:SetPoint("TOPLEFT", button, "TOPLEFT", inset, -inset)
+        body:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -inset, inset)
+    else
+        body:SetAllPoints(button)
+    end
     body:EnableMouse(false)
     local g = Glass.Apply(body, Buttons.SIZE)
     g.shadow:SetAlpha(0)   -- it would spill onto the next button (LibGlass Pill's rule)

@@ -93,12 +93,17 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `EDIT_MODE_LAYOUTS_UPDATED`.
 - **`Bags.lua`**: the bag bar (#14), full glass through `Buttons.Build`: the backpack, four bag
   slots, reagent bag and key ring, re-styled after each slot's own `UpdateTextures`, empty or not by
-  `GetInventoryItemTexture` (Blizzard's `HasBagEquipped`); `BagsBar.BorderArt` and its pooled
-  dividers (after `Layout` / `UpdateDividers`) faded. Never `SetAlpha` on a bag button itself:
-  `ItemButtonMixin` replaces it.
-- **`MicroMenu.lua`**: `MicroMenu.BorderArt` / `BackgroundArt` faded (#14), again on
-  `EDIT_MODE_LAYOUTS_UPDATED`; no panel of ours (taken out, #50). The micro buttons are left
-  alone: their bronze frame is baked into each icon atlas.
+  `GetInventoryItemTexture` (Blizzard's `HasBagEquipped`), the key ring by `HasKey`; an empty
+  slot's greyed icon faded, given back only where GAB faded it (#57); `BagsBar.BorderArt` and its
+  pooled dividers (after `Layout` / `UpdateDividers`) faded. Never `SetAlpha` on a bag button
+  itself: `ItemButtonMixin` replaces it.
+- **`MicroMenu.lua`**: the micro menu on glass (#14, #57). `MicroMenu.BorderArt` /
+  `BackgroundArt` faded; each button's bronze frame (inside its state atlases) cropped off with
+  `SetTexCoord(CROP...)` (relative to the atlas: docs/FOREVER-PROBE.md session 7), again after
+  each `Set*Atlas`, its `FlashContent` too; ButtonBG and the portrait's shadows faded. Then
+  `microStyle`: `tiles` (each button through `Buttons.Build(b, {}, { inset })`: they overlap by 5)
+  or `pill` (an own frame under UIParent, one level under MicroMenu, shown while it is visible
+  and home in `MicroMenuContainer`); both built once, switched live. Built out of combat.
 - **`Fade.lua`**: the bar fade (#10), per bar off / mouseover / combat, one faded alpha. One
   addon-owned driver (OnUpdate only while a bar fades) polls the reasons a bar is shown (pointer,
   the main bar's page arrows, its flyout, the action and pet drag grids, Edit Mode, Quick Keybind,

@@ -9,8 +9,9 @@
 --   pushed and highlight atlases, by the button's own UpdateTextures
 --   (Camelot\MainMenuBarBagButtons.lua:9-41), which runs on every slot update.
 --   That is the hook.
--- - The empty slot's silhouette is the slot's icon, not its frame: it stays,
---   even when the empty-slots look hides the slot's glass.
+-- - The empty slot's silhouette is the slot's icon, not its frame: faded on
+--   an empty slot (#57), the slot's glass showing the empty-slots look. The
+--   key ring with no keys counts as empty (HasKey).
 -- - ItemButtonMixin replaces the button's own SetAlpha (it fades the icon and
 --   count only), so nothing here calls SetAlpha on a bag button: only on its
 --   regions.
@@ -28,15 +29,43 @@ GAB.Bags = Bags
 Bags.BUTTONS = { "MainMenuBarBackpackButton", "CharacterBag0Slot", "CharacterBag1Slot", "CharacterBag2Slot",
     "CharacterBag3Slot", "CharacterReagentBag0Slot", "KeyRingButton" }
 
--- A bag slot holds a bag (Blizzard's own HasBagEquipped test); the backpack
--- and the key ring always hold theirs. Nil when unreadable: the rim stays.
+-- A bag slot holds a bag (Blizzard's own HasBagEquipped test); the key ring
+-- holds keys (HasKey: its empty look otherwise, #57); the backpack always
+-- holds itself. Nil when unreadable: the last state stays.
 local function occupied(b)
-    if b == MainMenuBarBackpackButton or b == KeyRingButton then return true end
+    if b == MainMenuBarBackpackButton then return true end
+    if b == KeyRingButton then
+        local ok, has = pcall(HasKey)
+        if not ok or API.IsSecret(has) or type(has) ~= "boolean" then return nil end
+        return has
+    end
     local ok, tex = pcall(GetInventoryItemTexture, "player", b:GetID())
     if not ok or API.IsSecret(tex) then return nil end
     return tex ~= nil
 end
 Bags.occupied = occupied
+
+-- An empty slot's greyed icon (the wing, the key ring's empty frame) faded,
+-- leaving the empty-slots look (#57); given back only where we faded it, so
+-- Blizzard's own icon alpha is never overwritten. By GAB's retained state: an
+-- unreadable update changes nothing.
+local faded = setmetatable({}, { __mode = "k" })
+local function syncIcon(b)
+    local s, icon = GAB.Buttons.State(b), b.icon
+    if not (s and icon) then return end
+    if not s.occupied then
+        icon:SetAlpha(0)
+        faded[b] = true
+    elseif faded[b] then
+        icon:SetAlpha(1)
+        faded[b] = nil
+    end
+end
+
+local function update(b)
+    GAB.Buttons.SetOccupied(b, occupied(b))
+    syncIcon(b)
+end
 
 local function regionsOf(b)
     return {
@@ -74,10 +103,10 @@ function Bags.Start()
                 if type(b.UpdateTextures) == "function" then
                     hooksecurefunc(b, "UpdateTextures", function(self)
                         GAB.Buttons.Restyle(self)
-                        GAB.Buttons.SetOccupied(self, occupied(self))
+                        update(self)
                     end)
                 end
-                GAB.Buttons.SetOccupied(b, occupied(b))
+                update(b)
             end)
         end
     end
