@@ -198,6 +198,14 @@ Options.AddSection(function(parent, anchor)
         Options._test.materialRadios = mgroup
     end
     last = material
+    -- The micro menu (#57): each button on glass, or one pill behind them.
+    local micro = label(parent, "The micro menu")
+    micro:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -12)
+    local _, microGroup = Options.radios(parent, micro,
+        { { "tiles", GAB.Micro.LABELS.tiles }, { "pill", GAB.Micro.LABELS.pill } },
+        GAB.Micro.Style, GAB.Settings.SetMicroStyle, { 240, 120 })
+    Options._test.microRadios = microGroup
+    last = micro
     local buttons = label(parent, "On the buttons", "GameFontNormal")
     buttons:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -16)
     local hotkeys = Options.checkbox(parent, buttons, "Key bindings",

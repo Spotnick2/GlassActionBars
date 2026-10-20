@@ -14,6 +14,7 @@ local DEFAULTS = {
     showHotkeys = true,     -- the key binding text on each button
     showMacroNames = true,  -- a macro's name on its button
     endCaps = false,        -- the main bar's gryphons
+    microStyle = "tiles",   -- the micro buttons each on glass, or "pill": one glass pill behind them (#57)
     fadeAlpha = 0,          -- a faded bar's alpha (fade: { [bar frame name] = mode }, absent = no fade)
     follow = true,          -- the stance and pet bars move with Glass Unit Frames' player and pet frames
     -- The look (theme, hover, press, emptySlots) is GlassActionBarsDB.look,
@@ -48,6 +49,7 @@ local function ensureDefaults()
         if db[k] == v then db[k] = nil end
     end
     if db.material ~= nil and not GAB.IsMaterial(db.material) then db.material = nil end
+    if db.microStyle ~= nil and not GAB.Micro.IsStyle(db.microStyle) then db.microStyle = nil end
     -- /gab tune: only known keys with a number in 0..1 survive. A key Pearl
     -- sets its own default for (#44) is kept whatever its value: the material
     -- is only known at login (Glass UI's, maybe), so no value is "the default".
@@ -181,6 +183,14 @@ end
 function Settings.SetEndCaps(on)
     GAB.db.endCaps = on == true
     GAB.Bars.Refresh()
+    return true
+end
+
+-- The micro menu's glass (#57): "tiles" or "pill", live. False for another.
+function Settings.SetMicroStyle(v)
+    if not GAB.Micro.IsStyle(v) then return false end
+    GAB.db.microStyle = v
+    API.Try("micro:style", GAB.Micro.Sync)
     return true
 end
 
@@ -368,6 +378,7 @@ local function helpLines()
         "/gab hotkeys on/off - key bindings on the buttons (" .. onoff(db.showHotkeys) .. ")",
         "/gab macros on/off - macro names on the buttons (" .. onoff(db.showMacroNames) .. ")",
         "/gab gryphons on/off - the main bar's end caps (" .. onoff(db.endCaps) .. ")",
+        "/gab micro tiles/pill - the micro menu's glass: each button on glass, or one pill (" .. GAB.Micro.Style() .. ")",
         "/gab skin on/off - glass, or Blizzard's own art after a /reload (" .. onoff(db.skin) .. ")",
         "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body, frostGrey, frostAlpha, frostRim, gloss, socketShade)",
         "/gab fade [1-8|stance|pet|all off/mouseover/combat] - fade bars until hovered, or out of combat",
@@ -405,6 +416,9 @@ local function slash(msg)
         local ok, why = Settings.SetMaterial(arg)
         if ok then say("material " .. arg .. ", after a /reload")
         else say("/gab material pearl/clean/classic" .. (why and (": " .. why) or "")) end
+    elseif cmd == "micro" then
+        if Settings.SetMicroStyle(arg) then say("micro menu: " .. arg)
+        else say("/gab micro tiles/pill") end
     elseif SWITCHES[cmd] then
         if ONOFF[arg] == nil then return say("/gab " .. cmd .. " on/off") end
         SWITCHES[cmd][1](ONOFF[arg])
