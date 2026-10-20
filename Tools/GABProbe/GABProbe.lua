@@ -13,7 +13,7 @@
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
 -- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53) and micro (#57): /fp steps gab <name>.
--- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, clear.
+-- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, clear.
 
 local ADDON, NS = ...
 local MAX_LOG = 3000
@@ -832,6 +832,43 @@ for _, step in ipairs({
 }) do microSteps[#microSteps + 1] = step end
 Probe:Steps("micro", microSteps)
 Probe:Command("micro", function() readMicro() end, "the micro buttons' atlases and the bag slots' icons (#57)")
+
+-- microfn: MainMenuMicroButton's OnUpdate called a nil SetNormalAtlas every
+-- second. Each micro button's atlas setters: the raw field (GAB's
+-- hooksecurefunc wrapper), the method read through the frame, the widget
+-- metatable's own, who tainted it; and the game menu button's call, run once
+-- under pcall with the atlas it already has.
+local MICRO_SETTERS = { "SetNormalAtlas", "SetPushedAtlas", "SetDisabledAtlas", "SetHighlightAtlas" }
+
+local function readMicroFns()
+    local out = {}
+    local list = microButtons()
+    local char = rawget(_G, "CharacterMicroButton")
+    if char then table.insert(list, 1, char) end
+    for _, b in ipairs(list) do
+        local mt = getmetatable(b)
+        local index = type(mt) == "table" and type(mt.__index) == "table" and mt.__index or nil
+        local parts = {}
+        for _, m in ipairs(MICRO_SETTERS) do
+            local secure, taint = issecurevariable(b, m)
+            parts[#parts + 1] = ("%s raw %s, via frame %s, metatable %s, secure %s %s"):format(m, type(rawget(b, m)),
+                type(b[m]), type(index and index[m]), Show(secure), Show(taint))
+        end
+        local line = Show(b:GetName()) .. ": " .. table.concat(parts, "; ")
+        say(line)
+        out[#out + 1] = line
+    end
+    local menu = rawget(_G, "MainMenuMicroButton")
+    if menu then
+        local tex = menu:GetNormalTexture()
+        local atlas = tex and tex:GetAtlas()
+        local ok, err = pcall(function() menu:SetNormalAtlas(atlas) end)
+        say("MainMenuMicroButton:SetNormalAtlas(" .. Show(atlas) .. ") " .. (ok and "ran" or ("ERROR " .. tostring(err))))
+        out[#out + 1] = ok and "SetNormalAtlas ran" or ("SetNormalAtlas ERROR " .. tostring(err))
+    end
+    return table.concat(out, " | ")
+end
+Probe:Command("microfn", function() readMicroFns() end, "the micro buttons' atlas setters, raw and inherited")
 
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })

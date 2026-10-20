@@ -6,6 +6,24 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
+## Session 8: the taint log makes hooked methods nil (#55), 2026-10-20, build 70450
+
+- **Seen:** `attempt to call a nil value` at `MainMenuBarMicroButtons.lua:2008`, 200+ times in
+  one session. That line is `self:SetNormalAtlas(...)` in the game menu button's OnUpdate, which
+  runs once a second. GAB hooks every micro button's `Set*Atlas` with `hooksecurefunc` (#57). It
+  began during Glass UI's `/fp steps skin timer`, whose first step turns on `taintLog 1`.
+- **`/fp gab microfn`** (run #280), after a `/reload` with the taint log off: on all 12 micro
+  buttons, each of the four setters was there as the raw field (GAB's hook wrapper), through the
+  frame, and in the widget metatable, all secure (no taint). `MainMenuMicroButton:SetNormalAtlas`
+  ran under `pcall`.
+- **The owner's test:** `/console taintLog 1` started the error and `/console taintLog 0` stopped
+  it, without the probe.
+- **So it's the taint log.** While it's on, Blizzard's code finds a method that an addon
+  hooked with `hooksecurefunc` nil. Players with the log off never see this. It also
+  explains session 6's `BagsBar:UpdateDividers` (#55) and session 1's `StanceBar:Update`: both
+  are methods GAB hooks, and both came from probe sessions. In a taint-log session, ignore errors
+  at Blizzard methods GAB hooks, and judge `Logs\taint.log` instead.
+
 ## Session 7: micro buttons and bag icons without Blizzard's art (#57), 2026-10-19, build 70450
 
 `/fp steps gab micro`, runs #269 and #271 (rev 2). In memory only; a `/reload` put it all back.
@@ -52,8 +70,7 @@ decides a detail of the skin. Facts that hold for every addon go to
   - The same shape as session 1's paging error (`ActionBarController.lua:151`,
     `StanceBar:Update()` nil, a method hooked with `hooksecurefunc`, not reproduced since).
     Twice now, a method Blizzard calls on its own frame read nil for a session, the method hooked
-    with `hooksecurefunc` by this addon or its probe. Unexplained; if it comes back, run
-    `/fp gab bagsbar` in that session, before any `/reload`.
+    with `hooksecurefunc` by this addon or its probe. Explained in session 8: the taint log.
 
 ## Session 5: button feedback (#34), 2026-10-19, build 70450
 
