@@ -164,6 +164,37 @@ SlashCmdList.FOREVERPROBE("steps gab dock")
 rec = ForeverProbeDB.steps.records["GABProbe/dock"]
 check(rec and rec.status == "active", "/fp steps gab dock starts")
 SlashCmdList.FOREVERPROBE("steps stop")
+-- micro (#57): the micro buttons' atlases read, cropped inside the atlas with
+-- the Background faded, and put back; the empty bag slots' and key ring's icons faded.
+local mtex = CharacterMicroButton:CreateTexture()
+rawset(mtex, "GetAtlas", function() return "UI-HUD-MicroMenu-CharacterInfo-Up" end)
+rawset(mtex, "SetTexCoord", function(self, ...) self._tc = { ... } end)
+rawset(CharacterMicroButton, "GetNormalTexture", function() return mtex end)
+C_Texture = { GetAtlasInfo = function(a)
+    return { width = 32, height = 40, file = 4567, leftTexCoord = 0.5, rightTexCoord = 0.75, topTexCoord = 0, bottomTexCoord = 0.5 }
+end }
+SlashCmdList.FOREVERPROBE("gab micro")
+check(logHas('"CharacterMicroButton" .-Normal "UI%-HUD%-MicroMenu%-CharacterInfo%-Up" 32x40 file 4567 coords 0.5000 0.7500 0.0000 0.5000'),
+    "/fp gab micro: each state's atlas, size and coords")
+check(logHas("CharacterBag1Slot shown true, icon .-occupied %(GAB%) false"), "  each bag slot's icon and GAB's occupancy")
+T.cropMicro(0.1)()
+local tc = mtex._tc
+check(tc and math.abs(tc[1] - 0.1) < 1e-9 and math.abs(tc[2] - 0.9) < 1e-9 and math.abs(tc[3] - 0.1) < 1e-9
+    and math.abs(tc[4] - 0.9) < 1e-9, "  cropped by 10%, relative to its atlas (run #269)")
+eq(CharacterMicroButton.Background:GetAlpha(), 0, "  its background faded")
+T.cropMicro(0)()
+eq(CharacterMicroButton.Background:GetAlpha(), 1, "  inset 0: the background back")
+T.fadeBagIcons("empty")()
+eq(CharacterBag1Slot.icon:GetAlpha(), 0, "an empty bag slot's icon faded")
+eq(KeyRingButton.icon:GetAlpha(), 0, "  the key ring's too")
+eq(MainMenuBarBackpackButton.icon:GetAlpha(), 1, "  the backpack's kept")
+T.fadeBagIcons("all")()
+eq(CharacterBag1Slot.icon:GetAlpha(), 1, "  back")
+C_Texture = nil
+SlashCmdList.FOREVERPROBE("steps gab micro")
+rec = ForeverProbeDB.steps.records["GABProbe/micro"]
+check(rec and rec.status == "active", "/fp steps gab micro starts")
+SlashCmdList.FOREVERPROBE("steps stop")
 SlashCmdList.FOREVERPROBE("gab clear")
 eq(#GABProbeDB.log, 1, "/fp gab clear empties the log in place (one line left: 'log cleared')")
 

@@ -6,6 +6,28 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
+## Session 7: micro buttons and bag icons without Blizzard's art (#57), 2026-10-19, build 70450
+
+`/fp steps gab micro`, runs #269 and #271 (rev 2). In memory only; a `/reload` put it all back.
+- **Micro buttons** (11 with state textures; the character button has none): every state atlas is
+  `UI-HUD-MicroMenu-<name>-Up/-Down/-Disabled/-Mouseover`, 32 x 41, in one file (8200846). The
+  bronze frame is part of each atlas. Behind each one is `Background` (`UI-HUD-MicroMenu-ButtonBG-Up`),
+  plus `PushedBackground`.
+- **`SetTexCoord` on a texture set by atlas is relative to the atlas's own region** (run #269):
+  `GetAtlasInfo`'s file coords (e.g. 0.3232-0.3857) zoomed into a sliver. In run #271,
+  `SetTexCoord(k, 1 - k, k, 1 - k)` cropped each state texture inside its atlas.
+- **The crop** (run #271, the backgrounds faded; owner: frame gone, symbol whole, at every step):
+  - at **0.08** the bronze frame is gone and every symbol is whole;
+  - from 0.12 the symbols grow, and at 0.20 the `!` and `?` are clipped.
+- **The character button:** regions `Background` / `PushedBackground` (ButtonBG), `Shadow`
+  (`UI-HUD-MicroMenu-Portrait-Shadow`, BORDER), the `Portrait` (`RTPortrait1`, masked by
+  `UI-HUD-MicroMenu-Portrait-Mask`), `PushedShadow`, the flash and the mouseover. With those three
+  faded, the portrait sits alone in its own dark masked shape.
+- **Bag slots:** an empty bag slot's icon is file 4760248 (the wing). The key ring with no keys
+  (`HasKey()` false) shows icon 7948326 with atlas `UI-HUD-ActionBar-IconFrame-Slot-Small`; GAB
+  counts the key ring as always filled. Fading the empty slots' and the key ring's icons
+  (`icon:SetAlpha(0)`) left frosted glass tiles (owner: better, both runs).
+
 ## Session 6: the dock's target and the bag bar error (#53, #55), 2026-10-19, build 70450
 
 `/fp steps gab dock` (run #263), `main` at 8ec6873 plus the probe. UIParent scale 0.64.
