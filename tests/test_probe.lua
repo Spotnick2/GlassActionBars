@@ -179,8 +179,8 @@ check(logHas('"CharacterMicroButton" .-Normal "UI%-HUD%-MicroMenu%-CharacterInfo
 check(logHas("CharacterBag1Slot shown true, icon .-occupied %(GAB%) false"), "  each bag slot's icon and GAB's occupancy")
 T.cropMicro(0.1)()
 local tc = mtex._tc
-check(tc and math.abs(tc[1] - 0.525) < 1e-9 and math.abs(tc[2] - 0.725) < 1e-9 and math.abs(tc[3] - 0.05) < 1e-9
-    and math.abs(tc[4] - 0.45) < 1e-9, "  cropped by 10% inside its atlas")
+check(tc and math.abs(tc[1] - 0.1) < 1e-9 and math.abs(tc[2] - 0.9) < 1e-9 and math.abs(tc[3] - 0.1) < 1e-9
+    and math.abs(tc[4] - 0.9) < 1e-9, "  cropped by 10%, relative to its atlas (run #269)")
 eq(CharacterMicroButton.Background:GetAlpha(), 0, "  its background faded")
 T.cropMicro(0)()
 eq(CharacterMicroButton.Background:GetAlpha(), 1, "  inset 0: the background back")

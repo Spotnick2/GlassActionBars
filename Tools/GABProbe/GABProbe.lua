@@ -748,6 +748,12 @@ local function readMicro()
         say(("%s %sx%s; %s; Background %s"):format(Show(b:GetName()), Show(b:GetWidth()), Show(b:GetHeight()),
             table.concat(parts, "; "), Show(bg and bg.GetAtlas and bg:GetAtlas())))
     end
+    local char = rawget(_G, "CharacterMicroButton")
+    for _, r in ipairs(char and { char:GetRegions() } or {}) do
+        say(("CharacterMicroButton region %s %s atlas %s texture %s alpha %s shown %s"):format(Show(r:GetObjectType()),
+            Show(r.GetDrawLayer and r:GetDrawLayer()), Show(r.GetAtlas and r:GetAtlas()), Show(r.GetTexture and r:GetTexture()),
+            Show(r:GetAlpha()), Show(r:IsShown())))
+    end
     local hasKey = rawget(_G, "HasKey")
     say("HasKey() " .. Show(hasKey and select(2, pcall(hasKey))))
     local B = gab() and gab().Bags
@@ -764,23 +770,29 @@ local function readMicro()
     return n .. " micro buttons"
 end
 
--- Crop every micro button's state textures by `k` of their atlas on each side,
--- the Background faded (k = 0: Blizzard's own, the Background shown).
+-- Crop every micro button's state textures by `k` on each side, the
+-- backgrounds faded (k = 0: Blizzard's own, the backgrounds shown). Run #269
+-- measured that SetTexCoord on a texture set by atlas is relative to the
+-- atlas's own region (0-1 is the whole atlas, not the file): coords taken from
+-- GetAtlasInfo zoomed into a sliver. The character button has no state
+-- textures: its Background, PushedBackground and Shadow are faded instead.
+local function fadeBacks(b, a)
+    for _, key in ipairs({ "Background", "PushedBackground", "Shadow" }) do
+        if type(b[key]) == "table" then b[key]:SetAlpha(a) end
+    end
+end
+
 local function cropMicro(k)
     return function()
         for _, b in ipairs(microButtons()) do
             for _, getter in ipairs(MICRO_STATES) do
                 local tex = b[getter](b)
-                local info = tex and atlasInfo(tex.GetAtlas and tex:GetAtlas())
-                if info and info.leftTexCoord then
-                    local l, r, t, bt = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
-                    local dx, dy = (r - l) * k, (bt - t) * k
-                    tex:SetTexCoord(l + dx, r - dx, t + dy, bt - dy)
-                end
+                if tex then tex:SetTexCoord(k, 1 - k, k, 1 - k) end
             end
-            if type(b.Background) == "table" then b.Background:SetAlpha(k > 0 and 0 or 1) end
-            if type(b.PushedBackground) == "table" then b.PushedBackground:SetAlpha(k > 0 and 0 or 1) end
+            fadeBacks(b, k > 0 and 0 or 1)
         end
+        local char = rawget(_G, "CharacterMicroButton")
+        if char then fadeBacks(char, k > 0 and 0 or 1) end
         return "inset " .. k
     end
 end
@@ -803,7 +815,7 @@ local function fadeBagIcons(mode)
 end
 
 local microSteps = {
-    title = "Micro buttons and empty bag slots without Blizzard's art (#57)",
+    title = "Micro buttons and empty bag slots without Blizzard's art (#57)", rev = 2,
     { text = "Reading the micro buttons' atlases and the bag slots' icons.", auto = true, run = readMicro },
 }
 for _, k in ipairs({ 0.08, 0.12, 0.16, 0.20 }) do
