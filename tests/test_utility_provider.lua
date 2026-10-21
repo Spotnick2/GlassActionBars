@@ -179,6 +179,9 @@ eq(hosted.roulette[5], false, "the bar off: OnHosted(false)")
 local badHosted = { id = "bad", icon = 1, OnClick = function() end, OnHosted = function() error("bad OnHosted") end }
 local late = { id = "late", icon = 2, OnClick = function() end, OnHosted = hostLog("late") }
 check(GAB.RegisterButton(badHosted) and GAB.RegisterButton(late), "two providers register late")
+check(rows["provider:late"] ~= nil and rows["provider:late"].frame:IsShown(), "  the open options page lists it at once")
+check(not rows["provider:late"].check:GetChecked(), "  unticked")
+eq(content:GetHeight(), (#U.ORDER_KEYS + 4) * GAB.Options.UTILITY_ROW + 16, "  the scroll height grows with it")
 WoW.tick()
 eq(seq(hosted.late), "false", "  the bar off: OnHosted(false) once")
 check(GAB.failures["utility:provider:bad"] ~= nil, "  the erroring one recorded")

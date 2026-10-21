@@ -733,9 +733,12 @@ end
 function Utility.IsPending() return pending end
 
 -- A provider registered (API.lua): its button and OnHosted come with the next
--- rebuild once the bar has started (Start's own rebuild covers the rest).
+-- rebuild once the bar has started (Start's own rebuild covers the rest); its
+-- row on the options page at once, even with the page open (a page not built
+-- yet has nothing to refresh).
 function Utility.ProviderRegistered()
     if started then Utility.Refresh() end
+    if GAB.Options then GAB.Options.RefreshPage(GAB.Options.utilityPage) end
 end
 
 -- ------------------------------------------------------------------
