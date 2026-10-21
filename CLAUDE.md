@@ -159,8 +159,13 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   keys: orientation, rows, iconSize, iconPadding). Alt-drag (Apotheca's overlay and combat handling)
   undocks at the drag's start and saves `utility.pos` at the drop; undocked, the bar sits there. Cooldowns: the
   Hearthstone by its use spell's duration object, other items by `GetItemCooldown`. Settings in
-  `GlassActionBarsDB.utility`, created by the first change only (Apotheca's import marker);
-  provider buttons will be `provider:<id>` keys.
+  `GlassActionBarsDB.utility`, created by the first change only (Apotheca's import marker).
+  Provider buttons (`RegisterButton`, #52): `provider:<id>` keys, off by default (`show[key] =
+  true` stored), kept in the order even when not registered this session (unseen: no button, no
+  row, MoveUtility steps past them); an insecure `GlassActionBarsUtilProvider_<id>` made at the
+  first Reconcile that shows it; the click asks `IsEnabled` each time; dimmed from it on refresh
+  and a frame after combat starts/ends; `OnHosted` once with false, then on change, after
+  Reconcile (never in combat).
 - **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using

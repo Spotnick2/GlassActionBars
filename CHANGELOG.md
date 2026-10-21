@@ -31,7 +31,8 @@
   action bar and matches its buttons; every action and campfire kit has a key binding (Esc >
   Options > Keybindings > Glass Action Bars). Hold **Alt and drag** it to put it anywhere instead,
   and choose its direction, rows, button size and spacing. Choose and order its buttons on the new
-  **Utility bar** options page; `/gab utility on/off`.
+  **Utility bar** options page; `/gab utility on/off`. Other addons can add their buttons to it
+  (Portal Roulette's launcher, for one): they're listed there unticked until you turn them on.
 - **Dock**: smart bars dock beside one of Edit Mode's Action Bars 1-8 and follow it (the new
   **Dock** options page, `/gab dock`), matching its button size and spacing, its rows and
   direction, or both (`/gab dock <bar> match on/off`, `/gab dock <bar> rows on/off`). Their buttons,

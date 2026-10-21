@@ -427,7 +427,10 @@ C_UnitAuras = { GetPlayerAuraBySpellID = function(id)
 end,
     -- The player's helpful auras in order: WoW.helpful[i] = { spellId, name, duration }.
     GetAuraDataByIndex = function(unit, i, filter) return (WoW.helpful or {})[i] end }
-function GetBindingKey(action) return WoW.bindings[action] end
+function GetBindingKey(action)
+    if type(action) ~= "string" then error("Usage: GetBindingKey(\"command\")", 2) end   -- a nil command is a caller bug: made loud (#52)
+    return WoW.bindings[action]
+end
 function IsAltKeyDown() return WoW.altDown == true end
 -- The pointer in screen pixels (WoW.cursor = { x, y }; a test may make either secret).
 function GetCursorPosition() local c = WoW.cursor or { 0, 0 }; return c[1], c[2] end

@@ -248,13 +248,14 @@ eq(#order, #U.ORDER_KEYS, "  every key exactly once")
 
 -- Saved settings: cleaned, but a present table stays (the import marker).
 local ensure = GAB._test.ensureDefaults
-GlassActionBarsDB = { utility = { enabled = "yes", show = { cooking = false, bogus = false, ["provider:roulette"] = false,
-    hearthstone = true }, order = { "cooking", "cooking", "bogus", "provider:x" } } }
+GlassActionBarsDB = { utility = { enabled = "yes", show = { cooking = false, bogus = false, ["provider:roulette"] = true,
+    ["provider:other"] = false, hearthstone = true }, order = { "cooking", "cooking", "bogus", "provider:x" } } }
 local u = rawget(ensure(), "utility")
 eq(u.enabled, nil, "load: a non-boolean enabled dropped")
 eq(u.show.cooking, false, "  a hidden action kept")
 eq(u.show.bogus, nil, "  an unknown key dropped")
-eq(u.show["provider:roulette"], false, "  a provider key kept before it registers")
+eq(u.show["provider:roulette"], true, "  a provider's button turned on kept before it registers (#52)")
+eq(u.show["provider:other"], nil, "  a provider's off dropped: off is its default")
 eq(u.show.hearthstone, nil, "  only false is stored")
 eq(table.concat(u.order, ","), "cooking,provider:x", "  the order deduplicated and cleaned")
 GlassActionBarsDB = { utility = {} }
