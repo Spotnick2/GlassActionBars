@@ -21,6 +21,12 @@
 -- every rebuild waits for PLAYER_REGEN_ENABLED. Walking into or away from a
 -- camp in combat changes the bar when the fight ends.
 --
+-- Other addons' buttons (GlassActionBars.RegisterButton, #52): key
+-- provider:<id>, off until the player ticks it; an insecure button made the
+-- first time it shows, its click asking the provider's IsEnabled each time.
+-- The provider hears OnHosted(true/false) when its button joins or leaves the
+-- enabled bar (once with false after it registers, if not shown).
+--
 -- Placement is the dock's (client "utility", Dock.lua): docked right of Action
 -- Bar 1 by default. Layout(geom) lays the buttons out with the bar's geometry,
 -- or the bar's own (LAYOUT, Apotheca's keys) when geom is nil. Alt-drag moves
@@ -34,6 +40,8 @@ local Utility = {}
 GAB.Utility = Utility
 
 Utility.PREFIX = "GlassActionBarsUtil_"
+Utility.PROVIDER_PREFIX = "GlassActionBarsUtilProvider_"
+Utility.DIM = 0.4   -- a provider button's icon while its IsEnabled() is false
 Utility.HEARTHSTONE = 6948
 Utility.CAMPFIRE_AURA = 1283391   -- "Campfire Nearby" (Wowhead; to confirm in game)
 Utility.SIZE, Utility.PADDING = 36, 4
@@ -115,6 +123,33 @@ function Utility.ValidKey(k)
     return type(k) == "string" and (isOrderKey[k] or k:match("^provider:[%w_]+$") ~= nil)
 end
 
+-- A provider key's id, else nil.
+function Utility.ProviderId(k)
+    return type(k) == "string" and k:match("^provider:([%w_]+)$") or nil
+end
+
+-- The registered definition behind a provider key (nil: not registered
+-- this session, e.g. an alt without that addon).
+local function providerDef(k)
+    local id = Utility.ProviderId(k)
+    return id and GAB.ProvidedButton(id) or nil
+end
+
+-- A key with something behind it this session: every built-in key, a
+-- provider's once it registered.
+function Utility.Registered(k)
+    if Utility.ProviderId(k) then return providerDef(k) ~= nil end
+    return isOrderKey[k] == true
+end
+
+-- The entry's name in Options.
+function Utility.Label(k)
+    if k == "camping" then return "Camping items" end
+    local def = providerDef(k)
+    if def then return def.label end
+    return BY_KEY[k] and BY_KEY[k].label or k
+end
+
 -- Key bindings: every action, and each Campfire Kit (Bindings.xml lists them).
 Utility.BINDING_KEYS = {}
 for _, a in ipairs(Utility.ACTIONS) do Utility.BINDING_KEYS[#Utility.BINDING_KEYS + 1] = a.key end
@@ -143,9 +178,13 @@ function Utility.Enabled()
     return true
 end
 
+-- A built-in entry shows unless turned off; a provider's only once turned on.
 function Utility.IsShown(key)
     local s = saved()
-    return not (s and type(s.show) == "table" and s.show[key] == false)
+    local v
+    if s and type(s.show) == "table" then v = s.show[key] end
+    if Utility.ProviderId(key) then return v == true end
+    return v ~= false
 end
 
 -- A valid value for one of LAYOUT's keys.
@@ -167,14 +206,20 @@ function Utility.ValidPos(p)
     return type(p) == "table" and finite(p.x) and finite(p.y)
 end
 
--- The saved order (known keys, once each), then any key it lacks.
+-- The saved order (valid keys, once each: a provider's kept even when it
+-- isn't registered this session), then any built-in key it lacks, then any
+-- registered provider it lacks.
 function Utility.Order()
     local s, out, seen = saved(), {}, {}
     for _, k in ipairs(s and type(s.order) == "table" and s.order or {}) do
-        if isOrderKey[k] and not seen[k] then out[#out + 1] = k; seen[k] = true end
+        if Utility.ValidKey(k) and not seen[k] then out[#out + 1] = k; seen[k] = true end
     end
     for _, k in ipairs(Utility.ORDER_KEYS) do
-        if not seen[k] then out[#out + 1] = k end
+        if not seen[k] then out[#out + 1] = k; seen[k] = true end
+    end
+    for _, def in ipairs(GAB.ProvidedButtons()) do
+        local k = "provider:" .. def.id
+        if not seen[k] then out[#out + 1] = k; seen[k] = true end
     end
     return out
 end
@@ -202,12 +247,14 @@ function Utility.ReadCampfire()
 end
 function Utility.NearCampfire() return campfire end
 
--- The ordered list of { key, kind = "spell"|"item", value } to show.
+-- The ordered list of { key, kind = "spell"|"item"|"provider", value } to show.
 function Utility.Collect()
     local list = {}
     for _, key in ipairs(Utility.Order()) do
-        if Utility.IsShown(key) then
-            if key == "camping" then
+        if Utility.IsShown(key) and Utility.Registered(key) then
+            if Utility.ProviderId(key) then
+                list[#list + 1] = { key = key, kind = "provider", value = Utility.ProviderId(key) }
+            elseif key == "camping" then
                 for _, a in ipairs(Utility.CAMPING) do
                     if API.ItemCount(a.item) > 0 and (a.kit or campfire) then
                         list[#list + 1] = { key = a.key, kind = "item", value = a.item }
@@ -251,18 +298,16 @@ local function tooltip(self)
     GameTooltip:Show()
 end
 
-local function makeButton(key)
-    local b = CreateFrame("Button", Utility.PREFIX .. key, frame, "SecureActionButtonTemplate")
-    b:SetSize(Utility.SIZE, Utility.SIZE)
-    -- Both edges: the client acts on the one ActionButtonUseKeyDown picks,
-    -- once (Apotheca, measured for clicks and CLICK bindings).
-    b:RegisterForClicks("AnyUp", "AnyDown")
+-- A button's own regions (the template has none); `cooldown` for ours only.
+local function addRegions(b, cooldown)
     local r = {}
     r.icon = b:CreateTexture(nil, "BACKGROUND")
     r.icon:SetAllPoints(b)
     r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- the icon's baked border off, as Blizzard's mask does (#46)
-    r.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
-    r.cooldown:SetAllPoints(b)
+    if cooldown then
+        r.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
+        r.cooldown:SetAllPoints(b)
+    end
     b:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
     r.pushed = b:GetPushedTexture()
     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
@@ -275,13 +320,81 @@ local function makeButton(key)
     r.count:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
     r.hotkey = over:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmallGray")
     r.hotkey:SetPoint("TOPRIGHT", b, "TOPRIGHT", -2, -3)
-    b:SetScript("OnEnter", tooltip)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
     b:Hide()
+    return r
+end
+
+local function makeButton(key)
+    local b = CreateFrame("Button", Utility.PREFIX .. key, frame, "SecureActionButtonTemplate")
+    b:SetSize(Utility.SIZE, Utility.SIZE)
+    -- Both edges: the client acts on the one ActionButtonUseKeyDown picks,
+    -- once (Apotheca, measured for clicks and CLICK bindings).
+    b:RegisterForClicks("AnyUp", "AnyDown")
+    local r = addRegions(b, true)
+    b:SetScript("OnEnter", tooltip)
     buttons[key], regions[b], state[b] = b, r, { key = key }
 end
 for _, a in ipairs(Utility.ACTIONS) do makeButton(a.key) end
 for _, a in ipairs(Utility.CAMPING) do makeButton(a.key) end
+
+-- A provider's callback: errors go to the client's error handler and to
+-- /gab failures, never into the bar (the Dock's shape). ok, then its result.
+local function callProvider(def, name, ...)
+    local fn = def[name]
+    local args, n = { ... }, select("#", ...)
+    local err
+    local ok, v = xpcall(function() return fn(unpack(args, 1, n)) end, function(e)
+        err = e
+        geterrorhandler()(e)
+    end)
+    if not ok then API.Fail("utility:provider:" .. def.id, err) end
+    return ok, v
+end
+
+-- Its IsEnabled(): none is enabled; false, or an error, refuses.
+local function providerEnabled(def)
+    if not def.IsEnabled then return true end
+    local ok, v = callProvider(def, "IsEnabled")
+    return ok and v ~= false
+end
+
+local function providerOf(b)
+    local s = state[b]
+    return s and s.kind == "provider" and GAB.ProvidedButton(s.value) or nil
+end
+
+local function providerClick(self, mouseButton)
+    local def = providerOf(self)
+    if def and providerEnabled(def) then callProvider(def, "OnClick", self, mouseButton) end
+end
+
+local function providerTooltip(self)
+    local def = providerOf(self)
+    if not (def and def.tooltip) then return end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    if type(def.tooltip) == "string" then
+        GameTooltip:SetText(def.tooltip)
+    else
+        callProvider(def, "tooltip", GameTooltip)
+    end
+    GameTooltip:Show()
+end
+
+-- An insecure button for a provider's key, made the first time it shows
+-- (Reconcile: out of combat), skinned at once when the bar's own are.
+local skinned = false
+local function makeProviderButton(key)
+    local b = CreateFrame("Button", Utility.PROVIDER_PREFIX .. Utility.ProviderId(key), frame)
+    b:SetSize(Utility.SIZE, Utility.SIZE)
+    b:RegisterForClicks("AnyUp")
+    local r = addRegions(b, false)
+    b:SetScript("OnClick", providerClick)
+    b:SetScript("OnEnter", providerTooltip)
+    buttons[key], regions[b], state[b] = b, r, { key = key, provider = true }
+    if skinned then API.Try("utility:skin", GAB.Buttons.Build, b, r, { maskIcon = true }) end
+    return b
+end
 
 -- ------------------------------------------------------------------
 -- Visuals: cooldowns, key text, counts (no secure change: safe in combat)
@@ -329,7 +442,15 @@ end
 
 function Utility.RefreshVisuals()
     for b, s in pairs(state) do
-        if s.kind then
+        if s.kind == "provider" then
+            local def, r = GAB.ProvidedButton(s.value), regions[b]
+            if def then
+                r.hotkey:SetText(def.binding and Utility.ShortKey(GetBindingKey(def.binding)) or "")
+                local on = providerEnabled(def)
+                r.icon:SetDesaturated(not on)
+                r.icon:SetAlpha(on and 1 or Utility.DIM)
+            end
+        elseif s.kind then
             API.Try("utility:cooldown", Utility.ApplyCooldown, b)
             local r = regions[b]
             r.hotkey:SetText(isBound[s.key] and Utility.ShortKey(GetBindingKey(Utility.BindingAction(s.key))) or "")
@@ -511,11 +632,27 @@ frame:SetScript("OnHide", function()
 end)
 
 local function clear(b)
-    b:SetAttribute("type", nil)
-    b:SetAttribute("spell", nil)
-    b:SetAttribute("item", nil)
+    if not state[b].provider then
+        b:SetAttribute("type", nil)
+        b:SetAttribute("spell", nil)
+        b:SetAttribute("item", nil)
+    end
     state[b].kind, state[b].value = nil, nil
     b:Hide()
+end
+
+-- Each registered provider told whether its button is on the enabled bar:
+-- the first time, and on each change (`on`: the ids shown now).
+local hostedSent = {}
+local function notifyHosted(on)
+    for _, copy in ipairs(GAB.ProvidedButtons()) do
+        local now = on[copy.id] == true
+        if hostedSent[copy.id] ~= now then
+            hostedSent[copy.id] = now
+            local def = GAB.ProvidedButton(copy.id)
+            if def.OnHosted then callProvider(def, "OnHosted", now) end
+        end
+    end
 end
 
 -- Over the stock action buttons: docked beside a bar, the bar may overlap
@@ -539,6 +676,7 @@ end
 Utility.Raise = raise
 
 local pending, cleared = false, false
+local started = false
 function Utility.Reconcile()
     if InCombatLockdown() then
         pending = true
@@ -553,19 +691,24 @@ function Utility.Reconcile()
         end
         shownList = {}
         frame:Hide()
+        notifyHosted({})
         return
     end
     cleared = false
-    local active, list = {}, {}
+    local active, list, on = {}, {}, {}
     for _, e in ipairs(Utility.Collect()) do
-        local b = buttons[e.key]
-        b:SetAttribute("type", e.kind)
-        if e.kind == "item" then
+        local b = buttons[e.key] or makeProviderButton(e.key)
+        if e.kind == "provider" then
+            regions[b].icon:SetTexture(GAB.ProvidedButton(e.value).icon)
+            on[e.value] = true
+        elseif e.kind == "item" then
+            b:SetAttribute("type", e.kind)
             b:SetAttribute("spell", nil)
             b:SetAttribute("item", "item:" .. e.value)
             local ok, icon = pcall(C_Item.GetItemIconByID, e.value)
             regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
         else
+            b:SetAttribute("type", e.kind)
             b:SetAttribute("item", nil)
             b:SetAttribute("spell", e.value)
             local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
@@ -584,9 +727,19 @@ function Utility.Reconcile()
     frame:SetShown(#list > 0)
     Utility.RefreshVisuals()
     GAB.Dock.RequestLayout("utility")
+    notifyHosted(on)
 end
 
 function Utility.IsPending() return pending end
+
+-- A provider registered (API.lua): its button and OnHosted come with the next
+-- rebuild once the bar has started (Start's own rebuild covers the rest); its
+-- row on the options page at once, even with the page open (a page not built
+-- yet has nothing to refresh).
+function Utility.ProviderRegistered()
+    if started then Utility.Refresh() end
+    if GAB.Options then GAB.Options.RefreshPage(GAB.Options.utilityPage) end
+end
 
 -- ------------------------------------------------------------------
 -- Binding names, events, start
@@ -631,7 +784,6 @@ function Utility.Refresh()
     driver:SetScript("OnUpdate", onUpdate)
 end
 
-local skinned = false
 local function skin()
     if skinned or GAB.db.skin == false then return end
     skinned = true
@@ -640,7 +792,6 @@ local function skin()
     end
 end
 
-local started = false
 function Utility.Start()
     if started then return end
     started = true
@@ -656,6 +807,11 @@ function Utility.Start()
         if InCombatLockdown() then posPending = true else restorePos() end
     end
     driver:SetScript("OnEvent", function(_, event, unit)
+        if event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
+            -- A provider's IsEnabled may follow combat: asked again a frame
+            -- later (InCombatLockdown is still false inside REGEN_DISABLED).
+            C_Timer.After(0, function() API.Try("utility:visuals", Utility.RefreshVisuals) end)
+        end
         if event == "PLAYER_REGEN_ENABLED" then
             -- An interrupted drag ends first (updateMover), before a rebuild can resize or hide the frame.
             updateMover()

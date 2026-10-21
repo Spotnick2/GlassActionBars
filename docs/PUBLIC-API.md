@@ -147,7 +147,23 @@ the order the player chooses. Glass Action Bars builds and shows it; it is an or
 | `binding` | string | Your key binding's command name (from your `Bindings.xml`). Its key shows on the button. The binding stays yours. |
 | `tooltip` | string or function | A string, or `function(tooltip)` that fills the GameTooltip. |
 | `IsEnabled()` | function | `false` refuses clicks, and dims the button. |
-| `OnHosted(isHosted)` | function | `true` while the button is actually **shown** on the Utility bar, `false` when it isn't (the bar is off, or the player hid it). Hide your own launcher only while it is `true`. |
+| `OnHosted(isHosted)` | function | `true` while your button is **on the Utility bar**: the player turned it on and the bar is on. `false` when it isn't. Hide your own launcher only while it is `true`. |
+
+- **Off until the player turns it on.** Your button is listed on the Utility bar's options page,
+  unticked, under the key `provider:<id>`. The player's choice and its place in the order are
+  saved; on a character where you don't register, the key is kept and nothing shows.
+- **OnHosted** is called once with `false` after you register (unless the button is already on),
+  then on each change only. Changes made in combat reach you when the fight ends. Hiding the
+  whole interface (Alt-Z) doesn't change it. Until it says `true`, assume you aren't hosted.
+- **Clicks**: every click asks `IsEnabled()` again; `false`, or an error, refuses it. Then
+  `OnClick(button, mouseButton)` runs. The dimming is refreshed when the bar rebuilds, when key
+  bindings change, on cooldown events, and a frame after combat starts and ends: if your
+  `IsEnabled()` changes at other times, the dimming may lag behind, the click never does.
+- **The tooltip** function gets the `GameTooltip`, already owned by your button; Glass Action Bars
+  shows it after your function.
+- **The icon** is cropped by 8% on each side, like an action icon, and rounded to the glass.
+- Register at `PLAYER_LOGIN` or any time later. Errors in your functions go to the error handler
+  and `/gab failures`, never into the bar.
 
 ## `GlassActionBars.EdgeState()` → `{ left, right, width }` or `nil`
 

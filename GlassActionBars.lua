@@ -98,7 +98,9 @@ local function ensureDefaults()
             if u.show ~= nil then
                 if type(u.show) ~= "table" then u.show = nil else
                     for k, v in pairs(u.show) do
-                        if not U.ValidKey(k) or v ~= false then u.show[k] = nil end
+                        -- Only what differs from the default: a built-in entry off, a provider's on.
+                        local want = U.ProviderId(k) and true or false
+                        if not U.ValidKey(k) or v ~= want then u.show[k] = nil end
                     end
                 end
             end
@@ -297,12 +299,16 @@ function Settings.SetUtilityEnabled(on)
     return true
 end
 
--- Show or hide one entry of the bar (an action key, or "camping").
+-- Show or hide one entry of the bar (an action key, "camping", or another
+-- addon's provider:<id>, off by default).
 function Settings.SetUtilityShown(key, on)
     if not GAB.Utility.ValidKey(key) then return false end
     local u = utility()
     u.show = u.show or {}
-    if on == false then u.show[key] = false else u.show[key] = nil end   -- only false is stored
+    -- Only what differs from the default is stored.
+    if GAB.Utility.ProviderId(key) then
+        u.show[key] = on == true or nil
+    elseif on == false then u.show[key] = false else u.show[key] = nil end
     GAB.Utility.Reconcile()
     return true
 end
@@ -324,12 +330,15 @@ function Settings.SetUtilityPosition(x, y)
     return true
 end
 
--- Move an entry one place up (-1) or down (1). False at an end.
+-- Move an entry one place up (-1) or down (1), past the keys of addons not
+-- registered this session (unseen, they keep their slot). False at an end.
 function Settings.MoveUtility(key, delta)
-    local order = GAB.Utility.Order()
+    local U = GAB.Utility
+    local order = U.Order()
     local i
     for n, k in ipairs(order) do if k == key then i = n end end
     local j = i and i + delta
+    while j and order[j] and not U.Registered(order[j]) do j = j + delta end
     if not j or j < 1 or j > #order then return false end
     order[i], order[j] = order[j], order[i]
     utility().order = order

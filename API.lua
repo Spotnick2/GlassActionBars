@@ -177,6 +177,7 @@ function GAB.RegisterButton(def)
     provided[def.id] = { id = def.id, label = def.label or def.id, icon = def.icon, OnClick = def.OnClick,
         binding = def.binding, tooltip = def.tooltip, IsEnabled = def.IsEnabled, OnHosted = def.OnHosted }
     providedOrder[#providedOrder + 1] = def.id
+    if GAB.Utility then API.Try("utility:provider", GAB.Utility.ProviderRegistered) end
     return true
 end
 
@@ -196,6 +197,12 @@ function GAB.ProvidedButtons()
         out[#out + 1] = copy
     end
     return out
+end
+
+-- Internal, for the Utility bar: one registered button's stored definition
+-- (GAB's own copy, read only), or nil.
+function GAB.ProvidedButton(id)
+    return provided[id]
 end
 
 GAB._test = GAB._test or {}

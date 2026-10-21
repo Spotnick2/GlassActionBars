@@ -465,7 +465,8 @@ Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
     local note = label(page, "A button shows only when the character can use it: a profession it knows, an item in "
         .. "its bags. Campfire kits show whenever carried, the other camping items only near a campfire. Key "
         .. "bindings: Esc > Options > Keybindings > Glass Action Bars. Docking: the Dock page. Hold Alt and drag "
-        .. "the bar to put it anywhere: that undocks it, and the spot is shared by every character.",
+        .. "the bar to put it anywhere: that undocks it, and the spot is shared by every character. Buttons from "
+        .. "other addons start unticked, and their key bindings stay in that addon's section.",
         "GameFontHighlightSmall")
     note:SetPoint("TOPLEFT", enabled, "BOTTOMLEFT", 0, -8)
     note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
@@ -485,13 +486,15 @@ Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
     end
     local content, top = Options.scrollArea(page, last)
     local rows, sync = {}, nil
-    for _, key in ipairs(U.ORDER_KEYS) do
+    -- A row per entry, made the first time it is listed (another addon's
+    -- button registers at login, after this page may exist).
+    local function makeRow(key)
         local r = CreateFrame("Frame", nil, content)
         r:SetSize(420, Options.UTILITY_ROW)
         local cb = CreateFrame("CheckButton", nil, r, "UICheckButtonTemplate")
         cb:SetSize(24, 24)
         cb:SetPoint("LEFT", r, "LEFT", 0, 0)
-        local text = label(r, key == "camping" and "Camping items" or U.BY_KEY[key].label)
+        local text = label(r, U.Label(key))
         text:SetPoint("LEFT", cb, "RIGHT", 4, 0)
         cb:SetScript("OnClick", function() GAB.Settings.SetUtilityShown(key, cb:GetChecked() == true); sync() end)
         local moves = {}
@@ -504,16 +507,26 @@ Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
             moves[i] = b
         end
         rows[key] = { frame = r, check = cb, up = moves[1], down = moves[2] }
+        return rows[key]
     end
-    content:SetHeight(#U.ORDER_KEYS * Options.UTILITY_ROW + 16)
+    -- The entries registered this session, in order, with no gap for the others.
     sync = function()
-        for i, key in ipairs(U.Order()) do
-            local row = rows[key]
-            row.frame:ClearAllPoints()
-            row.frame:SetPoint("TOPLEFT", top, "TOPLEFT", 0, -(i - 1) * Options.UTILITY_ROW)
-            row.check:SetChecked(U.IsShown(key))
+        local n = 0
+        for _, key in ipairs(U.Order()) do
+            if U.Registered(key) then
+                local row = rows[key] or makeRow(key)
+                n = n + 1
+                row.frame:ClearAllPoints()
+                row.frame:SetPoint("TOPLEFT", top, "TOPLEFT", 0, -(n - 1) * Options.UTILITY_ROW)
+                row.frame:Show()
+                row.check:SetChecked(U.IsShown(key))
+            elseif rows[key] then
+                rows[key].frame:Hide()
+            end
         end
+        content:SetHeight(n * Options.UTILITY_ROW + 16)
     end
+    sync()
     building[#building + 1] = sync
     Options._test.utilityRows = rows
 end)
