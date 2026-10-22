@@ -5,6 +5,7 @@
 ## Version: @project-version@
 ## X-License: MIT
 ## X-Curse-Project-ID: 1744070
+## X-Wago-ID: aND9586o
 ## SavedVariables: GlassActionBarsDB
 
 Libs\LibGlass-1.0\LibGlass-1.0.xml
