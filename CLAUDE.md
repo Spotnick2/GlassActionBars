@@ -253,10 +253,13 @@ and an in-game checklist.
 - **Plans** get an adversarial review before coding: Codex via the `codex-consult` skill,
   `gpt-6-astra` at high effort, looping until consensus without overengineering.
 - Provider work (Apotheca, 123, PortalRoulette) is an issue and PR in that addon's own repo.
-- CurseForge (project 1744070, https://www.curseforge.com/wow/addons/glass-action-bars) builds
-  releases from the tag webhook through `.pkgmeta`; the `release` job publishes a GitHub Release
-  from the tag's `## vX.Y.Z` section of `CHANGELOG.md`. Check CurseForge's own zip with an alpha
-  tag first (`References\Docs\RELEASING.md`).
+- A `v*` tag publishes three times (`References\Docs\RELEASING.md`). CurseForge (project 1744070,
+  https://www.curseforge.com/wow/addons/glass-action-bars) builds its own file from the tag
+  webhook through `.pkgmeta`. After `check`, the `release` job publishes CI's zip and
+  `release.json` as a GitHub Release, and the `wago` job uploads the same zip to Wago Addons
+  (project `aND9586o`, the TOC's `X-Wago-ID`; the `WAGO_API_TOKEN` secret). The notes are the tag's
+  `## vX.Y.Z` section of `CHANGELOG.md` (`tests/release_files.sh`, RELEASING.md's template, kept
+  unchanged). Check CurseForge's own zip with an alpha tag first.
 
 ## Conventions
 

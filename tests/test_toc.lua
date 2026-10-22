@@ -7,6 +7,7 @@ check(toc:find("## Interface: 16001", 1, true), "interface 16001 (1.60.1; 11601 
 check(toc:find("## Version: @project-version@", 1, true), "packager version token kept")
 check(toc:find("## SavedVariables: GlassActionBarsDB", 1, true), "saved variables declared")
 check(toc:find("## X-Curse-Project-ID: 1744070", 1, true), "the CurseForge project")
+check(toc:find("## X%-Wago%-ID: aND9586o\r?\n"), "the Wago project")
 -- Dependencies go provider -> GAB only: GAB never names a provider.
 check(not toc:find("## OptionalDeps", 1, true) and not toc:find("## Dependencies", 1, true),
     "no dependency on any other addon")
