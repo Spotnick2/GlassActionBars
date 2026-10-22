@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 - 2026-10-21
 
 - **Bar fade**: each action bar, the stance bar and the pet bar can fade until you point at it
   (`mouseover`), or fade only out of combat (`combat`). A faded bar comes back while you drag a
