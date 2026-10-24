@@ -266,3 +266,25 @@ and an in-game checklist.
 - **Right-size for a single maintainer.** The simplest thing that works; no speculative abstraction.
 - **Measured beats reasoned.** If a claim about the client can be checked in game, check it.
 - Match the surrounding code's idiom. Keep pure refactors in their own commit.
+
+## Consulting Codex
+
+The shared `codex-consult` skill (user level) has the invocation and the gotchas. For this repo:
+
+For GlassActionBars, good things to hand Codex:
+- anything that touches a Blizzard action button or bar (hooks, fades, region method calls), where
+  taint can get `SetAttribute` or paging blocked in combat;
+- anything that creates, moves or re-attributes a secure frame (the Utility bar, docking), and
+  what happens when it is asked to in combat;
+- the provider API's contract (`RegisterBar` / `RegisterButton`, `OnHosted` ordering);
+- anything that writes to SavedVariables or key bindings (the Apotheca import, the keybind mover);
+- any plan that grows scope toward a bar replacement (Bartender4, ElvUI), or owns action buttons.
+
+**Always hand it `CLAUDE.md` and `docs/PLAN.md` alongside the diff or plan**, plus
+`C:/Projects/WoW/References/Docs/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md` once it exists.
+Those findings were measured on the live client. Without them, a cold reviewer argues from
+Classic-era or Retail behaviour that doesn't hold here.
+`C:/Projects/WoW/References/Forever/api/forever-api-<version>.<build>.md` (take the highest build) is the full API surface when a question
+turns on whether something exists, and `C:/Projects/WoW/wow-ui-source` (branch `forever`) is the
+client's own FrameXML (`Blizzard_ActionBar`). `C:/Projects/WoW/References/Addons/ActionBars/Bartender4` is
+a behaviour reference: it owns its buttons, which we deliberately don't.
