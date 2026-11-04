@@ -252,6 +252,14 @@ function SetCVar(name, value)
     WoW.fire("CVAR_UPDATE", name, tostring(value))
     return true
 end
+-- C_CVar (the lock, #34): GetCVarBool reads "1" as true; WoW.cvarSecret makes it secret.
+C_CVar = {
+    GetCVarBool = function(name)
+        if WoW.cvarSecret then return WoW.Secret("cvar") end
+        return WoW.cvars[name] == "1"
+    end,
+    SetCVar = function(name, value) return SetCVar(name, value) end,
+}
 
 -- The player: GUID, and the name split across UnitName's two returns, one of
 -- the two shapes the client has used (AltStable #56).

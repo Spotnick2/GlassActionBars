@@ -175,6 +175,13 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   chooses the food again, `CanFeed` (cursor empty, no `SpellIsTargeting` / `SpellCanTargetItem` /
   `SpellCanTargetItemID`, Feed Pet usable) and arms it, type last; PostClick, every Reconcile and
   both `PLAYER_REGEN_*` disarm. No never-feed list (GlassPearls' is its own). GABProbe's `feedpet`.
+  The lock (#34, key `lockbars`, last of the actions, `optIn`: off until ticked, like a provider
+  key, so `show.lockbars = true` is what's saved): an insecure button (`state.insecure`: `clear`
+  never writes its attributes) whose click flips the CVar `lockActionBars` with `C_CVar.SetCVar`
+  (not `Settings.SetValue`: no setting callbacks on our stack; Blizzard's accessor reads the CVar
+  at each drag), out of combat, only while on the bar; dimmed in combat until GABProbe's `lock`
+  procedure measures a combat write. Padlock textures `Media/LockClosed` / `LockOpen`
+  (`Tools/make_lock.py`), repainted on `CVAR_UPDATE` for that CVar.
 - **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using

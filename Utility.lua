@@ -31,6 +31,13 @@
 -- Reconcile and both combat edges. The food: GlassPearls' order (its pet
 -- care pearl, #38), so both feed the same.
 --
+-- The lock (#34, key lockbars): off until the player ticks it; an insecure
+-- button that flips the "Lock Action Bars" CVar (lockActionBars) out of
+-- combat, its padlock open or closed with it. Not through Settings.SetValue:
+-- that runs the setting's Lua callbacks on our stack, while Blizzard's
+-- accessor reads the CVar fresh at each drag. In combat it does nothing
+-- (dimmed) until GABProbe's lock procedure measures a combat write.
+--
 -- Other addons' buttons (GlassActionBars.RegisterButton, #52): key
 -- provider:<id>, off until the player ticks it; an insecure button made the
 -- first time it shows, its click asking the provider's IsEnabled each time.
@@ -88,6 +95,7 @@ Utility.ACTIONS = {
     { key = "findherbs", label = "Find Herbs", spells = { 2383 } },
     { key = "findminerals", label = "Find Minerals", spells = { 2580 } },
     { key = "picklock", label = "Pick Lock", spells = { 1804 } },
+    { key = "lockbars", label = "Lock action bars", lock = true, optIn = true },   -- #34, off by default
 }
 
 -- The camping items: the authoritative list (Wowhead's Forever guide, #9).
@@ -141,6 +149,12 @@ function Utility.ProviderId(k)
     return type(k) == "string" and k:match("^provider:([%w_]+)$") or nil
 end
 
+-- A key off until the player turns it on: a provider's, or an opt-in action (the lock).
+function Utility.OptIn(k)
+    if Utility.ProviderId(k) then return true end
+    return BY_KEY[k] ~= nil and BY_KEY[k].optIn == true
+end
+
 -- The registered definition behind a provider key (nil: not registered
 -- this session, e.g. an alt without that addon).
 local function providerDef(k)
@@ -191,12 +205,13 @@ function Utility.Enabled()
     return true
 end
 
--- A built-in entry shows unless turned off; a provider's only once turned on.
+-- A built-in entry shows unless turned off; a provider's or an opt-in one
+-- only once turned on.
 function Utility.IsShown(key)
     local s = saved()
     local v
     if s and type(s.show) == "table" then v = s.show[key] end
-    if Utility.ProviderId(key) then return v == true end
+    if Utility.OptIn(key) then return v == true end
     return v ~= false
 end
 
@@ -352,7 +367,9 @@ function Utility.Collect()
                 end
             else
                 local a = BY_KEY[key]
-                if a.feed then
+                if a.lock then
+                    list[#list + 1] = { key = key, kind = "lock" }
+                elseif a.feed then
                     local food = Utility.KnownSpell(a) and Utility.PetReady() and Utility.FoodChoice()
                     if food then list[#list + 1] = { key = key, kind = "feed", value = Utility.FEED_PET, food = food } end
                 elseif a.item then
@@ -383,10 +400,54 @@ Utility.frame = frame
 local buttons, regions, state = {}, {}, {}   -- key -> button; button -> regions; button -> { kind, value, key }
 Utility.buttons = buttons
 
+-- ------------------------------------------------------------------
+-- The lock (#34): the "Lock Action Bars" CVar
+-- ------------------------------------------------------------------
+
+Utility.LOCK_CVAR = "lockActionBars"
+
+-- Whether the action bars are locked: true, false, or nil when unreadable.
+function Utility.BarsLocked()
+    local ok, v = pcall(C_CVar.GetCVarBool, Utility.LOCK_CVAR)
+    if not ok or API.IsSecret(v) or type(v) ~= "boolean" then return nil end
+    return v
+end
+
+-- Blizzard's own name for the setting, else ours.
+function Utility.LockLabel()
+    local t = rawget(_G, "LOCK_ACTIONBAR_TEXT")
+    if type(t) == "string" and not API.IsSecret(t) and t ~= "" then return t end
+    return "Lock Action Bars"
+end
+
+-- On the bar, out of combat, a left click: the other state. Its binding
+-- does nothing while the lock isn't on the bar (state kind cleared).
+local function lockClick(self, mouseButton)
+    if mouseButton ~= "LeftButton" or InCombatLockdown() then return end
+    local s = state[self]
+    if not (s and s.kind == "lock") then return end
+    local locked = Utility.BarsLocked()
+    if locked == nil then return end
+    pcall(C_CVar.SetCVar, Utility.LOCK_CVAR, locked and "0" or "1")
+    Utility.RefreshVisuals()
+end
+
 local function tooltip(self)
     local s = state[self]
     if not s or not s.kind then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    if s.kind == "lock" then
+        local locked = Utility.BarsLocked()
+        GameTooltip:SetText(Utility.LockLabel())
+        if locked ~= nil then GameTooltip:AddLine(locked and "Locked" or "Unlocked", 1, 1, 1) end
+        if InCombatLockdown() then
+            GameTooltip:AddLine("Not in combat", 1, 0.3, 0.3)
+        elseif locked ~= nil then
+            GameTooltip:AddLine(locked and "Click to unlock" or "Click to lock", 0.6, 0.8, 1)
+        end
+        GameTooltip:Show()
+        return
+    end
     if s.kind == "item" then GameTooltip:SetItemByID(s.value) else GameTooltip:SetSpellByID(s.value) end
     if s.kind == "feed" and s.food then
         local ok, name = pcall(C_Item.GetItemNameByID, s.food.id)
@@ -488,7 +549,20 @@ local function makeButton(key)
     end
     buttons[key], regions[b], state[b] = b, r, { key = key }
 end
-for _, a in ipairs(Utility.ACTIONS) do makeButton(a.key) end
+
+-- The lock's button: insecure (no secure action), no cooldown.
+local function makeLockButton(key)
+    local b = CreateFrame("Button", Utility.PREFIX .. key, frame)
+    b:SetSize(Utility.SIZE, Utility.SIZE)
+    b:RegisterForClicks("AnyUp")
+    local r = addRegions(b, false)
+    b:SetScript("OnClick", lockClick)
+    b:SetScript("OnEnter", tooltip)
+    buttons[key], regions[b], state[b] = b, r, { key = key, insecure = true }
+end
+for _, a in ipairs(Utility.ACTIONS) do
+    if a.lock then makeLockButton(a.key) else makeButton(a.key) end
+end
 for _, a in ipairs(Utility.CAMPING) do makeButton(a.key) end
 
 -- A provider's callback: errors go to the client's error handler and to
@@ -595,7 +669,15 @@ end
 
 function Utility.RefreshVisuals()
     for b, s in pairs(state) do
-        if s.kind == "provider" then
+        if s.kind == "lock" then
+            local r, locked = regions[b], Utility.BarsLocked()
+            r.icon:SetTexture(GAB.MEDIA .. (locked == false and "LockOpen" or "LockClosed"))
+            local fight = InCombatLockdown()
+            r.icon:SetDesaturated(fight)
+            r.icon:SetAlpha(fight and Utility.DIM or 1)
+            r.count:SetText("")
+            r.hotkey:SetText(Utility.ShortKey(GetBindingKey(Utility.BindingAction(s.key))))
+        elseif s.kind == "provider" then
             local def, r = GAB.ProvidedButton(s.value), regions[b]
             if def then
                 r.hotkey:SetText(def.binding and Utility.ShortKey(GetBindingKey(def.binding)) or "")
@@ -789,7 +871,7 @@ frame:SetScript("OnHide", function()
 end)
 
 local function clear(b)
-    if not state[b].provider then
+    if not (state[b].provider or state[b].insecure) then
         b:SetAttribute("type", nil)
         b:SetAttribute("spell", nil)
         b:SetAttribute("item", nil)
@@ -861,6 +943,8 @@ function Utility.Reconcile()
         if e.kind == "provider" then
             regions[b].icon:SetTexture(GAB.ProvidedButton(e.value).icon)
             on[e.value] = true
+        elseif e.kind == "lock" then
+            -- No attributes: an insecure button. Its padlock: RefreshVisuals.
         elseif e.kind == "feed" then
             -- Disarmed (above): only its click arms it.
             local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
@@ -916,7 +1000,9 @@ function Utility.LocalizeBindingNames()
     local missing = false
     for _, key in ipairs(Utility.BINDING_KEYS) do
         local a, name = BY_KEY[key], nil
-        if a.item then
+        if a.lock then
+            name = Utility.LockLabel()
+        elseif a.item then
             local ok, n = pcall(C_Item.GetItemNameByID, a.item)
             name = ok and API.Plain(n)
         else
@@ -1009,6 +1095,8 @@ function Utility.Start()
             end
         elseif event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN" or event == "UPDATE_BINDINGS" then
             Utility.RefreshVisuals()
+        elseif event == "CVAR_UPDATE" then
+            if not API.IsSecret(arg1) and arg1 == Utility.LOCK_CVAR then Utility.RefreshVisuals() end
         elseif event == "GET_ITEM_INFO_RECEIVED" then
             if namesPending then Utility.LocalizeBindingNames() end
             if Utility.FoodArrived(arg1) then Utility.Refresh() end
@@ -1021,7 +1109,7 @@ function Utility.Start()
         "MODIFIER_STATE_CHANGED", "SPELLS_CHANGED",
         "SKILL_LINES_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE", "BAG_UPDATE_DELAYED", "UNIT_AURA",
         "BAG_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN", "UPDATE_BINDINGS", "GET_ITEM_INFO_RECEIVED",
-        "UNIT_PET", "UNIT_LEVEL", "UNIT_HEALTH" }, "utility")
+        "UNIT_PET", "UNIT_LEVEL", "UNIT_HEALTH", "CVAR_UPDATE" }, "utility")
     Utility.Refresh()
 end
 
