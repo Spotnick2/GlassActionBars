@@ -56,10 +56,15 @@ check(U.frame:IsShown(), "  the bar shown")
 -- The player's order.
 check(Settings.MoveUtility("cooking", -1), "move Cooking up")
 WoW.tick()
+eq(shownKeys(), "hearthstone,cooking", "  past Feed Pet, not shown here")
+check(Settings.MoveUtility("cooking", -1), "move Cooking up again")
+WoW.tick()
 eq(shownKeys(), "cooking,hearthstone", "  Cooking first")
 eq(Settings.MoveUtility("cooking", -1), false, "  can't move past the top")
 Settings.MoveUtility("cooking", 1)
+Settings.MoveUtility("cooking", 1)
 WoW.tick()
+eq(U.Order()[2], "feedpet", "  back to the default order")
 
 -- Camping: a kit whenever carried; a feature only near a campfire.
 WoW.items[279981] = 1                           -- Basic Campfire Kit
@@ -234,7 +239,9 @@ local rows = GAB.Options._test.utilityRows
 local function y(key) return rows[key].frame._points[#rows[key].frame._points][5] end
 check(y("hearthstone") > y("cooking"), "the page: Hearthstone above Cooking")
 rows.cooking.up:GetScript("OnClick")(rows.cooking.up)
-check(y("cooking") > y("hearthstone"), "  Up moves Cooking above it")
+check(y("cooking") > y("feedpet") and y("feedpet") < y("hearthstone"), "  Up moves Cooking above Feed Pet")
+rows.cooking.up:GetScript("OnClick")(rows.cooking.up)
+check(y("cooking") > y("hearthstone"), "  again: above the Hearthstone")
 rows.camping.check:SetChecked(false)
 rows.camping.check:GetScript("OnClick")(rows.camping.check)
 eq(U.IsShown("camping"), false, "  unticking Camping hides the group")

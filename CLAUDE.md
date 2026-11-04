@@ -166,6 +166,15 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   first Reconcile that shows it; the click asks `IsEnabled` each time; dimmed from it on refresh
   and a frame after combat starts/ends; `OnHosted` once with false, then on change, after
   Reconcile (never in combat).
+  Feed Pet (#65, key `feedpet`, after the Hearthstone): shown with Feed Pet known, a live hunter pet
+  (`PetReady`: `UnitExists`, `UnitIsDead`, `HasPetUI`'s second return, all plain) and food
+  (`FoodChoice`: bags 0-4, `CanPetEatItem` plainly true, unlocked, cached; GlassPearls' order:
+  within 10 levels of the pet the cheapest, else the highest level). Blizzard's secure item target
+  (`target-bag` / `target-slot`) applies to any spell awaiting an item, so the button is
+  **disarmed at rest**: `useOnKeyDown` false, the release's PreClick (out of combat, LeftButton)
+  chooses the food again, `CanFeed` (cursor empty, no `SpellIsTargeting` / `SpellCanTargetItem` /
+  `SpellCanTargetItemID`, Feed Pet usable) and arms it, type last; PostClick, every Reconcile and
+  both `PLAYER_REGEN_*` disarm. No never-feed list (GlassPearls' is its own). GABProbe's `feedpet`.
 - **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using

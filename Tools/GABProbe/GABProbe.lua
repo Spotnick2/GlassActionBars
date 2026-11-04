@@ -12,8 +12,9 @@
 --   - whether the Utility bar adds and drops the camp features with it;
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
--- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53) and micro (#57): /fp steps gab <name>.
--- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, clear.
+-- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53), micro (#57) and feedpet (#65):
+-- /fp steps gab <name>.
+-- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, pet, clear.
 
 local ADDON, NS = ...
 local MAX_LOG = 3000
@@ -870,6 +871,123 @@ local function readMicroFns()
 end
 Probe:Command("microfn", function() readMicroFns() end, "the micro buttons' atlas setters, raw and inherited")
 
+-- ------------------------------------------------------------------
+-- feedpet (#65): the Utility bar's Feed Pet on a hunter with a pet out.
+-- Measures CanPetEatItem on every food in the bags, the bar's food choice,
+-- and Blizzard's secure item-target path (type "spell" 6991 plus
+-- target-bag / target-slot): does one click, one bound key and one key with
+-- a modifier each feed the pet the chosen food, leave no spell waiting for a
+-- target, and leave the button disarmed?
+-- ------------------------------------------------------------------
+
+local FEED_ATTRS = { "type", "spell", "target-bag", "target-slot" }
+local feedTarget = nil   -- { id, count } of the food the next feed should take
+
+local function feedButton()
+    local U = utility()
+    return U and U.buttons and U.buttons.feedpet
+end
+
+-- The pet, every bag item's CanPetEatItem, the bar's choice and its button.
+local function readPet()
+    local okE, exists = pcall(UnitExists, "pet")
+    local okD, dead = pcall(UnitIsDead, "pet")
+    local okH, hasUI, isHunter = pcall(HasPetUI)
+    local okP, happy = pcall(C_PetInfo.GetPetHappiness)
+    local okL, level = pcall(UnitLevel, "pet")
+    say(("pet: exists %s, dead %s, HasPetUI %s / hunter %s, happiness %s, level %s"):format(
+        Show(okE and exists), Show(okD and dead), Show(okH and hasUI), Show(okH and isHunter),
+        Show(okP and happy), Show(okL and level)))
+    local edible, seen = {}, {}
+    for bag = 0, 4 do
+        local okN, n = pcall(C_Container.GetContainerNumSlots, bag)
+        for slot = 1, (okN and not secret(n) and n or 0) do
+            local ok, info = pcall(C_Container.GetContainerItemInfo, bag, slot)
+            local id = ok and not secret(info) and type(info) == "table" and info.itemID or nil
+            if secret(id) then
+                say(("bag %d slot %d: item id <secret>"):format(bag, slot))
+            elseif id and not seen[id] then
+                seen[id] = true
+                local okC, can = pcall(C_PetInfo.CanPetEatItem, id)
+                local shown = okC and Show(can) or ("ERROR " .. tostring(can))
+                local plainCan = okC and not secret(can)   -- secret first: comparing one throws
+                if plainCan and can == true then edible[#edible + 1] = id end
+                say(("bag %d slot %d: item %s %s: CanPetEatItem %s"):format(bag, slot, Show(id), Show(info.itemName), shown))
+            end
+        end
+    end
+    say("edible item ids: " .. (#edible > 0 and table.concat(edible, " ") or "none"))
+    local U, b = utility(), feedButton()
+    if not (U and U.FoodChoice) then say("Glass Action Bars has no Feed Pet (not this branch?)") return "no GAB" end
+    local food = U.FoodChoice()
+    say(("bar: PetReady %s, choice %s, button shown %s"):format(Show(U.PetReady()),
+        food and ("item " .. food.id .. " bag " .. food.bag .. " slot " .. food.slot .. " x" .. food.count) or "none",
+        Show(b and b:IsShown())))
+    local okC, count = pcall(C_Item.GetItemCount, food and food.id or 0)
+    feedTarget = food and okC and not secret(count) and type(count) == "number" and { id = food.id, count = count } or nil
+    return U.PetReady(), food and food.id, #edible, b and b:IsShown()
+end
+
+-- The food count dropped since readPet (the last feed took one).
+local function fed()
+    if not feedTarget then return false, "no food chosen: press Read first" end
+    local ok, n = pcall(C_Item.GetItemCount, feedTarget.id)
+    if not ok or secret(n) or type(n) ~= "number" then return false, "count unreadable" end
+    if n < feedTarget.count then return true, feedTarget.id, feedTarget.count, n end
+    return false, "item " .. feedTarget.id .. " still x" .. n
+end
+
+-- After a feed: nothing waiting for a target, the button disarmed.
+local function afterFeed()
+    local okT, targeting = pcall(SpellIsTargeting)
+    local b, armed = feedButton(), {}
+    for _, k in ipairs(FEED_ATTRS) do
+        local v = b and b:GetAttribute(k)
+        if v ~= nil then armed[#armed + 1] = k .. "=" .. Show(v) end
+    end
+    local okP, happy = pcall(C_PetInfo.GetPetHappiness)
+    say(("after the feed: SpellIsTargeting %s, happiness %s, button %s"):format(Show(okT and targeting),
+        Show(okP and happy), #armed > 0 and ("ARMED " .. table.concat(armed, " ")) or "disarmed"))
+    readPet()   -- the next feed's baseline
+    return okT and targeting == false and #armed == 0, Show(okT and targeting), #armed
+end
+
+local function feedStep(how)
+    return { text = how .. " This step completes when the food count drops.",
+        wait = function() return fed() end, timeout = 120 }
+end
+local function afterStep()
+    return { text = "Checking that no spell is left waiting and the button is disarmed.", auto = true,
+        run = afterFeed, check = function() return (afterFeed()), "no targeting cursor, disarmed" end }
+end
+
+Probe:Command("pet", function() readPet() end, "the pet, every food's CanPetEatItem, the Feed Pet choice")
+
+Probe:Steps("feedpet", {
+    title = "Feed Pet on the Utility bar (#65)",
+    { text = "On a hunter with a live pet out, out of combat, with some food it eats in your bags (and, if you "
+        .. "have one, a food you would NOT want fed, like a stat-buff food). Press Read.",
+      button = "Read", run = readPet,
+      check = function()
+          local U, b = utility(), feedButton()
+          return U ~= nil and U.PetReady() and b ~= nil and b:IsShown(), "a live hunter pet and the Feed Pet button shown"
+      end },
+    { text = "Hover Feed Pet on the Utility bar: is the food its tooltip names the one you would feed?",
+      ask = true, screenshot = "Feed Pet tooltip" },
+    feedStep("Click Feed Pet on the Utility bar once, with the mouse."),
+    { text = "Did your PET eat it (its feeding effect), not you?", ask = true },
+    afterStep(),
+    feedStep("Bind a key to Glass Action Bars > Feed Pet (Esc > Options > Key Bindings), close the window, "
+        .. "and press the key once."),
+    afterStep(),
+    feedStep("Bind it with a modifier now (Shift plus a key), and press that once."),
+    afterStep(),
+    { text = "Cast another spell that waits for an item (Disenchant, a poison, an enchant) if you have one, keep "
+        .. "its cursor up, and click Feed Pet. Nothing should be fed or enchanted. Did nothing happen to the food?",
+      ask = true },
+    { text = "Press Reload now (or type /reload) to save the results.", reload = true },
+})
+
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
 boot:SetScript("OnEvent", function(_, event, name)
@@ -888,4 +1006,4 @@ boot:SetScript("OnEvent", function(_, event, name)
 end)
 
 NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCamping, cropMicro = cropMicro, fadeBagIcons = fadeBagIcons,
-    takeBaseline = takeBaseline, cooldownVerdict = cooldownVerdict }
+    takeBaseline = takeBaseline, cooldownVerdict = cooldownVerdict, readPet = readPet, fed = fed, afterFeed = afterFeed }

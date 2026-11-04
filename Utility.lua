@@ -21,6 +21,16 @@
 -- every rebuild waits for PLAYER_REGEN_ENABLED. Walking into or away from a
 -- camp in combat changes the bar when the fight ends.
 --
+-- Feed Pet (#65): a hunter's button, shown with a live hunter pet out and
+-- food it eats in the bags. Blizzard's secure path: type "spell", 6991, and
+-- target-bag / target-slot, which OnActionButtonClick uses after the action
+-- whenever a spell awaits an item (SecureTemplates.lua), whatever the action
+-- was, none included. So the button is DISARMED at rest: the release's
+-- PreClick (out of combat, useOnKeyDown false) chooses the food again,
+-- checks, and arms it, type last; PostClick disarms, and so do every
+-- Reconcile and both combat edges. The food: GlassPearls' order (its pet
+-- care pearl, #38), so both feed the same.
+--
 -- Other addons' buttons (GlassActionBars.RegisterButton, #52): key
 -- provider:<id>, off until the player ticks it; an insecure button made the
 -- first time it shows, its click asking the provider's IsEnabled each time.
@@ -44,6 +54,8 @@ Utility.PROVIDER_PREFIX = "GlassActionBarsUtilProvider_"
 Utility.DIM = 0.4   -- a provider button's icon while its IsEnabled() is false
 Utility.HEARTHSTONE = 6948
 Utility.CAMPFIRE_AURA = 1283391   -- "Campfire Nearby" (Wowhead; to confirm in game)
+Utility.FEED_PET = 6991
+Utility.FOOD_BAND = 10            -- food within this many levels of the pet: the cheapest (GlassPearls')
 Utility.SIZE, Utility.PADDING = 36, 4
 Utility.DOCK = { bar = 1, side = "RIGHT", align = "END", gap = 4, match = true }
 -- The bar's own layout (undocked, or docked without matching): Apotheca's
@@ -56,6 +68,7 @@ local LAYOUT_RANGE = { rows = { 1, 12 }, iconSize = { 16, 64 }, iconPadding = { 
 -- (Apotheca's FOREVER-PROBE.md); the rest are Vanilla's IDs, carried forward.
 Utility.ACTIONS = {
     { key = "hearthstone", label = "Hearthstone", item = 6948, measured = true },
+    { key = "feedpet", label = "Feed Pet", spells = { 6991 }, feed = true },   -- #65, not Apotheca's
     { key = "cooking", label = "Cooking", spells = { 18260, 3413, 3102, 2550 }, measured = true },
     { key = "firstaid", label = "First Aid", spells = { 10846, 7924, 3274, 3273 }, measured = true },
     { key = "fishing", label = "Fishing", spells = { 18248, 7732, 7731, 7620 }, measured = true },
@@ -247,6 +260,83 @@ function Utility.ReadCampfire()
 end
 function Utility.NearCampfire() return campfire end
 
+-- A yes/no read: true or false when plain, nil when it threw, was secret or
+-- wasn't a boolean (GetCursorInfo's "nothing" is its nil: see CanFeed).
+local function flag(fn, ...)
+    local ok, v = pcall(fn, ...)
+    if not ok or API.IsSecret(v) or type(v) ~= "boolean" then return nil end
+    return v
+end
+
+-- A live hunter pet out, plainly (HasPetUI's second return: a hunter's pet,
+-- not a warlock's; it says nothing of death).
+function Utility.PetReady()
+    if flag(UnitExists, "pet") ~= true or flag(UnitIsDead, "pet") ~= false then return false end
+    local ok, _, isHunter = pcall(HasPetUI)
+    return ok and not API.IsSecret(isHunter) and isHunter == true
+end
+
+-- The food in bags 0-4 the pet eats, GlassPearls' order: within FOOD_BAND
+-- levels of the pet the cheapest first, else the highest item level; ties by
+-- bag and slot. { bag, slot, id, count (that item in all the bags) } or nil.
+-- An item not in the cache yet is asked for once; GET_ITEM_INFO_RECEIVED
+-- rebuilds the bar.
+local foodWaiting = {}
+local function plainNumber(v) v = API.Plain(v); return type(v) == "number" and v or nil end
+function Utility.FoodChoice()
+    local list, totals, edible = {}, {}, {}
+    for bag = 0, 4 do
+        local ok, n = pcall(C_Container.GetContainerNumSlots, bag)
+        n = ok and plainNumber(n) or 0
+        for slot = 1, n do
+            local ok2, info = pcall(C_Container.GetContainerItemInfo, bag, slot)
+            if ok2 and not API.IsSecret(info) and type(info) == "table" then
+                local id, count, locked = plainNumber(info.itemID), plainNumber(info.stackCount), API.Plain(info.isLocked)
+                if id and count then
+                    if edible[id] == nil then edible[id] = flag(C_PetInfo.CanPetEatItem, id) == true end
+                    if edible[id] then
+                        totals[id] = (totals[id] or 0) + count
+                        local ok3, name, _, _, level, _, _, _, _, _, _, price = pcall(C_Item.GetItemInfo, id)
+                        level, price = ok3 and plainNumber(level), ok3 and plainNumber(price)
+                        if not (ok3 and API.Plain(name) ~= nil and level and price) then
+                            if not foodWaiting[id] then
+                                foodWaiting[id] = true
+                                pcall(C_Item.RequestLoadItemDataByID, id)
+                            end
+                        elseif locked == false then
+                            list[#list + 1] = { bag = bag, slot = slot, id = id, level = level, price = price }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if #list == 0 then return nil end
+    local okLevel, petLevel = pcall(UnitLevel, "pet")
+    petLevel = okLevel and plainNumber(petLevel) or nil
+    local floor = petLevel and petLevel > 0 and petLevel - Utility.FOOD_BAND or nil
+    for _, c in ipairs(list) do c.within = floor ~= nil and c.level >= floor end
+    table.sort(list, function(a, b)
+        if a.within ~= b.within then return a.within end
+        if a.within then
+            if a.price ~= b.price then return a.price < b.price end
+        elseif a.level ~= b.level then
+            return a.level > b.level
+        end
+        if a.bag ~= b.bag then return a.bag < b.bag end
+        return a.slot < b.slot
+    end)
+    local c = list[1]
+    return { bag = c.bag, slot = c.slot, id = c.id, count = totals[c.id] }
+end
+
+-- A food we asked the cache for arrived: true once per item.
+function Utility.FoodArrived(id)
+    if API.IsSecret(id) or type(id) ~= "number" or not foodWaiting[id] then return false end
+    foodWaiting[id] = nil
+    return true
+end
+
 -- The ordered list of { key, kind = "spell"|"item"|"provider", value } to show.
 function Utility.Collect()
     local list = {}
@@ -262,7 +352,10 @@ function Utility.Collect()
                 end
             else
                 local a = BY_KEY[key]
-                if a.item then
+                if a.feed then
+                    local food = Utility.KnownSpell(a) and Utility.PetReady() and Utility.FoodChoice()
+                    if food then list[#list + 1] = { key = key, kind = "feed", value = Utility.FEED_PET, food = food } end
+                elseif a.item then
                     if API.ItemCount(a.item) > 0 then list[#list + 1] = { key = key, kind = "item", value = a.item } end
                 else
                     local id = Utility.KnownSpell(a)
@@ -295,7 +388,62 @@ local function tooltip(self)
     if not s or not s.kind then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     if s.kind == "item" then GameTooltip:SetItemByID(s.value) else GameTooltip:SetSpellByID(s.value) end
+    if s.kind == "feed" and s.food then
+        local ok, name = pcall(C_Item.GetItemNameByID, s.food.id)
+        name = ok and API.Plain(name)
+        if type(name) ~= "string" or name == "" then name = "item " .. s.food.id end
+        GameTooltip:AddLine(("Feeds: %s (%d)"):format(name, s.food.count), 1, 1, 1)
+    end
     GameTooltip:Show()
+end
+
+-- ------------------------------------------------------------------
+-- Feed Pet's click (#65): armed only for the release that feeds
+-- ------------------------------------------------------------------
+
+local FEED_ATTRS = { "type", "spell", "target-bag", "target-slot" }
+
+-- Out of combat only: in lockdown the attributes can't change (the
+-- PLAYER_REGEN_ENABLED disarm covers that).
+function Utility.DisarmFeed()
+    local b = buttons.feedpet
+    if not b or InCombatLockdown() then return end
+    for _, k in ipairs(FEED_ATTRS) do b:SetAttribute(k, nil) end
+end
+
+-- May the click feed `food` now? true, or false and why. Every read plain:
+-- anything unknown refuses. No spell may be waiting for an item, by the two
+-- tests the secure click itself uses, or it would take our food.
+function Utility.CanFeed(food)
+    if not food then return false, "no food" end
+    if not Utility.PetReady() then return false, "no live hunter pet" end
+    local ok, kind = pcall(GetCursorInfo)
+    if not ok or API.IsSecret(kind) or kind ~= nil then return false, "the cursor holds something" end
+    if flag(SpellIsTargeting) ~= false then return false, "a spell is waiting for a target" end
+    if flag(SpellCanTargetItem) ~= false or flag(SpellCanTargetItemID) ~= false then
+        return false, "a spell is waiting for an item"
+    end
+    if flag(C_Spell.IsSpellUsable, Utility.FEED_PET) ~= true then return false, "Feed Pet can't be cast now" end
+    return true
+end
+
+local function feedPreClick(self, mouseButton, down)
+    if InCombatLockdown() then return end
+    Utility.DisarmFeed()
+    if down or mouseButton ~= "LeftButton" then return end
+    local s = state[self]
+    if not (s and s.kind == "feed") then return end   -- not on the bar: its binding does nothing
+    local food = Utility.FoodChoice()                 -- again now: the stack may have moved
+    if not Utility.CanFeed(food) then return end
+    self:SetAttribute("target-bag", food.bag)
+    self:SetAttribute("target-slot", food.slot)
+    self:SetAttribute("spell", Utility.FEED_PET)
+    self:SetAttribute("type", "spell")                -- last: armed only now
+end
+
+local function feedPostClick(_, _, down)
+    if down then return end
+    Utility.DisarmFeed()
 end
 
 -- A button's own regions (the template has none); `cooldown` for ours only.
@@ -333,6 +481,11 @@ local function makeButton(key)
     b:RegisterForClicks("AnyUp", "AnyDown")
     local r = addRegions(b, true)
     b:SetScript("OnEnter", tooltip)
+    if BY_KEY[key].feed then
+        b:SetAttribute("useOnKeyDown", false)   -- the release acts, for clicks and the binding
+        b:SetScript("PreClick", feedPreClick)
+        b:SetScript("PostClick", feedPostClick)
+    end
     buttons[key], regions[b], state[b] = b, r, { key = key }
 end
 for _, a in ipairs(Utility.ACTIONS) do makeButton(a.key) end
@@ -422,7 +575,7 @@ end
 -- path not yet shown wrong for camping's shared hour.
 function Utility.ApplyCooldown(b)
     local s, cd = state[b], regions[b].cooldown
-    if s.kind == "spell" then return spellCooldown(cd, s.value) end
+    if s.kind == "spell" or s.kind == "feed" then return spellCooldown(cd, s.value) end
     if s.value == Utility.HEARTHSTONE then
         local ok, _, spellID = pcall(C_Item.GetItemSpell, s.value)
         spellID = ok and API.Plain(spellID)
@@ -455,7 +608,11 @@ function Utility.RefreshVisuals()
             local r = regions[b]
             r.hotkey:SetText(isBound[s.key] and Utility.ShortKey(GetBindingKey(Utility.BindingAction(s.key))) or "")
             local camping = BY_KEY[s.key] and BY_KEY[s.key].item and s.key ~= "hearthstone"
-            r.count:SetText(camping and tostring(API.ItemCount(s.value)) or "")
+            if s.kind == "feed" then
+                r.count:SetText(s.food and tostring(s.food.count) or "")   -- the food's, as of the last rebuild
+            else
+                r.count:SetText(camping and tostring(API.ItemCount(s.value)) or "")
+            end
         end
     end
 end
@@ -636,8 +793,10 @@ local function clear(b)
         b:SetAttribute("type", nil)
         b:SetAttribute("spell", nil)
         b:SetAttribute("item", nil)
+        b:SetAttribute("target-bag", nil)
+        b:SetAttribute("target-slot", nil)
     end
-    state[b].kind, state[b].value = nil, nil
+    state[b].kind, state[b].value, state[b].food = nil, nil, nil
     b:Hide()
 end
 
@@ -683,6 +842,7 @@ function Utility.Reconcile()
         return
     end
     pending = false
+    Utility.DisarmFeed()   -- never left armed by a click that didn't finish
     API.Try("utility:raise", raise)
     if not Utility.Enabled() then
         if not cleared then
@@ -701,6 +861,10 @@ function Utility.Reconcile()
         if e.kind == "provider" then
             regions[b].icon:SetTexture(GAB.ProvidedButton(e.value).icon)
             on[e.value] = true
+        elseif e.kind == "feed" then
+            -- Disarmed (above): only its click arms it.
+            local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
+            regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
         elseif e.kind == "item" then
             b:SetAttribute("type", e.kind)
             b:SetAttribute("spell", nil)
@@ -714,7 +878,7 @@ function Utility.Reconcile()
             local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
             regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
         end
-        state[b].kind, state[b].value = e.kind, e.value
+        state[b].kind, state[b].value, state[b].food = e.kind, e.value, e.food
         b:Show()
         active[b] = true
         list[#list + 1] = b
@@ -806,7 +970,8 @@ function Utility.Start()
     if savedPos() then
         if InCombatLockdown() then posPending = true else restorePos() end
     end
-    driver:SetScript("OnEvent", function(_, event, unit)
+    local petDead = flag(UnitIsDead, "pet")
+    driver:SetScript("OnEvent", function(_, event, arg1)
         if event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
             -- A provider's IsEnabled may follow combat: asked again a frame
             -- later (InCombatLockdown is still false inside REGEN_DISABLED).
@@ -820,20 +985,33 @@ function Utility.Start()
                 if not hosted then restorePos() end
             end
             skin()
+            Utility.DisarmFeed()   -- whatever a fight interrupted
             -- A combat read may have been unknown: a change found now rebuilds too.
             if Utility.ReadCampfire() or pending then Utility.Reconcile() end
         elseif event == "PLAYER_REGEN_DISABLED" then
             -- The last moment before lockdown: a drag stops cleanly, where it is.
             if dragging and not InCombatLockdown() then stopDrag() end
+            Utility.DisarmFeed()
             updateMover()
         elseif event == "MODIFIER_STATE_CHANGED" then
             updateMover()
         elseif event == "UNIT_AURA" then
-            if unit == "player" and Utility.ReadCampfire() then Utility.Refresh() end
+            if arg1 == "player" and Utility.ReadCampfire() then Utility.Refresh() end
+        elseif event == "UNIT_PET" then
+            if arg1 == "player" then Utility.Refresh() end
+        elseif event == "UNIT_LEVEL" then
+            if arg1 == "pet" then Utility.Refresh() end   -- the food band
+        elseif event == "UNIT_HEALTH" then
+            -- The pet died or came back: no rebuild (a bag scan) on every health tick.
+            if arg1 == "pet" then
+                local d = flag(UnitIsDead, "pet")
+                if d ~= nil and d ~= petDead then petDead = d; Utility.Refresh() end
+            end
         elseif event == "BAG_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_COOLDOWN" or event == "UPDATE_BINDINGS" then
             Utility.RefreshVisuals()
         elseif event == "GET_ITEM_INFO_RECEIVED" then
             if namesPending then Utility.LocalizeBindingNames() end
+            if Utility.FoodArrived(arg1) then Utility.Refresh() end
         else
             if event == "SPELLS_CHANGED" and namesPending then Utility.LocalizeBindingNames() end
             Utility.Refresh()
@@ -842,7 +1020,8 @@ function Utility.Start()
     API.RegisterEvents(driver, { "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
         "MODIFIER_STATE_CHANGED", "SPELLS_CHANGED",
         "SKILL_LINES_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE", "BAG_UPDATE_DELAYED", "UNIT_AURA",
-        "BAG_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN", "UPDATE_BINDINGS", "GET_ITEM_INFO_RECEIVED" }, "utility")
+        "BAG_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN", "UPDATE_BINDINGS", "GET_ITEM_INFO_RECEIVED",
+        "UNIT_PET", "UNIT_LEVEL", "UNIT_HEALTH" }, "utility")
     Utility.Refresh()
 end
 

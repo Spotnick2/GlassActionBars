@@ -216,4 +216,24 @@ eq(#GABProbeDB.log, 1, "/fp gab clear empties the log in place (one line left: '
 
 eq(#WoW.chat, chatBefore, "nothing went to chat")
 eq(next(GAB.failures), nil, "nothing failed")
+-- feedpet (#65): the pet, every food's CanPetEatItem (secret-safe), the
+-- bar's choice; a feed seen by the count; disarmed afterwards.
+WoW.known[6991] = true
+WoW.pet = { hunter = true, level = 30 }
+WoW.bags[0] = { [1] = { itemID = 101, stackCount = 5 }, [2] = { itemID = 102, stackCount = 1 } }
+WoW.edible = { [101] = true, [102] = WoW.Secret("can") }
+WoW.itemInfo = { [101] = { level = 30, price = 5 } }
+WoW.items[101] = 5
+local ready, foodId, nEdible = T.readPet()
+check(ready == true and foodId == 101 and nEdible == 1, "feedpet: a live hunter pet, food 101, one plainly edible")
+check(logHas("item 102.*CanPetEatItem <secret>") or logHas("item 102.*CanPetEatItem"), "  a secret CanPetEatItem logged, not compared")
+eq((T.fed()), false, "  not fed yet")
+WoW.items[101] = 4
+eq((T.fed()), true, "  the count dropped: fed")
+eq((T.afterFeed()), true, "  nothing targeting, the button disarmed")
+GAB.Utility.buttons.feedpet:SetAttribute("target-bag", 0)
+eq((T.afterFeed()), false, "  a target left on the button: fails")
+GAB.Utility.buttons.feedpet:SetAttribute("target-bag", nil)
+check(GAB.Utility.buttons.feedpet ~= nil, "  the feedpet procedure's button exists")
+
 done("test_probe")
