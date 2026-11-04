@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.0 - 2026-11-04
+
+- **Feed Pet** on the Utility bar, for a hunter with a live pet out: one click (or its key
+  binding) feeds your pet a food from your bags that it eats, chosen as Glass Pearls' pet care
+  does: within 10 levels of the pet the cheapest, else the highest level. Its tooltip names the
+  food and how many you carry. It shows only while your pet is alive and you have food it eats.
+- **A padlock** on the Utility bar that locks and unlocks your action bars (Blizzard's "Lock
+  Action Bars"), out of combat. Off until you tick **Lock action bars** on the Utility bar options
+  page; it follows the setting when you change it in Blizzard's options too.
+
 ## v0.2.0 - 2026-10-21
 
 - **Bar fade**: each action bar, the stance bar and the pet bar can fade until you point at it

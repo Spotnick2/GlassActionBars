@@ -99,8 +99,8 @@ wear the same glass on their own buttons: [docs/PUBLIC-API.md](https://github.co
 
 ## What's next
 
-The plan is [docs/PLAN.md](https://github.com/Spotnick2/GlassActionBars/blob/main/docs/PLAN.md). Next: importing Apotheca's profession bar settings and
-key bindings into the Utility bar, and Apotheca, 123 and Portal Roulette adopting the API.
+The plan is [docs/PLAN.md](https://github.com/Spotnick2/GlassActionBars/blob/main/docs/PLAN.md). Next: Apotheca, 123 and Portal Roulette
+adopting the API.
 
 ## License
 

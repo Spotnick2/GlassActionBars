@@ -77,7 +77,7 @@ Issues:
 - **v0.2.0:**
   7. Dock.
   8. Provider API and `docs/PUBLIC-API.md`.
-  9. Utility bar port and the Apotheca settings import.
+  9. Utility bar port. (The Apotheca settings import was dropped: #9 closed without it, 2026-11-03.)
   10. Bar fade (mouseover / out of combat).
 - **Provider repos:**
   - PortalRoulette: launcher as a GAB button.
@@ -170,7 +170,7 @@ Release v0.1.0 following `References/Docs/RELEASING.md`: an alpha tag first, the
 - Secure buttons are named `GlassActionBarsUtil_<key>`, with `CLICK` entries in a new `Bindings.xml` (`category=`).
 - Buttons registered by providers appear in the same order list.
 
-**Apotheca settings import**
+**Apotheca settings import** (dropped: #9 closed without it on 2026-11-03; kept here for the record, not planned)
 - At `PLAYER_LOGIN`, if `ApothecaDB` exists and the **saved** GAB DB has no `utility` table: deep-copy the active Apotheca profile's `utility` table (`enabled`, `show`, `order`, layout) into the saved DB.
   - The check must run against the persisted table before any `__index` defaults apply, otherwise a default table would block the first import.
   - From then on the saved DB owns its own `utility` table.
@@ -195,8 +195,7 @@ Release v0.1.0 following `References/Docs/RELEASING.md`: an alpha tag first, the
 - Flyout counts as mouseover.
 - Edit Mode poll start and stop; combat deferral.
 - API validation, error isolation, `OnHosted` ordering, non-recursive `RequestLayout`.
-- The import runs only when GAB has no utility settings.
-- The keybind mover: skips conflicts, verifies, and is safe to run again.
+- (Dropped with the import: the import runs only when GAB has no utility settings; the keybind mover skips conflicts, verifies, and is safe to run again.)
 - Every utility key has a `Bindings.xml` line (port `test_utility`).
 
 ## Phase 3: provider adoption (separate issue and PR in each repo)
@@ -229,7 +228,7 @@ Each provider adds `## OptionalDeps: GlassActionBars` and runs `if GlassActionBa
 - v0.2 adds:
   - Docks follow Edit Mode moves live, and a change during combat applies after combat.
   - Hosting and undocking restore the provider's own position.
-  - The keybind mover works under both account and character binding sets.
+  - (Dropped with the import: the keybind mover under both binding sets.)
   - Apotheca's old utility keys do nothing once it is hosted.
   - The Portal Roulette button opens the wheel, the floating launcher comes back when the Utility bar is off, and the button is refused in combat.
 - Releases: alpha tag → `Tools/check_package.py` on CurseForge's zip → `vX.Y.Z` tag → GitHub Release made by the workflow.
