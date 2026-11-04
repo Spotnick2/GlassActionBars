@@ -98,8 +98,9 @@ local function ensureDefaults()
             if u.show ~= nil then
                 if type(u.show) ~= "table" then u.show = nil else
                     for k, v in pairs(u.show) do
-                        -- Only what differs from the default: a built-in entry off, a provider's on.
-                        local want = U.ProviderId(k) and true or false
+                        -- Only what differs from the default: a built-in entry off, an opt-in one
+                        -- (a provider's, the lock) on.
+                        local want = U.OptIn(k)
                         if not U.ValidKey(k) or v ~= want then u.show[k] = nil end
                     end
                 end
@@ -300,13 +301,13 @@ function Settings.SetUtilityEnabled(on)
 end
 
 -- Show or hide one entry of the bar (an action key, "camping", or another
--- addon's provider:<id>, off by default).
+-- addon's provider:<id> or the lock, off by default).
 function Settings.SetUtilityShown(key, on)
     if not GAB.Utility.ValidKey(key) then return false end
     local u = utility()
     u.show = u.show or {}
     -- Only what differs from the default is stored.
-    if GAB.Utility.ProviderId(key) then
+    if GAB.Utility.OptIn(key) then
         u.show[key] = on == true or nil
     elseif on == false then u.show[key] = false else u.show[key] = nil end
     GAB.Utility.Reconcile()

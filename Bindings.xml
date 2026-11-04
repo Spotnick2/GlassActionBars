@@ -25,6 +25,7 @@
 	<Binding name="CLICK GlassActionBarsUtil_findherbs:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_findminerals:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_picklock:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_lockbars:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_camp_basic:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_camp_journeyman:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_camp_expert:LeftButton" category="Glass Action Bars"/>

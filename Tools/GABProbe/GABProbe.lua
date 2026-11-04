@@ -12,9 +12,9 @@
 --   - whether the Utility bar adds and drops the camp features with it;
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
--- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53), micro (#57) and feedpet (#65):
--- /fp steps gab <name>.
--- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, pet, clear.
+-- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53), micro (#57), feedpet (#65) and
+-- lock (#34): /fp steps gab <name>.
+-- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, pet, lock, clear.
 
 local ADDON, NS = ...
 local MAX_LOG = 3000
@@ -988,6 +988,105 @@ Probe:Steps("feedpet", {
     { text = "Press Reload now (or type /reload) to save the results.", reload = true },
 })
 
+-- ------------------------------------------------------------------
+-- lock (#34): the Utility bar's padlock and the lockActionBars CVar. Out of
+-- combat: the button flips it, the Options checkbox agrees, a drag obeys,
+-- and the padlock follows the checkbox. In combat: can addon code write the
+-- CVar (C_CVar.SetCVar's return, the value just after and after the fight,
+-- whether an unmodified drag obeys it, ADDON_ACTION_BLOCKED, which the host
+-- logs; Logs\taint.log read afterwards)? The original value is put back.
+-- ------------------------------------------------------------------
+
+local LOCK = "lockActionBars"
+local lockRead, lockOriginal = nil, nil   -- the value the next wait compares with; this run's start
+local combatWrite = nil                   -- this run's combat write: { before, after }
+
+local function locked()
+    local ok, v = pcall(C_CVar.GetCVarBool, LOCK)
+    if not ok then return nil end
+    if secret(v) then return "secret" end
+    return v
+end
+
+local function readLock()
+    local U = utility()
+    local b = U and U.buttons and U.buttons.lockbars
+    local r = U and U._test and U._test.regions and b and U._test.regions[b]
+    local icon = r and r.icon and r.icon:GetTexture()
+    lockRead = locked()
+    say(("lockActionBars %s; lock button shown %s; its icon %s"):format(Show(lockRead), Show(b and b:IsShown()), Show(icon)))
+    return lockRead, b and b:IsShown(), icon
+end
+
+-- The procedure's first step: this run's original value, then the read.
+local function startLock()
+    lockOriginal, combatWrite = locked(), nil
+    return readLock()
+end
+
+local function lockChanged()
+    local v = locked()
+    if v ~= nil and v ~= "secret" and v ~= lockRead then return true, Show(lockRead) .. " -> " .. Show(v) end
+    return false, "still " .. Show(v)
+end
+
+-- In combat: write the other value and read it straight back.
+local function writeInCombat()
+    local before = locked()
+    local lockdown = InCombatLockdown()
+    local ok, ret = pcall(C_CVar.SetCVar, LOCK, before == true and "0" or "1")
+    local after = locked()
+    combatWrite = { before = before, after = after }
+    say(("in combat (lockdown %s): before %s; SetCVar %s; after %s"):format(Show(lockdown), Show(before),
+        ok and Show(ret) or ("ERROR " .. tostring(ret)), Show(after)))
+    return lockdown, before, ok and ret or "error", after
+end
+
+local function restoreLock()
+    local now = locked()
+    local ok, ret = true, nil
+    if lockOriginal ~= nil and lockOriginal ~= "secret" and now ~= lockOriginal then
+        ok, ret = pcall(C_CVar.SetCVar, LOCK, lockOriginal and "1" or "0")
+    end
+    say(("after the fight: %s (written in combat: %s); put back to %s: %s"):format(Show(now),
+        Show(combatWrite and combatWrite.after), Show(lockOriginal), ok and Show(ret) or ("ERROR " .. tostring(ret))))
+    return now, combatWrite and combatWrite.after, locked()
+end
+
+Probe:Command("lock", function() readLock() end, "lockActionBars and the Utility bar's lock button")
+
+Probe:Steps("lock", {
+    title = "The lock on the Utility bar (#34)",
+    { text = "Tick \"Lock action bars\" on Esc > Options > AddOns > Glass Action Bars > Utility bar, close it, "
+        .. "then press Read.", button = "Read", run = startLock,
+      check = function()
+          local _, shown = readLock()
+          return shown == true, "the lock button on the Utility bar"
+      end },
+    { text = "Click the padlock on the Utility bar once. This step completes when the setting changes.",
+      wait = lockChanged, timeout = 120 },
+    { text = "Reading again.", auto = true, run = readLock },
+    { text = "Open Esc > Options > Action Bars: does \"Lock Action Bars\" match the padlock now?", ask = true,
+      screenshot = "Options vs padlock" },
+    { text = "Without a modifier key, drag a spell off an action bar (put it back after). Did it behave as the "
+        .. "padlock says (comes off when open, stays when closed)?", ask = true },
+    { text = "Now tick or untick \"Lock Action Bars\" in Esc > Options > Action Bars. This step completes when "
+        .. "the setting changes.", wait = lockChanged, timeout = 120 },
+    { text = "Close the options. Did the padlock on the Utility bar follow?", ask = true, screenshot = "padlock after Options" },
+    { text = "Start a fight (a training dummy or an easy mob) and stay in it. This step completes once you are "
+        .. "in combat.", wait = function() return InCombatLockdown(), "not in combat yet" end, timeout = 300 },
+    { text = "Writing lockActionBars from addon code in combat.", auto = true, run = writeInCombat,
+      check = function() return combatWrite ~= nil and combatWrite.after ~= combatWrite.before, "the value changed in combat" end },
+    { text = "Still in the fight, drag a spell off a bar without a modifier (put it back after). Did it follow the "
+        .. "value just written (see the log line) rather than the old one?", ask = true },
+    { text = "End the fight. This step completes when you are out of combat.",
+      wait = function() return not InCombatLockdown(), "still in combat" end, timeout = 600 },
+    { text = "Reading after the fight and putting the original value back.", auto = true, run = restoreLock },
+    { text = "Do the padlock and Esc > Options > Action Bars show your original setting again?", ask = true },
+    { text = "Press Reload now (or type /reload) to save the results. Then the session reads Logs\\taint.log.",
+      reload = true },
+})
+
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
 boot:SetScript("OnEvent", function(_, event, name)
@@ -1006,4 +1105,5 @@ boot:SetScript("OnEvent", function(_, event, name)
 end)
 
 NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCamping, cropMicro = cropMicro, fadeBagIcons = fadeBagIcons,
-    takeBaseline = takeBaseline, cooldownVerdict = cooldownVerdict, readPet = readPet, fed = fed, afterFeed = afterFeed }
+    takeBaseline = takeBaseline, cooldownVerdict = cooldownVerdict, readPet = readPet, fed = fed, afterFeed = afterFeed,
+    readLock = readLock, startLock = startLock, lockChanged = lockChanged, writeInCombat = writeInCombat, restoreLock = restoreLock }

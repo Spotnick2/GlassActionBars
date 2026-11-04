@@ -236,4 +236,31 @@ eq((T.afterFeed()), false, "  a target left on the button: fails")
 GAB.Utility.buttons.feedpet:SetAttribute("target-bag", nil)
 check(GAB.Utility.buttons.feedpet ~= nil, "  the feedpet procedure's button exists")
 
+-- lock (#34): the CVar read, a change seen, a combat write read back, the original put back.
+WoW.cvars.lockActionBars = "1"
+GAB.Settings.SetUtilityShown("lockbars", true)
+WoW.tick()
+local v, shown = T.startLock()
+check(v == true and shown == true, "lock: locked, the button shown")
+eq((T.lockChanged()), false, "  no change yet")
+WoW.cvars.lockActionBars = "0"
+eq((T.lockChanged()), true, "  a change seen")
+T.readLock()
+WoW.combat = true
+local lockdown, before, ret, after = T.writeInCombat()
+check(lockdown == true and before == false and ret == true and after == true, "  the combat write recorded, read back")
+WoW.combat = false
+T.restoreLock()
+eq(WoW.cvars.lockActionBars, "1", "  this run's original value put back")
+-- A second run, started unlocked: its own original, not the first run's.
+WoW.cvars.lockActionBars = "0"
+T.startLock()
+eq(select(2, T.restoreLock()), nil, "  a new run forgets the last run's combat write")
+check(rawget(_G, "combatWrite") == nil, "  no global written")
+WoW.combat = true
+T.writeInCombat()
+WoW.combat = false
+T.restoreLock()
+eq(WoW.cvars.lockActionBars, "0", "  a second run puts back its own start (unlocked)")
+
 done("test_probe")
