@@ -94,7 +94,7 @@ check(close(GAB.EdgeState().right, 2133), "  hidden: its OnHide measures again")
 -- Combat: never announced in a fight; after it.
 fired = #WoW.triggered
 WoW.combat = true
-MultiBar5:Hide(); settle()
+WoW.blizzard(MultiBar5, function() MultiBar5:Hide() end); settle()   -- Blizzard hides it mid-fight
 eq(#WoW.triggered, fired, "in combat: no event")
 WoW.combat = false
 WoW.fire("PLAYER_REGEN_ENABLED"); settle()

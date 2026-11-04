@@ -222,8 +222,9 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
 Lua 5.1 at `C:\Program Files (x86)\Lua\5.1\` (`lua.exe`, `luac.exe`). No build step.
 
 ```powershell
-pwsh tests\run.ps1                                                   # luac -p on the TOC files + probe, then every tests\test_*.lua (needs ..\LibGlass or $env:LIBGLASS)
-& 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_boot.lua      # one test, from the repo root
+pwsh tests\run.ps1                                                   # luac -p on the TOC files + probe, then every tests\test_*.lua through WowTestKit (needs ..\LibGlass or $env:LIBGLASS)
+pwsh tests\run.ps1 -KitDev                                           # against the ..\WowTestKit working copy instead of the pin
+& 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_boot.lua      # one test, from the repo root (once run.ps1 has fetched the kit)
 pwsh Tools\deploy.ps1 -Probe                                         # copy the addon (+ GABProbe) into AddOns
 ```
 
@@ -235,11 +236,23 @@ pwsh Tools\deploy.ps1 -Probe                                         # copy the 
 
 ## Testing
 
-GlassMail's harness: `tests\wow_stubs.lua` (strict globals as an allowlist of APIs verified in the
-dump, secrets as throwing `newproxy` values, event names validated against the dump or
-`tests\events-70374.txt`, every widget method recorded, `hooksecurefunc` recorded in `WoW.hooked`),
-`tests\harness.lua` (`check`, `eq`, `loadAddon`, `newChat`, `chatHas`), `test_methods.lua` (every
-method called exists on this client). **Mutation-test every new test**: break the behaviour,
+The test scaffolding is WowTestKit (`C:\Projects\WoW\WowTestKit`; its README is the reference)
+at the commit and client build `tests\kit.pin` names. `tests\run.ps1` puts that commit in
+`%LOCALAPPDATA%\WowTestKit\<sha>` and hands off to the kit's runner; CI fetches it with
+`tests\fetch_kit.sh`. `tests\kit.lua`, `kit.ps1` and `fetch_kit.sh` are the kit's bootstrap
+copies: never edit them here. A kit need is an issue on the kit, worked around in
+`tests\wow_stubs.lua` with a `-- WowTestKit #N:` comment meanwhile. `tests\run.ps1 -KitDev`
+runs against the `..\WowTestKit` working copy instead of the pin.
+
+The kit gives the mechanics (strict globals, secrets as throwing `newproxy` values, event names
+checked against the pinned build, every widget method recorded, protected frames refusing in
+combat, `check` / `eq` / `done`, which fails on a stray `|` in a printed line). `tests\wow_stubs.lua`
+adds GAB's own: the action, stance and pet bars, the bag bar, the micro menu, the Utility bar's
+spells and items, `WoW.violations` (every change on a protected frame in combat, more methods than
+the core's own refusals), `WoW.blizzard(f, fn)` (Blizzard's secure code changing a protected frame
+mid-fight). `tests\harness.lua`: `loadAddon`, `loadForeverProbe`, `newChat`, `chatHas`, the TOC
+readers. `test_toc.lua` runs `Kit.checkToc`, `test_methods.lua` `Kit.checkMethods` (every method
+called exists on that widget type in the pinned build). **Mutation-test every new test**: break the behaviour,
 confirm it goes red. Offline tests can't cover taint, real secrets or rendering; that's the probe
 and an in-game checklist.
 
