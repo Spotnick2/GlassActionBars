@@ -170,6 +170,56 @@ C_UnitAuras = { GetPlayerAuraBySpellID = function(id)
 end,
     -- The player's helpful auras in order: WoW.helpful[i] = { spellId, name, duration }.
     GetAuraDataByIndex = function(unit, i, filter) return (WoW.helpful or {})[i] end }
+-- The pet and its food (Feed Pet, #65): WoW.pet = { exists, dead, hunter,
+-- level } (any field may be a secret); WoW.bags[bag][slot] = { itemID,
+-- stackCount, isLocked }; WoW.edible[itemID] = true | a secret | "throw";
+-- WoW.itemInfo[itemID] = { level, price } (absent: not in the cache yet,
+-- WoW.requested[itemID] counts the requests). The click's checks:
+-- WoW.cursorItem, WoW.targeting, WoW.targetItem, WoW.targetItemID (each a
+-- value to return), WoW.feedUsable (default true).
+local function resetPet()
+    WoW.bags, WoW.edible, WoW.itemInfo, WoW.requested = {}, {}, {}, {}
+    WoW.pet, WoW.cursorItem, WoW.targeting, WoW.targetItem, WoW.targetItemID, WoW.feedUsable = nil, nil, nil, nil, nil, nil
+end
+table.insert(WoW.onReset, resetPet)
+resetPet()
+function UnitExists(unit) if unit == "pet" then return WoW.pet ~= nil and WoW.pet.exists ~= false end return unit == "player" end
+function UnitIsDead(unit) if unit == "pet" then return WoW.pet ~= nil and WoW.pet.dead == true end return false end
+function UnitLevel(unit) if unit == "pet" then return WoW.pet and WoW.pet.level or 0 end return 60 end
+function HasPetUI()
+    if not WoW.pet then return false, false end
+    return true, WoW.pet.hunter
+end
+C_PetInfo = { CanPetEatItem = function(id)
+    local v = WoW.edible[id]
+    if v == "throw" then error("CanPetEatItem refused") end
+    if v == nil then return false end
+    return v
+end }
+C_Container.GetContainerNumSlots = function(bag)
+    if bag < 0 or bag > 5 then error("bad bag " .. tostring(bag)) end
+    return WoW.bags[bag] and 16 or 0
+end
+C_Container.GetContainerItemInfo = function(bag, slot)
+    local s = WoW.bags[bag] and WoW.bags[bag][slot]
+    if not s then return nil end
+    if s.secret then return WoW.Secret("bag record") end
+    return { itemID = s.itemID, stackCount = s.stackCount, isLocked = s.isLocked == true, iconFileID = 1 }
+end
+C_Item.GetItemInfo = function(id)
+    local i = WoW.itemInfo[id]
+    if not i then return nil end
+    return i.secretName and WoW.Secret("name") or ("item" .. id), "link", 1, i.level, 1, "Consumable", "Food", 20, "", 1, i.price, 0, 0, 0, 0
+end
+C_Item.RequestLoadItemDataByID = function(id) WoW.requested[id] = (WoW.requested[id] or 0) + 1 end
+C_Spell.IsSpellUsable = function(id)
+    if id == 6991 then return WoW.feedUsable ~= false, false end
+    return true, false
+end
+function GetCursorInfo() return WoW.cursorItem end
+function SpellIsTargeting() if WoW.targeting == nil then return false end return WoW.targeting end
+function SpellCanTargetItem() if WoW.targetItem == nil then return false end return WoW.targetItem end
+function SpellCanTargetItemID() if WoW.targetItemID == nil then return false end return WoW.targetItemID end
 function GetBindingKey(action)
     if type(action) ~= "string" then error("Usage: GetBindingKey(\"command\")", 2) end   -- a nil command is a caller bug: made loud (#52)
     return WoW.bindings[action]

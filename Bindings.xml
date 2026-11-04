@@ -5,6 +5,7 @@
 	     Utility.lua. An action not on the bar has no attributes, so its key
 	     does nothing. tests/test_utility.lua checks this list. -->
 	<Binding name="CLICK GlassActionBarsUtil_hearthstone:LeftButton" category="Glass Action Bars"/>
+	<Binding name="CLICK GlassActionBarsUtil_feedpet:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_cooking:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_firstaid:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_fishing:LeftButton" category="Glass Action Bars"/>
