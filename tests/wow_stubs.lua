@@ -177,7 +177,12 @@ end,
 -- WoW.requested[itemID] counts the requests). The click's checks:
 -- WoW.cursorItem, WoW.targeting, WoW.targetItem, WoW.targetItemID (each a
 -- value to return), WoW.feedUsable (default true).
-WoW.bags, WoW.edible, WoW.itemInfo, WoW.requested = {}, {}, {}, {}
+local function resetPet()
+    WoW.bags, WoW.edible, WoW.itemInfo, WoW.requested = {}, {}, {}, {}
+    WoW.pet, WoW.cursorItem, WoW.targeting, WoW.targetItem, WoW.targetItemID, WoW.feedUsable = nil, nil, nil, nil, nil, nil
+end
+table.insert(WoW.onReset, resetPet)
+resetPet()
 function UnitExists(unit) if unit == "pet" then return WoW.pet ~= nil and WoW.pet.exists ~= false end return unit == "player" end
 function UnitIsDead(unit) if unit == "pet" then return WoW.pet ~= nil and WoW.pet.dead == true end return false end
 function UnitLevel(unit) if unit == "pet" then return WoW.pet and WoW.pet.level or 0 end return 60 end
