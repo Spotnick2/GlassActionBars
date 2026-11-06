@@ -75,9 +75,9 @@ spellbook open (the **Bar fade** options page, `/gab fade`).
 `/gab help` lists them; the same settings are on the options page (Esc > Options > AddOns >
 Glass Action Bars).
 
-- `/gab theme clear/smoked/class|suite` - the glass's tint (`suite`: Glass UI's)
+- `/gab theme clear/smoked/class/suite` - the glass's tint (`suite`: Glass UI's)
 - `/gab material pearl/clean/classic` - the glass itself (after a `/reload`)
-- `/gab look glass|soft|minimal`, `/gab look hover|press|empty <choice>` - button feedback
+- `/gab look glass/soft/minimal`, `/gab look hover/press/empty <choice>` - button feedback
 - `/gab hotkeys on/off`, `/gab macros on/off` - key bindings and macro names on the buttons
 - `/gab gryphons on/off` - the main bar's end caps
 - `/gab micro tiles/pill` - the micro menu's glass
@@ -85,10 +85,10 @@ Glass Action Bars).
 - `/gab tune` - the glass's numbers (rim, empty slots, inner line, haze, body), live
   (with Pearl, also `gloss`, the reflection on filled buttons, and `socketShade`, an empty
   slot's dark top edge)
-- `/gab fade 1-8|stance|pet|all off/mouseover/combat` - fade a bar until you point at it, or out
+- `/gab fade 1-8/stance/pet/all off/mouseover/combat` - fade a bar until you point at it, or out
   of combat; `/gab fade alpha 0..1` - how faded
 - `/gab utility on/off` - the Utility bar
-- `/gab dock` - where smart bars dock: `/gab dock <bar> 1-8|off [side] [align]`,
+- `/gab dock` - where smart bars dock: `/gab dock <bar> 1-8/off [side] [align]`,
   `<bar> gap 0-32`, `<bar> match on/off`, `<bar> rows on/off`
 - `/gab follow [on/off]` - the stance and pet bars follow Glass Unit Frames, and why a bar stays
 - `/gab options` - the options page; `/gab version` - the addon's version and the client build

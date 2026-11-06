@@ -228,7 +228,7 @@ eq(Fade.Mode("PetActionBar"), "combat", "/gab fade pet combat")
 SlashCmdList.GLASSACTIONBARS("fade alpha 0.5")
 eq(GAB.db.fadeAlpha, 0.5, "/gab fade alpha 0.5")
 SlashCmdList.GLASSACTIONBARS("fade 9 mouseover")
-check(chatHas("/gab fade <1%-8|stance|pet|all>"), "a bad bar: the usage line")
+check(chatHas("/gab fade <1%-8/stance/pet/all>"), "a bad bar: the usage line")
 SlashCmdList.GLASSACTIONBARS("fade all off")
 for _, b in ipairs(Fade.BARS) do eq(Fade.Mode(b[1]), "off", "/gab fade all off: " .. b[1]) end
 newChat()

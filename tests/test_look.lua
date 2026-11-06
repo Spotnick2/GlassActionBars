@@ -170,7 +170,7 @@ eq(B.Preset(), "glass", "/gab look glass")
 SlashCmdList.GLASSACTIONBARS("look empty half")
 eq(B.Look("emptySlots"), "half", "/gab look empty half")
 SlashCmdList.GLASSACTIONBARS("look hover sparkle")
-check(chatHas("/gab look glass|soft|minimal"), "  a bad choice: the usage")
+check(chatHas("/gab look glass/soft/minimal"), "  a bad choice: the usage")
 SlashCmdList.GLASSACTIONBARS("look")
 check(chatHas("look: custom"), "/gab look: the current mix")
 

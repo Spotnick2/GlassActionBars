@@ -50,7 +50,7 @@ slash("inspect restore")
 eq(rimRegion:GetAlpha(), before, "inspect restore: every hidden region back")
 newChat()
 slash("layer nonsense off")
-check(chatHas("/gab layer <body|tint"), "an unknown layer: the usage")
+check(chatHas("/gab layer <body/tint"), "an unknown layer: the usage")
 
 -- Nothing is saved as a setting.
 eq(rawget(GlassActionBarsDB, "tune"), nil, "no setting changed")
