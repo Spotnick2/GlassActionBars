@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Comprehend Scroll** on the Utility bar, for mages who know it, with its own key binding.
+
 ## v1.0.0 - 2026-11-04
 
 - **Feed Pet** on the Utility bar, for a hunter with a live pet out: one click (or its key
