@@ -383,22 +383,22 @@ local function onoff(v) return v and "on" or "off" end
 local function helpLines()
     local db = GAB.db
     return {
-        "/gab theme " .. table.concat(GAB.Theme.NAMES, "/") .. "|suite - the glass's tint (" .. GAB.Theme.Current() .. ")",
+        "/gab theme " .. table.concat(GAB.Theme.NAMES, "/") .. "/suite - the glass's tint (" .. GAB.Theme.Current() .. ")",
         "/gab material pearl/clean/classic - the glass itself, after a /reload (" .. (GAB.GlassPreset or "?") .. ")",
         "/gab hotkeys on/off - key bindings on the buttons (" .. onoff(db.showHotkeys) .. ")",
         "/gab macros on/off - macro names on the buttons (" .. onoff(db.showMacroNames) .. ")",
         "/gab gryphons on/off - the main bar's end caps (" .. onoff(db.endCaps) .. ")",
         "/gab micro tiles/pill - the micro menu's glass: each button on glass, or one pill (" .. GAB.Micro.Style() .. ")",
         "/gab skin on/off - glass, or Blizzard's own art after a /reload (" .. onoff(db.skin) .. ")",
-        "/gab tune [key value|reset] - the glass's numbers, live (rim, empty, dark, wash, body, frostGrey, frostAlpha, frostRim, gloss, socketShade)",
-        "/gab fade [1-8|stance|pet|all off/mouseover/combat] - fade bars until hovered, or out of combat",
+        "/gab tune [key value / reset] - the glass's numbers, live (rim, empty, dark, wash, body, frostGrey, frostAlpha, frostRim, gloss, socketShade)",
+        "/gab fade [1-8/stance/pet/all off/mouseover/combat] - fade bars until hovered, or out of combat",
         ("/gab fade alpha 0..1 - how faded a faded bar is (%.2f)"):format(db.fadeAlpha),
-        "/gab dock [<bar> 1-8|off [side] [align] | <bar> gap 0-32 | <bar> match/rows on/off] - dock a smart bar to an action bar",
+        "/gab dock [<bar> 1-8/off [side] [align]; <bar> gap 0-32; <bar> match/rows on/off] - dock a smart bar to an action bar",
         "/gab utility on/off - the Utility bar: Hearthstone, professions, camping (" .. onoff(GAB.Utility.Enabled()) .. ")",
         "/gab follow [on/off] - the stance and pet bars move with Glass Unit Frames (" .. onoff(db.follow) .. ")",
-        "/gab look [glass|soft|minimal | hover|press|empty <choice>] - button feedback ("
+        "/gab look [glass/soft/minimal; hover/press/empty <choice>] - button feedback ("
             .. GAB.Buttons.Preset() .. ")",
-        "/gab inspect [button|hide n|show n|restore] - what a button draws, layer by layer",
+        "/gab inspect [button; hide n; show n; restore] - what a button draws, layer by layer",
         "/gab layer <name> off/on - hide one layer on every button, for a look (a /reload undoes it)",
         "/gab options - open the options page",
         "/gab failures - what failed to build or register",
@@ -454,7 +454,7 @@ local function slash(msg)
         elseif tonumber(value) and Settings.SetTune(key, tonumber(value)) then
             say(("tune %s %.2f"):format(key, GAB.Buttons.Tune(key)))
         else
-            say("/gab tune <" .. table.concat(GAB.Buttons.TUNE_ORDER, "|") .. "> <0..1>, or /gab tune reset")
+            say("/gab tune <" .. table.concat(GAB.Buttons.TUNE_ORDER, "/") .. "> <0..1>, or /gab tune reset")
         end
     elseif cmd == "fade" then
         local key, value = arg:match("^(%S*)%s*(.-)$")
@@ -472,7 +472,7 @@ local function slash(msg)
             end
             say("fade " .. key .. ": " .. Fade.LABELS[value])
         else
-            say("/gab fade <1-8|stance|pet|all> <off|mouseover|combat>, or /gab fade alpha <0..1>")
+            say("/gab fade <1-8/stance/pet/all> <off/mouseover/combat>, or /gab fade alpha <0..1>")
         end
     elseif cmd == "dock" then
         local Dock = GAB.Dock
@@ -481,7 +481,7 @@ local function slash(msg)
         for _, cl in ipairs(Dock.Clients()) do
             if cl.id:lower() == key then id = cl.id end
         end
-        local usage = "/gab dock <bar> <1-8|off> [left|right|top|bottom] [start|center|end], "
+        local usage = "/gab dock <bar> <1-8/off> [left/right/top/bottom] [start/center/end], "
             .. "/gab dock <bar> gap <0-32>, /gab dock <bar> match on/off (size and spacing), /gab dock <bar> rows on/off"
         if key == "" then
             local list = Dock.Clients()
@@ -539,8 +539,8 @@ local function slash(msg)
         elseif alias[key] and Settings.SetLook(alias[key], value) then
             say("look: " .. alias[key] .. " " .. value)
         else
-            say("/gab look glass|soft|minimal|suite, or /gab look hover off|glow|halo|suite, "
-                .. "press off|flash|ripple|suite, empty hidden|faint|half|full|frosted|suite")
+            say("/gab look glass/soft/minimal/suite, or /gab look hover off/glow/halo/suite, "
+                .. "press off/flash/ripple/suite, empty hidden/faint/half/full/frosted/suite")
         end
     elseif cmd == "follow" then
         if arg == "" then
@@ -566,7 +566,7 @@ local function slash(msg)
         local name, state = (msg or ""):match("^%s*%S+%s+(%S+)%s*(%S*)")
         state = state and state:lower()
         if not (name and (state == "on" or state == "off") and GAB.Inspect.Layer(name, state == "on")) then
-            say("/gab layer <" .. table.concat(GAB.Inspect.LAYER_NAMES, "|") .. "> off/on")
+            say("/gab layer <" .. table.concat(GAB.Inspect.LAYER_NAMES, "/") .. "> off/on")
         end
     elseif cmd == "options" then
         if not GAB.Options.Open() then say("Esc > Options > AddOns > Glass Action Bars") end

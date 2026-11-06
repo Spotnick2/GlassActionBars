@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `/gab` help and usage lines no longer lose letters: the choices are separated by `/`, not `|`.
+
 ## v1.0.1 - 2026-11-06
 
 - **Comprehend Scroll** on the Utility bar, for mages who know it, with its own key binding.

@@ -11,21 +11,6 @@ function tocLines() return Kit.tocLines(TOC) end
 -- Lua files listed in the TOC, in load order.
 function tocFiles() return Kit.tocFiles(TOC) end
 
--- FINDING (#68): GlassActionBars.lua's /gab help and usage lines hold a bare
--- "|" ("clear/smoked/class|suite", "[key value|reset]", "<1-8|off>"...), which
--- the client reads as an escape. done() lets exactly those through (a printed
--- line naming a "/gab " command) until they're fixed; any other stray "|"
--- still fails.
-local kitDone = done
-function done(name)
-    local keep = {}
-    for _, line in ipairs(WoW.strays) do
-        if not line:find("/gab ", 1, true) then keep[#keep + 1] = line end
-    end
-    WoW.strays = keep
-    kitDone(name)
-end
-
 -- The embedded library comes from a checkout, not from Libs\ (gitignored,
 -- filled by the packager): $LIBGLASS, else ..\LibGlass. No checkout fails the
 -- run loudly; a silently skipped library would test nothing.
