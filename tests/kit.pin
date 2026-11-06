@@ -1,6 +1,5 @@
 # WowTestKit for these tests: the commit, and the client build to test against.
-# The newest build the kit has data for (70790, #75). GAB's own measurements
-# are still dated by MEASURED_ON_BUILD (70374) until they are re-checked in game.
+# 70790: GAB's MEASURED_ON_BUILD, and the newest build the kit has data for (#75).
 sha=d5efa17d5e5df28324ba50e9d1008cbfc179b73f
 build=70790
 api=1
