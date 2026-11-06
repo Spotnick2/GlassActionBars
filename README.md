@@ -46,7 +46,8 @@ layouts, cooldowns, range and proc glows all stay the game's own, in and out of 
 actions (Disenchant, Smelting, Find Herbs, Pick Lock...), and your camping items: a campfire kit
 whenever you carry one, the camp features when you are near a campfire; and for a hunter with a pet
 out, **Feed Pet**: one click feeds it a food from your bags that it eats (the tooltip names which:
-within 10 levels of the pet the cheapest, else the highest level). Tick **Lock action bars** on its
+within 10 levels of the pet the cheapest, else the highest level); for a mage,
+**Comprehend Scroll**, to decipher the scrolls you find. Tick **Lock action bars** on its
 options page for a padlock that locks or unlocks your action bars (Blizzard's "Lock Action Bars"),
 out of combat. It shows only what this
 character can use, docks right of the main bar and matches its buttons, and every action has a

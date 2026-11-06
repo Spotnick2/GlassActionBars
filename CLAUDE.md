@@ -289,6 +289,9 @@ and an in-game checklist.
   (project `aND9586o`, the TOC's `X-Wago-ID`; the `WAGO_API_TOKEN` secret). The notes are the tag's
   `## vX.Y.Z` section of `CHANGELOG.md` (`tests/release_files.sh`, RELEASING.md's template, kept
   unchanged). Check CurseForge's own zip with an alpha tag first.
+- A release tag (`vX.Y.Z`, not an alpha or beta) updates `README.md` and the untracked
+  `README.curseforge.md` in its prep PR, so both describe that release; the PR says the latter
+  changed (the owner pastes it into CurseForge and Wago). RELEASING.md §3.
 
 ## Conventions
 
