@@ -53,6 +53,17 @@ eq(item, "item:6948", "  by item ID")
 eq(shownKeys(), "hearthstone,cooking", "  in the default order")
 check(U.frame:IsShown(), "  the bar shown")
 
+-- Comprehend Scroll (#76): a mage's spell, so it shows only where known.
+WoW.known[1296017] = true
+rebuild()
+t, spell = attrs("comprehend")
+eq(t, "spell", "Comprehend Scroll known: a spell button")
+eq(spell, 1296017, "  its spell")
+eq(shownKeys(), "hearthstone,cooking,comprehend", "  after the other actions")
+WoW.known[1296017] = nil
+rebuild()
+eq((attrs("comprehend")), nil, "not known (not a mage): no button")
+
 -- The player's order.
 check(Settings.MoveUtility("cooking", -1), "move Cooking up")
 WoW.tick()
