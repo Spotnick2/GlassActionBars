@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.0.2 - 2026-11-06
 
 - `/gab` help and usage lines no longer lose letters: the choices are separated by `/`, not `|`.
 
