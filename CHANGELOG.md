@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.0.1 - 2026-11-06
 
 - **Comprehend Scroll** on the Utility bar, for mages who know it, with its own key binding.
 
