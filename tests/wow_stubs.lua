@@ -235,7 +235,7 @@ function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a } end
 date = os.date
 time = os.time
 function GetServerTime() return time() end
-function GetBuildInfo() return "1.60.1", "70374", "Oct 12 2026", 16001 end
+function GetBuildInfo() return "1.60.1", "70790", "Nov 3 2026", 16001 end
 -- Everything in the stubs is secure; WoW.tainted[name] = "Addon" says otherwise (GABProbe bagsbar, #55).
 function issecurevariable(t, name)
     local by = WoW.tainted and WoW.tainted[name]

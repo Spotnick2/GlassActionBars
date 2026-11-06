@@ -45,7 +45,7 @@ for _, cmd in ipairs({ "failures", "version", "options", "nonsense" }) do
     check(#newChat() >= 0, "/gab " .. cmd .. " runs")
 end
 SlashCmdList.GLASSACTIONBARS("version")
-check(chatHas("measured on 1.60.1.70374"), "/gab version names the measured build")
+check(chatHas("measured on 1.60.1.70790"), "/gab version names the measured build")
 
 -- A dev build on another client build warns once, at initial login only.
 newChat()

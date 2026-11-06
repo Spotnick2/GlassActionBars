@@ -12,7 +12,7 @@ GAB.API = API
 
 -- The build the notes in docs/ were measured on. Bump only after re-measuring
 -- in game; tests/test_toc.lua pins the same literal.
-GAB.MEASURED_ON_BUILD = "1.60.1.70374"
+GAB.MEASURED_ON_BUILD = "1.60.1.70790"   -- in game since v1.0.0 (#75)
 
 function API.Print(msg)
     print("|cff7fd4ffGlassActionBars|r " .. msg)
