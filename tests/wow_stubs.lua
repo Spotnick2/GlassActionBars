@@ -216,7 +216,24 @@ C_Spell.IsSpellUsable = function(id)
     if id == 6991 then return WoW.feedUsable ~= false, false end
     return true, false
 end
-function GetCursorInfo() return WoW.cursorItem end
+-- The cursor: WoW.cursorInfo = { "spell", slot, bank, spellID } (#86), else WoW.cursorItem's kind alone.
+function GetCursorInfo()
+    if WoW.cursorInfo then return unpack(WoW.cursorInfo) end
+    return WoW.cursorItem
+end
+function ClearCursor() WoW.cursorInfo, WoW.cursorItem = nil, nil end
+-- The pick-up modifier (Blizzard's PICKUPACTION, Shift by default) and the mouse buttons held.
+WoW.mouseDown = {}
+function IsModifiedClick(action) return action == "PICKUPACTION" and WoW.pickupDown == true end
+function GetModifiedClick(action) return action == "PICKUPACTION" and "SHIFT" or nil end
+function IsMouseButtonDown(b) return WoW.mouseDown[b or "LeftButton"] == true end
+-- Override bindings: owner -> { key = "button:mouse" }.
+WoW.overrides = {}
+function SetOverrideBindingClick(owner, _, key, name, mouse)
+    WoW.overrides[owner] = WoW.overrides[owner] or {}
+    WoW.overrides[owner][key] = name .. ":" .. (mouse or "LeftButton")
+end
+function ClearOverrideBindings(owner) WoW.overrides[owner] = nil end
 function SpellIsTargeting() if WoW.targeting == nil then return false end return WoW.targeting end
 function SpellCanTargetItem() if WoW.targetItem == nil then return false end return WoW.targetItem end
 function SpellCanTargetItemID() if WoW.targetItemID == nil then return false end return WoW.targetItemID end
