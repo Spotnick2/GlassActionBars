@@ -175,6 +175,19 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   chooses the food again, `CanFeed` (cursor empty, no `SpellIsTargeting` / `SpellCanTargetItem` /
   `SpellCanTargetItemID`, Feed Pet usable) and arms it, type last; PostClick, every Reconcile and
   both `PLAYER_REGEN_*` disarm. No never-feed list (GlassPearls' is its own). GABProbe's `feedpet`.
+  Editing on the bar (#86): a spell dropped on a button (`OnReceiveDrag`, or a click with it on
+  the cursor) is the key `spell:<id>` in `utility.order` (being there is the entry; at most
+  `MAX_SPELLS`, 40), a secure `GlassActionBarsUtilSpell_<id>` made at the first Reconcile that
+  shows it, registered only on characters that know that rank (another class's keeps its slot); a
+  built-in entry's spell (any rank) turns that entry on instead. Shift (Blizzard's PICKUPACTION)
+  + drag moves a button along the bar (`Settings.PlaceUtility`) or off it (`RemoveUtility`: a
+  spell leaves the order, anything else is unticked); our own ghost, nothing on the real cursor.
+  **The gesture guard:** a mouse press (`OnMouseDown` with `IsMouseButtonDown` true: a CLICK
+  binding fires it too, with the button up) that places or picks up begins a gesture, ended a
+  frame after that button's `OnMouseUp` or `OnDragStop` (no `OnMouseUp` after a drag); while one
+  is outstanding a secure button's PreClick strips its action and PostClick re-arms it
+  (`Utility.Arm`), a placement accepted in the release's PostClick, after the dispatch; insecure
+  buttons' clicks are `guarded`. Out of combat only. Measured: docs/FOREVER-PROBE.md session 9.
   The lock (#34, key `lockbars`, last of the actions, `optIn`: off until ticked, like a provider
   key, so `show.lockbars = true` is what's saved): an insecure button (`state.insecure`: `clear`
   never writes its attributes) whose click flips the CVar `lockActionBars` with `C_CVar.SetCVar`

@@ -466,7 +466,9 @@ Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
         .. "its bags. Campfire kits show whenever carried, the other camping items only near a campfire. Key "
         .. "bindings: Esc > Options > Keybindings > Glass Action Bars. Docking: the Dock page. Hold Alt and drag "
         .. "the bar to put it anywhere: that undocks it, and the spot is shared by every character. Buttons from "
-        .. "other addons start unticked, and their key bindings stay in that addon's section.",
+        .. "other addons start unticked, and their key bindings stay in that addon's section. Drag a spell from "
+        .. "your spellbook onto the bar to add it (it shows on the characters that know it). Hold Shift (the Pick "
+        .. "Up Action key) and drag a button to move it, or off the bar to take it off.",
         "GameFontHighlightSmall")
     note:SetPoint("TOPLEFT", enabled, "BOTTOMLEFT", 0, -8)
     note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
@@ -506,11 +508,21 @@ Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
             b:SetScript("OnClick", function() GAB.Settings.MoveUtility(key, m[1]); sync() end)
             moves[i] = b
         end
-        rows[key] = { frame = r, check = cb, up = moves[1], down = moves[2] }
+        local remove
+        if U.SpellId(key) then   -- a dropped spell (#86)
+            remove = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+            remove:SetSize(70, 20)
+            remove:SetText("Remove")
+            remove:SetPoint("LEFT", r, "LEFT", 300 + 2 * 56, 0)
+            remove:SetScript("OnClick", function() GAB.Settings.RemoveUtility(key); sync() end)
+        end
+        rows[key] = { frame = r, check = cb, up = moves[1], down = moves[2], remove = remove, text = text }
         return rows[key]
     end
-    -- The entries registered this session, in order, with no gap for the others.
+    -- The entries registered this session, in order, with no gap for the
+    -- others. Every row hidden first: a removed spell's key is gone from the order.
     sync = function()
+        for _, row in pairs(rows) do row.frame:Hide() end
         local n = 0
         for _, key in ipairs(U.Order()) do
             if U.Registered(key) then
@@ -520,8 +532,7 @@ Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
                 row.frame:SetPoint("TOPLEFT", top, "TOPLEFT", 0, -(n - 1) * Options.UTILITY_ROW)
                 row.frame:Show()
                 row.check:SetChecked(U.IsShown(key))
-            elseif rows[key] then
-                rows[key].frame:Hide()
+                if U.SpellId(key) then row.text:SetText(U.Label(key)) end   -- a name not loaded at first
             end
         end
         content:SetHeight(n * Options.UTILITY_ROW + 16)

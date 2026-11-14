@@ -71,6 +71,12 @@ function Methods.GetRight(w) return w._rect and w._rect[2] end
 function Methods.GetTop(w) return w._rect and w._rect[3] end
 function Methods.GetBottom(w) return w._rect and w._rect[4] end
 function Methods.GetEffectiveScale(w) return w._escale or 1 end
+function Methods.GetCenter(w)
+    local r = w._rect
+    if not r then return nil end
+    if issecretvalue(r[1]) or issecretvalue(r[3]) then return r[1], r[3] end
+    return (r[1] + r[2]) / 2, (r[3] + r[4]) / 2
+end
 function Methods.SetTexCoord(w, ...) w._texcoord = { ... } end
 -- Moving: like the client, refused on a protected frame (or one with
 -- protected children: the test marks it _protected) in combat.
@@ -156,6 +162,8 @@ C_Spell = {
     GetSpellTexture = function(id) return 200000 + id end,
     GetSpellName = function(id) return (WoW.spellNames or {})[id] end,
     GetSpellCooldownDuration = function(id) return WoW.durations[id] end,
+    IsSpellPassive = function(id) return (WoW.passive or {})[id] == true end,
+    GetSpellSubtext = function(id) return (WoW.spellRanks or {})[id] or "" end,
 }
 C_Container = { GetItemCooldown = function(id)
     local c = WoW.itemCooldowns[id]
@@ -234,6 +242,64 @@ function SetOverrideBindingClick(owner, _, key, name, mouse)
     WoW.overrides[owner][key] = name .. ":" .. (mouse or "LeftButton")
 end
 function ClearOverrideBindings(owner) WoW.overrides[owner] = nil end
+
+-- A click as the client delivers it on 70938 (docs/FOREVER-PROBE.md session
+-- 9). Per edge: the mouse event first (OnMouseDown / OnMouseUp; a key
+-- binding fires them too, with IsMouseButtonDown false), then PreClick, the
+-- secure action, OnClick, PostClick. A SecureActionButtonTemplate button
+-- registers both edges and acts on the one its useOnKeyDown attribute, else
+-- ActionButtonUseKeyDown, picks: what it would do is recorded in
+-- WoW.dispatched, nil type included. Any other button: the up edge only.
+-- opts.key: a key binding. opts.drag: OnDragStart after the press, then
+-- opts.during(), and the release is OnDragStop alone (no OnMouseUp, no up
+-- edge). The next frame's timers run after the release.
+WoW.dispatched = {}
+local function clickEdge(b, mouse, down)
+    local secure = b._template == "SecureActionButtonTemplate"
+    if down and not secure then return end
+    local pre = b:GetScript("PreClick")
+    if pre then pre(b, mouse, down) end
+    if secure then
+        local onDown = b:GetAttribute("useOnKeyDown")
+        if onDown == nil then onDown = WoW.cvars.ActionButtonUseKeyDown == "1" end
+        if down == onDown then
+            table.insert(WoW.dispatched, { button = b, type = b:GetAttribute("type"), spell = b:GetAttribute("spell"),
+                item = b:GetAttribute("item"), bag = b:GetAttribute("target-bag"), slot = b:GetAttribute("target-slot") })
+        end
+    end
+    local on = b:GetScript("OnClick")
+    if on then on(b, mouse, down) end
+    local post = b:GetScript("PostClick")
+    if post then post(b, mouse, down) end
+end
+function WoW.press(b, mouse, opts)
+    mouse, opts = mouse or "LeftButton", opts or {}
+    if not opts.key then WoW.mouseDown[mouse] = true end
+    local down = b:GetScript("OnMouseDown")
+    if down then down(b, mouse) end
+    clickEdge(b, mouse, true)
+    if opts.drag then
+        local start = b:GetScript("OnDragStart")
+        if start then start(b, mouse) end
+        if opts.during then opts.during() end
+        WoW.mouseDown[mouse] = nil
+        local stop = b:GetScript("OnDragStop")
+        if stop then stop(b) end
+    else
+        WoW.mouseDown[mouse] = nil
+        local up = b:GetScript("OnMouseUp")
+        if up then up(b, mouse) end
+        clickEdge(b, mouse, false)
+    end
+    WoW.flushTimers(0)
+end
+-- The secure actions that would have run since the last call: a list of their types (nil as "nil").
+function WoW.takeDispatched()
+    local out = {}
+    for _, d in ipairs(WoW.dispatched) do out[#out + 1] = tostring(d.type) end
+    WoW.dispatched = {}
+    return table.concat(out, " ")
+end
 function SpellIsTargeting() if WoW.targeting == nil then return false end return WoW.targeting end
 function SpellCanTargetItem() if WoW.targetItem == nil then return false end return WoW.targetItem end
 function SpellCanTargetItemID() if WoW.targetItemID == nil then return false end return WoW.targetItemID end

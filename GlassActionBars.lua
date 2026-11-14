@@ -107,11 +107,24 @@ local function ensureDefaults()
             end
             if u.order ~= nil then
                 if type(u.order) ~= "table" then u.order = nil else
-                    local clean, seen = {}, {}
+                    local clean, seen, spells = {}, {}, 0
                     for _, k in ipairs(u.order) do
-                        if U.ValidKey(k) and not seen[k] then clean[#clean + 1] = k; seen[k] = true end
+                        -- Dropped spells (#86) up to the cap, the first ones kept.
+                        local spell = U.SpellId(k) ~= nil
+                        if U.ValidKey(k) and not seen[k] and not (spell and spells >= U.MAX_SPELLS) then
+                            clean[#clean + 1] = k; seen[k] = true
+                            if spell then spells = spells + 1 end
+                        end
                     end
                     u.order = clean
+                end
+            end
+            -- A dropped spell's hidden mark lives only while it is in the order.
+            if type(u.show) == "table" then
+                local inOrder = {}
+                for _, k in ipairs(type(u.order) == "table" and u.order or {}) do inOrder[k] = true end
+                for k in pairs(u.show) do
+                    if U.SpellId(k) and not inOrder[k] then u.show[k] = nil end
                 end
             end
             for k in pairs(U.LAYOUT) do
@@ -344,6 +357,75 @@ function Settings.MoveUtility(key, delta)
     order[i], order[j] = order[j], order[i]
     utility().order = order
     GAB.Utility.Reconcile()
+    return true
+end
+
+-- The Utility bar's options rows follow a change made on the bar itself (#86).
+local function refreshUtilityPage()
+    if GAB.Options and GAB.Options.utilityPage then GAB.Options.RefreshPage(GAB.Options.utilityPage) end
+end
+
+-- `key` moved before `before` in `order` (nil, or a key not there: last).
+local function placeIn(order, key, before)
+    for n = #order, 1, -1 do if order[n] == key then table.remove(order, n) end end
+    for n, k in ipairs(order) do
+        if k == before then table.insert(order, n, key) return end
+    end
+    order[#order + 1] = key
+end
+
+local function inList(list, v)
+    for _, x in ipairs(list) do if x == v then return true end end
+    return false
+end
+
+-- An entry moved on the bar itself (#86's reorder drag): before `before`
+-- (nil: last). False for a key not in the order or placed on itself.
+function Settings.PlaceUtility(key, before)
+    local U = GAB.Utility
+    if not U.ValidKey(key) or key == before then return false end
+    local order = U.Order()
+    if not inList(order, key) then return false end
+    placeIn(order, key, before)
+    utility().order = order
+    U.Reconcile()
+    refreshUtilityPage()
+    return true
+end
+
+-- A spell dropped on the bar (#86), before `before` (nil: last): a built-in
+-- entry's spell turns that entry on, another becomes spell:<id>, shown.
+-- True and its key, or false and why (the cursor keeps the spell).
+function Settings.AddUtilitySpell(id, before)
+    local U = GAB.Utility
+    local key, why = U.DropKey(id)
+    if not key then return false, why end
+    local order = U.Order()
+    if U.SpellId(key) and not inList(order, key) and U.SpellCount(order) >= U.MAX_SPELLS then
+        return false, "the bar holds " .. U.MAX_SPELLS .. " added spells already"
+    end
+    local u = utility()
+    if type(u.show) == "table" then u.show[key] = nil end   -- shown: no built-in here is opt-in
+    if key ~= before then placeIn(order, key, before) end   -- dropped on its own button: stays
+    u.order = order
+    U.Reconcile()
+    refreshUtilityPage()
+    return true, key
+end
+
+-- An entry taken off the bar (#86, dragged off it): a dropped spell leaves
+-- the order; anything else is unticked, back from Options.
+function Settings.RemoveUtility(key)
+    local U = GAB.Utility
+    if not U.ValidKey(key) then return false end
+    if not U.SpellId(key) then return Settings.SetUtilityShown(key, false) end
+    local u = utility()
+    local order = U.Order()
+    for n = #order, 1, -1 do if order[n] == key then table.remove(order, n) end end
+    u.order = order
+    if type(u.show) == "table" then u.show[key] = nil end
+    U.Reconcile()
+    refreshUtilityPage()
     return true
 end
 
