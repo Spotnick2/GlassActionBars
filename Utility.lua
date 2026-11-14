@@ -94,9 +94,12 @@ Utility.ACTIONS = {
     { key = "engineering", label = "Engineering", spells = { 12656, 4038, 4037, 4036 } },
     { key = "leatherworking", label = "Leatherworking", spells = { 10662, 3811, 3104, 2108 }, measured = true },
     { key = "tailoring", label = "Tailoring", spells = { 12180, 3910, 3909, 3908 }, measured = true },
-    { key = "skinning", label = "Skinning", spells = { 10768, 8618, 8617, 8613 }, measured = true },
+    -- Herbalism's and Skinning's camp-feature spells (#90), not their gathering
+    -- casts (a herb or a corpse as the target): learned with the skill
+    -- (SkillLineAbility, acquire 2, 70938), like Fishing's Bait and Tackle.
+    { key = "skinning", label = "Tanning", spells = { 1278068 } },
     { key = "mining", label = "Mining", spells = { 10248, 3564, 2576, 2575 } },
-    { key = "herbalism", label = "Herbalism", spells = { 11993, 3570, 2368, 2366 } },
+    { key = "herbalism", label = "Gardening", spells = { 1278062 }, measured = true },
     { key = "smelting", label = "Smelting", spells = { 2656 } },
     { key = "poisons", label = "Poisons", spells = { 2842 } },
     { key = "disenchant", label = "Disenchant", spells = { 13262 }, measured = true },
@@ -1023,9 +1026,16 @@ local markerLine = marker:CreateTexture(nil, "OVERLAY")
 markerLine:SetAllPoints()
 markerLine:SetColorTexture(0.5, 0.83, 1, 0.9)
 
+local function shownIndex(b)
+    for n, x in ipairs(shownList) do if x == b then return n end end
+end
+
 -- Where a drop would land: the shown button nearest the pointer and whether
--- on its trailing half; nil when the pointer is off the bar (its rect plus
--- half a button).
+-- after it; nil when the pointer is off the bar (its rect plus half a
+-- button). A moved button takes the target's slot (#88): after it when moving
+-- forward, before it when moving back, whichever half (in a grid, "after the
+-- row's last button" is the next row's first slot, where it came from). A
+-- spell from the spellbook has no slot: after on the target's trailing half.
 local function dropTarget()
     local px, py = pointer()
     local fx, fy, fw, fh = screenRect(frame)
@@ -1042,6 +1052,10 @@ local function dropTarget()
         end
     end
     if not best then return nil end
+    if reorder then
+        local from, to = shownIndex(reorder.button), shownIndex(best)
+        return best, from ~= nil and to > from
+    end
     return best, trailing(best)
 end
 
@@ -1506,4 +1520,5 @@ Utility._test = { regions = regions, state = state, frame = frame,
     shown = function() return shownList end, geom = function() return lastGeom end,
     setCampfire = function(v) campfire = v end, mover = mover, poller = poller,
     dragging = function() return dragging, stopPending end,
-    gesture = gesture, ghost = ghost, marker = marker, reorder = function() return reorder end }
+    gesture = gesture, ghost = ghost, marker = marker, reorder = function() return reorder end,
+    lastCols = function() return lastCols end }

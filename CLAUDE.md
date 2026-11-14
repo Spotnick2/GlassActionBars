@@ -180,7 +180,8 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `MAX_SPELLS`, 40), a secure `GlassActionBarsUtilSpell_<id>` made at the first Reconcile that
   shows it, registered only on characters that know that rank (another class's keeps its slot); a
   built-in entry's spell (any rank) turns that entry on instead. Shift (Blizzard's PICKUPACTION)
-  + drag moves a button along the bar (`Settings.PlaceUtility`) or off it (`RemoveUtility`: a
+  + drag moves a button along the bar (`Settings.PlaceUtility`; it takes the slot of the button
+  it's dropped on, after it moving forward and before it moving back, #88) or off it (`RemoveUtility`: a
   spell leaves the order, anything else is unticked); our own ghost, nothing on the real cursor.
   **The gesture guard:** a mouse press (`OnMouseDown` with `IsMouseButtonDown` true: a CLICK
   binding fires it too, with the button up) that places or picks up begins a gesture, ended a
