@@ -12,9 +12,9 @@
 --   - whether the Utility bar adds and drops the camp features with it;
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
--- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53), micro (#57), feedpet (#65) and
--- lock (#34): /fp steps gab <name>.
--- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, pet, lock, clear.
+-- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53), micro (#57), feedpet (#65),
+-- lock (#34) and utilitydrag (#86): /fp steps gab <name>.
+-- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, pet, lock, drag, ranks, clear.
 
 local ADDON, NS = ...
 local MAX_LOG = 3000
@@ -1087,6 +1087,325 @@ Probe:Steps("lock", {
       reload = true },
 })
 
+-- ------------------------------------------------------------------
+-- utilitydrag (#86): before the Utility bar takes dropped spells and a
+-- pick-up drag, two test buttons of the probe's own, built like the bar's:
+-- S, secure (AnyUp + AnyDown, a /run macro that only counts), and P,
+-- insecure (AnyUp, its OnClick counts). Both carry the plan's gesture guard:
+-- a gesture begins at a mouse press (the cursor holds something: "place";
+-- the pick-up modifier: "pickup") and ends a frame after that button's
+-- release, or a frame after an OnReceiveDrag; while one is outstanding S's
+-- PreClick strips its action and PostClick restores it, P's OnClick does
+-- nothing, and a "place" release takes the cursor (logged, cleared). Every
+-- script logs its frame number, edge, mouse button, cursor, modifier and the
+-- counters, so the log answers: the order of OnMouseDown / PreClick /
+-- OnClick / PostClick / OnMouseUp / OnDragStart / OnDragStop /
+-- OnReceiveDrag, frame by frame; whether the guard keeps the action from
+-- firing on both ActionButtonUseKeyDown values; whether a Shift CLICK
+-- binding still acts. `ranks` reads the spellbook for #86's rank question.
+-- ------------------------------------------------------------------
+
+local drag = { frame = 0, fired = { S = 0, P = 0 }, drops = 0, ended = 0, marks = {}, binds = false }
+local dragHost, dragButtons, gesture = nil, {}, {}
+
+local function cursorText()
+    local p = Probe.Pack(pcall(GetCursorInfo))
+    if not p[1] then return "ERROR" end
+    local parts = {}
+    for i = 2, p.n do parts[#parts + 1] = Show(p[i]) end
+    return #parts > 0 and table.concat(parts, " ") or "empty"
+end
+local function cursorHolds()
+    local ok, kind = pcall(GetCursorInfo)
+    return not ok or secret(kind) or kind ~= nil
+end
+local function pickupMod()
+    local ok, v = pcall(IsModifiedClick, "PICKUPACTION")
+    return ok and not secret(v) and v == true
+end
+
+local function trace(b, what, extra)
+    local g = gesture[b]
+    say(("drag f%d %s %s%s | cursor %s, pickup %s, gesture %s, fired S%d P%d, drops %d"):format(drag.frame,
+        b.probeName, what, extra and (" " .. extra) or "", cursorText(), Show(pickupMod()),
+        g and (g.kind .. "/" .. tostring(g.mouse)) or "none", drag.fired.S, drag.fired.P, drag.drops))
+end
+
+local function accept(b, how)
+    if not cursorHolds() then trace(b, "accept: cursor empty, nothing to take", how) return end
+    drag.drops = drag.drops + 1
+    trace(b, "ACCEPT (" .. how .. ")")
+    ClearCursor()
+end
+
+-- One frame later: the release's click, if any, has been dispatched.
+local function endLater(b, g)
+    C_Timer.After(0, function()
+        if gesture[b] == g then gesture[b] = nil; drag.ended = drag.ended + 1; trace(b, "gesture ended") end
+    end)
+end
+
+local function strip(b) b:SetAttribute("type", nil) end
+local function restore(b) b:SetAttribute("type", "macro") end
+
+-- A CLICK binding fires OnMouseDown too, with the mouse button up (session 9).
+local function onMouseDown(b, mouse)
+    if not gesture[b] and not InCombatLockdown() and IsMouseButtonDown(mouse) then
+        local kind = cursorHolds() and "place" or pickupMod() and "pickup" or nil
+        if kind then gesture[b] = { kind = kind, mouse = mouse } end
+    end
+    trace(b, "OnMouseDown", mouse .. " IsMouseButtonDown " .. Show(IsMouseButtonDown(mouse)))
+end
+local function onMouseUp(b, mouse)
+    trace(b, "OnMouseUp", mouse)
+    local g = gesture[b]
+    if g and g.mouse == mouse then endLater(b, g) end
+end
+
+local function makeDragButton(name, secure)
+    local b = CreateFrame("Button", "GABProbeDrag" .. name, dragHost, secure and "SecureActionButtonTemplate" or nil)
+    b.probeName = name
+    b:SetSize(44, 44)
+    local t = b:CreateTexture(nil, "BACKGROUND")
+    t:SetAllPoints()
+    t:SetColorTexture(secure and 0.2 or 0.35, 0.3, secure and 0.5 or 0.25, 0.9)
+    local label = b:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    label:SetPoint("CENTER")
+    label:SetText(name)
+    b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+    b:RegisterForDrag("LeftButton")
+    b:SetScript("OnMouseDown", onMouseDown)
+    b:SetScript("OnMouseUp", onMouseUp)
+    b:SetScript("OnDragStart", function(self, mouse)
+        trace(self, "OnDragStart", tostring(mouse))
+    end)
+    -- After a drag no OnMouseUp comes (session 9): the gesture ends here too.
+    b:SetScript("OnDragStop", function(self)
+        trace(self, "OnDragStop")
+        if gesture[self] then endLater(self, gesture[self]) end
+    end)
+    b:SetScript("OnReceiveDrag", function(self)
+        trace(self, "OnReceiveDrag")
+        local fresh = not gesture[self]
+        if fresh then gesture[self] = { kind = "place", mouse = "drag" } end
+        accept(self, "OnReceiveDrag")
+        if fresh then endLater(self, gesture[self]) end
+    end)
+    b:SetScript("OnHide", function(self) trace(self, "OnHide") end)
+    if secure then
+        b:RegisterForClicks("AnyUp", "AnyDown")
+        restore(b)
+        b:SetAttribute("macrotext", "/run GABProbeDragFired('S')")
+        b:SetScript("PreClick", function(self, mouse, down)
+            local g = gesture[self]
+            if g and not InCombatLockdown() then strip(self) end
+            trace(self, "PreClick", ("%s %s%s"):format(mouse, down and "down" or "up", g and not InCombatLockdown() and " STRIPPED" or ""))
+        end)
+        b:HookScript("OnClick", function(self, mouse, down)
+            trace(self, "OnClick", ("%s %s type %s"):format(mouse, down and "down" or "up", Show(self:GetAttribute("type"))))
+        end)
+        b:SetScript("PostClick", function(self, mouse, down)
+            local g = gesture[self]
+            if g and not InCombatLockdown() then restore(self) end
+            trace(self, "PostClick", ("%s %s"):format(mouse, down and "down" or "up"))
+            if g and g.kind == "place" and not down then accept(self, "PostClick") end
+        end)
+    else
+        b:RegisterForClicks("AnyUp")
+        b:SetScript("OnClick", function(self, mouse, down)
+            local g = gesture[self]
+            trace(self, "OnClick", ("%s %s%s"):format(mouse, down and "down" or "up", g and " GUARDED" or ""))
+            if g then
+                if g.kind == "place" then accept(self, "OnClick") end
+                return
+            end
+            drag.fired.P = drag.fired.P + 1
+            trace(self, "FIRED")
+        end)
+    end
+    dragButtons[name] = b
+    return b
+end
+
+-- The secure macro's call: S's action reached.
+function GABProbeDragFired(name)
+    drag.fired[name] = drag.fired[name] + 1
+    if dragButtons[name] then trace(dragButtons[name], "FIRED") end
+end
+
+local function dragSetup()
+    if InCombatLockdown() then say("utilitydrag: out of combat, please") return false, "in combat" end
+    if not dragHost then
+        dragHost = CreateFrame("Frame", "GABProbeDragHost", UIParent)
+        dragHost:SetSize(110, 70)
+        dragHost:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+        dragHost:SetFrameStrata("HIGH")
+        local title = dragHost:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        title:SetPoint("BOTTOM", dragHost, "TOP", 0, 2)
+        title:SetText("GAB drag test")
+        makeDragButton("S", true):SetPoint("LEFT", dragHost, "LEFT", 6, 0)
+        makeDragButton("P", false):SetPoint("RIGHT", dragHost, "RIGHT", -6, 0)
+        local ticker = CreateFrame("Frame", nil, dragHost)
+        ticker:SetScript("OnUpdate", function() drag.frame = drag.frame + 1 end)
+    end
+    dragHost:Show()
+    -- Shift binds the guard must not swallow: override bindings, gone at logout or with the host.
+    local okS = pcall(SetOverrideBindingClick, dragHost, false, "SHIFT-F10", "GABProbeDragS", "LeftButton")
+    local okP = pcall(SetOverrideBindingClick, dragHost, false, "SHIFT-F11", "GABProbeDragP", "LeftButton")
+    drag.binds = okS and okP
+    drag.useKeyDown = GetCVar("ActionButtonUseKeyDown")
+    local okM, mod = pcall(GetModifiedClick, "PICKUPACTION")
+    say(("utilitydrag: test buttons up; ActionButtonUseKeyDown %s, lockActionBars %s, PICKUPACTION %s, "
+        .. "SHIFT-F10/F11 bound %s"):format(Show(drag.useKeyDown), Show(GetCVar("lockActionBars")),
+        Show(okM and mod), Show(drag.binds)))
+    return true, drag.useKeyDown, okM and mod
+end
+
+local function dragTeardown()
+    if not dragHost or InCombatLockdown() then return false end
+    pcall(ClearOverrideBindings, dragHost)
+    if drag.originalKeyDown ~= nil then SetCVar("ActionButtonUseKeyDown", drag.originalKeyDown) end
+    dragHost:Hide()
+    say(("utilitydrag: done; fired S%d P%d, drops %d; ActionButtonUseKeyDown back to %s"):format(
+        drag.fired.S, drag.fired.P, drag.drops, Show(GetCVar("ActionButtonUseKeyDown"))))
+    return true
+end
+
+local function flipKeyDown()
+    if drag.originalKeyDown == nil then drag.originalKeyDown = GetCVar("ActionButtonUseKeyDown") end
+    local now = GetCVar("ActionButtonUseKeyDown")
+    SetCVar("ActionButtonUseKeyDown", now == "1" and "0" or "1")
+    say("utilitydrag: ActionButtonUseKeyDown " .. Show(now) .. " -> " .. Show(GetCVar("ActionButtonUseKeyDown")))
+    return GetCVar("ActionButtonUseKeyDown")
+end
+
+-- A step's counters against the ones it started with (taken at its first poll).
+local function since(key)
+    local m = drag.marks[key]
+    if not m then
+        m = { S = drag.fired.S, P = drag.fired.P, drops = drag.drops, ended = drag.ended }
+        drag.marks[key] = m
+    end
+    return drag.fired.S - m.S, drag.fired.P - m.P, drag.drops - m.drops, drag.ended - m.ended
+end
+local function waitFired(key, name)
+    return function()
+        local s, p = since(key)
+        local n = name == "S" and s or p
+        return n > 0, name .. " not fired yet"
+    end
+end
+local function waitDrop(key)
+    return function()
+        local _, _, d = since(key)
+        return d > 0 and not cursorHolds(), "no drop taken yet"
+    end
+end
+local function noFire(key)
+    return function()
+        local s, p, d = since(key)
+        return s == 0 and p == 0, ("fired S+%d P+%d, drops +%d"):format(s, p, d)
+    end
+end
+
+-- The spellbook's player spells: id, name, subtext, highest rank or not; for a
+-- lower rank, what the client says of it (#86: does a dropped lower rank stay
+-- known, and is there an ID path to the highest?).
+local function readRanks()
+    local okN, lines = pcall(C_SpellBook.GetNumSpellBookSkillLines)
+    if not okN or secret(lines) then say("ranks: skill lines unreadable") return end
+    local seen, lower = 0, 0
+    for i = 1, lines do
+        local okI, info = pcall(C_SpellBook.GetSpellBookSkillLineInfo, i)
+        if okI and type(info) == "table" and not secret(info.itemIndexOffset) then
+            for slot = info.itemIndexOffset + 1, info.itemIndexOffset + info.numSpellBookItems do
+                local okT, kind, _, id = pcall(C_SpellBook.GetSpellBookItemType, slot, Enum.SpellBookSpellBank.Player)
+                if okT and not secret(id) and type(id) == "number" then
+                    seen = seen + 1
+                    local _, name = pcall(C_Spell.GetSpellName, id)
+                    local _, sub = pcall(C_Spell.GetSpellSubtext, id)
+                    local _, highest = pcall(C_ActionBar.IsHighestSpellRank, id)
+                    local line = ("rank: slot %d id %d %s %s, kind %s, highest %s"):format(slot, id, Show(name), Show(sub),
+                        Show(kind), Show(highest))
+                    if highest == false then
+                        lower = lower + 1
+                        local _, k1 = pcall(IsSpellKnown, id)
+                        local _, k2 = pcall(C_SpellBook.IsSpellKnown, id)
+                        local _, k3 = pcall(IsPlayerSpell, id)
+                        local _, ov = pcall(C_SpellBook.FindSpellOverrideByID, id)
+                        local _, base = pcall(C_SpellBook.FindBaseSpellByID, id)
+                        local okF, fslot, bank = pcall(C_SpellBook.FindSpellBookSlotForSpell, id)
+                        local fid
+                        if okF and type(fslot) == "number" then
+                            local okB, item = pcall(C_SpellBook.GetSpellBookItemInfo, fslot, bank)
+                            fid = okB and type(item) == "table" and item.spellID or nil
+                        end
+                        line = line .. (" | IsSpellKnown %s, C_SpellBook.IsSpellKnown %s, IsPlayerSpell %s, override %s, "
+                            .. "base %s, FindSpellBookSlotForSpell %s -> id %s"):format(Show(k1), Show(k2), Show(k3),
+                            Show(ov), Show(base), Show(okF and fslot), Show(fid))
+                    end
+                    say(line)
+                end
+            end
+        end
+    end
+    say(("ranks: %d spellbook spells, %d not the highest rank"):format(seen, lower))
+    return seen, lower
+end
+
+Probe:Command("drag", function() dragSetup() end, "the utilitydrag test buttons (S secure, P plain)")
+Probe:Command("ranks", function() readRanks() end, "every spellbook spell's rank facts (#86)")
+
+-- A pick-up gesture (or `n` of them) done and ended, nothing fired.
+local function noFireStep(key, text, n)
+    return { text = text, timeout = 180, check = noFire(key),
+        wait = function()
+            local _, _, _, e = since(key)
+            return e >= (n or 1), "gestures ended: " .. e .. " of " .. (n or 1)
+        end }
+end
+
+Probe:Steps("utilitydrag", {
+    rev = 2,
+    title = "Drop and drag on Utility-like buttons (#86)",
+    { text = "Out of combat. Press Set up: two test buttons appear above the middle of the screen, S (secure, "
+        .. "like the Utility bar's spells) and P (plain, like the padlock). Open the console (/fp) if you want "
+        .. "to watch the log.", button = "Set up", run = dragSetup,
+      check = function() return dragHost ~= nil and dragHost:IsShown(), "the test buttons shown" end },
+    { text = "Control: click S once, normally.", wait = waitFired("s1", "S"), timeout = 120 },
+    { text = "Control: click P once, normally.", wait = waitFired("p1", "P"), timeout = 120 },
+    { text = "Open your spellbook (P), drag a spell out of it and release it ON S.",
+      wait = waitDrop("dropS"), timeout = 180, check = noFire("dropS") },
+    { text = "Drag a spell from the spellbook and release it ON P.", wait = waitDrop("dropP"), timeout = 180,
+      check = noFire("dropP") },
+    { text = "Drag a spell from the spellbook and release it over empty ground, so it stays on the cursor. Then "
+        .. "click S with it.", wait = waitDrop("clickS"), timeout = 180, check = noFire("clickS") },
+    { text = "Again with P: a spell on the cursor (released over empty ground), then click P.",
+      wait = waitDrop("clickP"), timeout = 180, check = noFire("clickP") },
+    noFireStep("shiftS", "Hold Shift, press the left button on S, drag a little off it, and release."),
+    noFireStep("shiftclickS", "Shift-click S (no drag)."),
+    noFireStep("shiftP", "Shift-click P, then Shift-drag P a little and release.", 2),
+    noFireStep("overlap", "On S: hold Shift, press and HOLD the left button, let go of Shift, click the right "
+        .. "button, then release the left button."),
+    { text = "Press Shift+F10 once (bound to S for this test): the key must still act.",
+      wait = waitFired("keyS", "S"), timeout = 120 },
+    { text = "Press Shift+F11 once (bound to P).", wait = waitFired("keyP", "P"), timeout = 120 },
+    { text = "Now the other ActionButtonUseKeyDown setting (put back at the end).", button = "Flip it",
+      run = flipKeyDown },
+    { text = "Control: click S once, normally.", wait = waitFired("s2", "S"), timeout = 120 },
+    { text = "Drag a spell from the spellbook and release it ON S.", wait = waitDrop("dropS2"), timeout = 180,
+      check = noFire("dropS2") },
+    { text = "A spell on the cursor (released over empty ground), then click S.", wait = waitDrop("clickS2"),
+      timeout = 180, check = noFire("clickS2") },
+    noFireStep("shiftS2", "Hold Shift, press the left button on S, drag a little off it, and release."),
+    noFireStep("shiftclickS2", "Shift-click S (no drag)."),
+    { text = "Press Shift+F10 once.", wait = waitFired("keyS2", "S"), timeout = 120 },
+    { text = "On a character that knows two ranks of a spell (a hunter's stings, a priest's heals): reading every "
+        .. "spellbook spell's rank facts.", button = "Read ranks", run = readRanks },
+    { text = "Putting the setting back and removing the test buttons and keys.", auto = true, run = dragTeardown },
+    { text = "Press Reload now (or type /reload) to save the results.", reload = true },
+})
+
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
 boot:SetScript("OnEvent", function(_, event, name)
@@ -1106,4 +1425,6 @@ end)
 
 NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCamping, cropMicro = cropMicro, fadeBagIcons = fadeBagIcons,
     takeBaseline = takeBaseline, cooldownVerdict = cooldownVerdict, readPet = readPet, fed = fed, afterFeed = afterFeed,
-    readLock = readLock, startLock = startLock, lockChanged = lockChanged, writeInCombat = writeInCombat, restoreLock = restoreLock }
+    readLock = readLock, startLock = startLock, lockChanged = lockChanged, writeInCombat = writeInCombat, restoreLock = restoreLock,
+    drag = drag, dragButtons = dragButtons, gesture = gesture, dragSetup = dragSetup, dragTeardown = dragTeardown,
+    flipKeyDown = flipKeyDown, readRanks = readRanks, since = since }

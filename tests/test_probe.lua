@@ -263,4 +263,110 @@ WoW.combat = false
 T.restoreLock()
 eq(WoW.cvars.lockActionBars, "0", "  a second run puts back its own start (unlocked)")
 
+-- utilitydrag (#86): the test buttons and their gesture guard. The client's
+-- order is what the procedure measures; this drives one plausible order
+-- (OnMouseDown, the down edge, the up edge, OnMouseUp, then the next frame)
+-- with the secure dispatch modelled on SecureActionButton_OnClick.
+WoW.cvars.ActionButtonUseKeyDown = "1"
+local ok = T.dragSetup()
+check(ok == true, "utilitydrag: set up out of combat")
+local S, P = T.dragButtons.S, T.dragButtons.P
+eq(WoW.overrides[_G.GABProbeDragHost]["SHIFT-F10"], "GABProbeDragS:LeftButton", "  Shift+F10 clicks S")
+local function edge(b, mouse, down, key)
+    if b:GetScript("PreClick") then b:GetScript("PreClick")(b, mouse, down) end
+    if b == S then
+        local onDown = WoW.cvars.ActionButtonUseKeyDown == "1"
+        if (down and onDown) or (not down and not onDown) then
+            if b:GetAttribute("type") == "macro" then GABProbeDragFired("S") end
+        end
+        b:GetScript("OnClick")(b, mouse, down)
+    elseif not down then
+        b:GetScript("OnClick")(b, mouse, down)
+    end
+    if b:GetScript("PostClick") then b:GetScript("PostClick")(b, mouse, down) end
+end
+local function click(b, mouse)
+    mouse = mouse or "LeftButton"
+    WoW.mouseDown[mouse] = true
+    b:GetScript("OnMouseDown")(b, mouse)
+    edge(b, mouse, true)
+    WoW.mouseDown[mouse] = nil
+    edge(b, mouse, false)
+    b:GetScript("OnMouseUp")(b, mouse)
+    WoW.flushTimers(0)
+end
+local function key(b) edge(b, "LeftButton", true); edge(b, "LeftButton", false) end
+local function fired() return T.drag.fired.S, T.drag.fired.P, T.drag.drops end
+local function spellOnCursor() WoW.cursorInfo = { "spell", 12, "spell", 6991 } end
+
+for _, cv in ipairs({ "1", "0" }) do
+    WoW.cvars.ActionButtonUseKeyDown = cv
+    local s0, p0, d0 = fired()
+    click(S); click(P)
+    local s1, p1 = fired()
+    check(s1 == s0 + 1 and p1 == p0 + 1, "  [keydown " .. cv .. "] a plain click acts once on each")
+    WoW.pickupDown = true
+    click(S); click(P)
+    local s2, p2 = fired()
+    check(s2 == s1 and p2 == p1, "  [keydown " .. cv .. "] a Shift-click acts on neither edge")
+    eq(S:GetAttribute("type"), "macro", "  [keydown " .. cv .. "] S's action restored after")
+    key(S); key(P)
+    local s3, p3 = fired()
+    check(s3 == s2 + 1 and p3 == p2 + 1, "  [keydown " .. cv .. "] a Shift key binding still acts")
+    WoW.pickupDown = false
+    spellOnCursor(); click(S)
+    local s4, _, d4 = fired()
+    check(s4 == s3 and d4 == d0 + 1 and WoW.cursorInfo == nil, "  [keydown " .. cv .. "] a click with a spell takes it, casts nothing")
+    spellOnCursor(); click(P)
+    local _, p5, d5 = fired()
+    check(p5 == p3 and d5 == d4 + 1, "  [keydown " .. cv .. "] the same on P")
+    -- A spellbook drag released on S, then the release click in the same frame.
+    spellOnCursor()
+    S:GetScript("OnReceiveDrag")(S)
+    edge(S, "LeftButton", false)
+    WoW.flushTimers(0)
+    local s6, _, d6 = fired()
+    check(s6 == s4 and d6 == d5 + 1, "  [keydown " .. cv .. "] OnReceiveDrag takes it once, the release casts nothing")
+    eq(T.gesture[S], nil, "  [keydown " .. cv .. "] the gesture ended a frame later")
+end
+-- A pick-up drag: no OnMouseUp after it (session 9), OnDragStop ends the gesture.
+WoW.pickupDown = true
+WoW.mouseDown.LeftButton = true
+S:GetScript("OnMouseDown")(S, "LeftButton"); edge(S, "LeftButton", true)
+S:GetScript("OnDragStart")(S, "LeftButton")
+WoW.mouseDown.LeftButton, WoW.pickupDown = nil, false
+S:GetScript("OnDragStop")(S); WoW.flushTimers(0)
+eq(T.gesture[S], nil, "  a drag's gesture ends at OnDragStop")
+-- A key binding fires OnMouseDown with the mouse button up: no gesture, it acts.
+local k0 = fired()
+WoW.pickupDown = true
+S:GetScript("OnMouseDown")(S, "LeftButton"); edge(S, "LeftButton", true); edge(S, "LeftButton", false)
+S:GetScript("OnMouseUp")(S, "LeftButton"); WoW.flushTimers(0)
+WoW.pickupDown = false
+eq((fired()), k0 + 1, "  a Shift key binding's OnMouseDown begins nothing, the key acts")
+-- Overlap: Shift-left down, Shift up, right click, left up: still nothing.
+local s0 = fired()
+WoW.cvars.ActionButtonUseKeyDown = "0"
+WoW.pickupDown = true
+WoW.mouseDown.LeftButton = true
+S:GetScript("OnMouseDown")(S, "LeftButton"); edge(S, "LeftButton", true)
+WoW.pickupDown = false
+click(S, "RightButton")
+WoW.mouseDown.LeftButton = nil
+edge(S, "LeftButton", false); S:GetScript("OnMouseUp")(S, "LeftButton"); WoW.flushTimers(0)
+eq((fired()), s0, "  a right click mid-gesture doesn't let the left release act")
+eq(T.gesture[S], nil, "  the gesture ended")
+-- In combat: no gesture begins, the click acts.
+WoW.combat = true
+WoW.pickupDown = true
+click(S)
+eq((fired()), s0 + 1, "  in combat a Shift-click acts (the stated exception)")
+WoW.combat, WoW.pickupDown = false, false
+-- Teardown: the keys gone, the setting back.
+T.flipKeyDown()
+eq(WoW.cvars.ActionButtonUseKeyDown, "1", "  flipped")
+check(T.dragTeardown() == true and WoW.overrides[_G.GABProbeDragHost] == nil, "  teardown clears the keys")
+eq(WoW.cvars.ActionButtonUseKeyDown, "0", "  and puts the setting back")
+check(#WoW.chat == chatBefore, "  nothing in chat")
+
 done("test_probe")

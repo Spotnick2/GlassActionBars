@@ -44,6 +44,14 @@
 -- The provider hears OnHosted(true/false) when its button joins or leaves the
 -- enabled bar (once with false after it registers, if not shown).
 --
+-- Spells dropped on the bar (#86): key spell:<id>, in the saved order (being
+-- there is the entry), shown on the characters that know that rank; a secure
+-- GlassActionBarsUtilSpell_<id> made the first time one shows. A spell of a
+-- built-in entry turns that entry on instead. Editing on the bar: drop a
+-- spell on a button (or click one with a spell on the cursor), Shift-drag
+-- (Blizzard's Pick Up Action key) a button along the bar or off it. A press
+-- that places or picks up never acts (the gesture, below).
+--
 -- Placement is the dock's (client "utility", Dock.lua): docked right of Action
 -- Bar 1 by default. Layout(geom) lays the buttons out with the bar's geometry,
 -- or the bar's own (LAYOUT, Apotheca's keys) when geom is nil. Alt-drag moves
@@ -131,6 +139,11 @@ local BY_KEY = {}
 for _, a in ipairs(Utility.ACTIONS) do BY_KEY[a.key] = a end
 for _, a in ipairs(Utility.CAMPING) do BY_KEY[a.key] = a end
 Utility.BY_KEY = BY_KEY
+-- A built-in entry's spells (every rank): a drop of one is that entry.
+local BUILTIN_SPELL = {}
+for _, a in ipairs(Utility.ACTIONS) do
+    for _, id in ipairs(a.spells or {}) do BUILTIN_SPELL[id] = a.key end
+end
 
 -- The keys of the player's order: the actions, then the Camping group.
 Utility.ORDER_KEYS = {}
@@ -142,12 +155,29 @@ for _, k in ipairs(Utility.ORDER_KEYS) do isOrderKey[k] = true end
 -- A key the saved settings may hold: an order key, or a provider's button
 -- (provider:<id>, kept even before that provider registers; #9's PR 2).
 function Utility.ValidKey(k)
-    return type(k) == "string" and (isOrderKey[k] or k:match("^provider:[%w_]+$") ~= nil)
+    return type(k) == "string" and (isOrderKey[k] or k:match("^provider:[%w_]+$") ~= nil
+        or Utility.SpellId(k) ~= nil)
 end
 
 -- A provider key's id, else nil.
 function Utility.ProviderId(k)
     return type(k) == "string" and k:match("^provider:([%w_]+)$") or nil
+end
+
+-- A dropped spell's key (#86): spell:<id>. Its ID, else nil.
+Utility.SPELL_PREFIX = "GlassActionBarsUtilSpell_"
+Utility.MAX_SPELLS = 40
+function Utility.SpellId(k)
+    local id = type(k) == "string" and k:match("^spell:(%d+)$")
+    id = id and tonumber(id)
+    return id and id > 0 and id < 2147483648 and id or nil
+end
+
+-- The dropped spells' keys in an order.
+function Utility.SpellCount(order)
+    local n = 0
+    for _, k in ipairs(order) do if Utility.SpellId(k) then n = n + 1 end end
+    return n
 end
 
 -- A key off until the player turns it on: a provider's, or an opt-in action (the lock).
@@ -167,6 +197,10 @@ end
 -- provider's once it registered.
 function Utility.Registered(k)
     if Utility.ProviderId(k) then return providerDef(k) ~= nil end
+    -- A dropped spell: this character knows that rank (a lower rank stays
+    -- known after training: FOREVER-PROBE session 9); another class's keeps its slot.
+    local id = Utility.SpellId(k)
+    if id then return API.SpellKnown(id) == true end
     return isOrderKey[k] == true
 end
 
@@ -175,6 +209,16 @@ function Utility.Label(k)
     if k == "camping" then return "Camping items" end
     local def = providerDef(k)
     if def then return def.label end
+    local id = Utility.SpellId(k)
+    if id then
+        local ok, name = pcall(C_Spell.GetSpellName, id)
+        name = ok and API.Plain(name)
+        if type(name) ~= "string" or name == "" then return "Spell " .. id end
+        local okR, rank = pcall(C_Spell.GetSpellSubtext, id)
+        rank = okR and API.Plain(rank)
+        if type(rank) == "string" and rank ~= "" then return name .. " (" .. rank .. ")" end
+        return name
+    end
     return BY_KEY[k] and BY_KEY[k].label or k
 end
 
@@ -360,6 +404,8 @@ function Utility.Collect()
         if Utility.IsShown(key) and Utility.Registered(key) then
             if Utility.ProviderId(key) then
                 list[#list + 1] = { key = key, kind = "provider", value = Utility.ProviderId(key) }
+            elseif Utility.SpellId(key) then
+                list[#list + 1] = { key = key, kind = "spell", value = Utility.SpellId(key) }
             elseif key == "camping" then
                 for _, a in ipairs(Utility.CAMPING) do
                     if API.ItemCount(a.item) > 0 and (a.kit or campfire) then
@@ -508,6 +554,125 @@ local function feedPostClick(_, _, down)
     Utility.DisarmFeed()
 end
 
+-- ------------------------------------------------------------------
+-- Editing the bar on the bar (#86): one gesture per mouse press
+-- ------------------------------------------------------------------
+
+-- A press with anything on the cursor places it ("place"); one with the
+-- pick-up modifier (Blizzard's PICKUPACTION, Shift by default) may start a
+-- reorder drag ("pickup"). Neither acts on either edge. Measured on 70938
+-- (docs/FOREVER-PROBE.md session 9): OnMouseDown comes before the down
+-- edge's PreClick, and OnMouseUp before the up edge's; a CLICK binding fires
+-- them too, with IsMouseButtonDown false, so a key press begins nothing;
+-- after OnDragStart no OnMouseUp or up edge comes, so OnDragStop ends a
+-- gesture too; a spellbook drop is OnReceiveDrag alone. A gesture ends a
+-- frame after its own button's release (that release's click is in the same
+-- dispatch), and only that: a second mouse button's press or release leaves
+-- it. Secure buttons: PreClick strips the action, PostClick restores it from
+-- state, out of combat only (a press whose fight starts before its release
+-- may act: the stated exception).
+local gesture = {}   -- button -> { mouse = <button or false>, kind = "place" | "pickup" }
+local ACTION_ATTRS = { "type", "spell", "item", "target-bag", "target-slot" }
+
+-- The cursor holds something (anything unreadable counts as something).
+local function cursorHolds()
+    local ok, kind = pcall(GetCursorInfo)
+    return not ok or API.IsSecret(kind) or kind ~= nil
+end
+
+local function endGesture(b, g)
+    C_Timer.After(0, function()
+        if gesture[b] == g then gesture[b] = nil end
+    end)
+end
+
+local function gestureDown(self, mouse)
+    if gesture[self] or InCombatLockdown() or not state[self].kind then return end
+    if flag(IsMouseButtonDown, mouse) ~= true then return end   -- a key binding's press
+    local kind
+    if cursorHolds() then
+        kind = "place"
+    elseif flag(IsModifiedClick, "PICKUPACTION") == true then
+        kind = "pickup"
+    end
+    if kind then gesture[self] = { mouse = mouse, kind = kind } end
+end
+
+local function gestureUp(self, mouse)
+    local g = gesture[self]
+    if g and g.mouse == mouse then endGesture(self, g) end
+end
+
+-- A spellbook drag released here: taken at once; a click in the same
+-- dispatch (none measured) is still suppressed.
+local function onReceiveDrag(self)
+    local g = gesture[self]
+    local fresh = g == nil
+    if fresh then
+        g = { mouse = false, kind = "place" }
+        gesture[self] = g
+    end
+    Utility.DropOn(self)
+    if fresh then endGesture(self, g) end
+end
+
+local function onDragStart(self)
+    local g = gesture[self]
+    if g and g.kind == "pickup" and not InCombatLockdown() then Utility.StartReorder(self) end
+end
+
+local function onDragStop(self)
+    Utility.FinishReorder(self)
+    local g = gesture[self]
+    if g then endGesture(self, g) end
+end
+
+local function securePreClick(self, mouseButton, down)
+    if gesture[self] then
+        if not InCombatLockdown() then
+            for _, k in ipairs(ACTION_ATTRS) do self:SetAttribute(k, nil) end
+        end
+        return
+    end
+    if state[self].key == "feedpet" then feedPreClick(self, mouseButton, down) end
+end
+
+local function securePostClick(self, mouseButton, down)
+    local g = gesture[self]
+    if g then
+        if not InCombatLockdown() then Utility.Arm(self) end
+        -- After the secure dispatch: the rebuild can't re-arm this press.
+        if g.kind == "place" and not down then Utility.DropOn(self) end
+        return
+    end
+    if state[self].key == "feedpet" then feedPostClick(self, mouseButton, down) end
+end
+
+-- An insecure button's click (the lock, a provider's): a gesture's does nothing but place.
+local function guarded(fn)
+    return function(self, ...)
+        local g = gesture[self]
+        if g then
+            if g.kind == "place" then Utility.DropOn(self) end
+            return
+        end
+        return fn(self, ...)
+    end
+end
+
+local function addEditing(b, secure)
+    b:RegisterForDrag("LeftButton")
+    b:SetScript("OnMouseDown", gestureDown)
+    b:SetScript("OnMouseUp", gestureUp)
+    b:SetScript("OnReceiveDrag", onReceiveDrag)
+    b:SetScript("OnDragStart", onDragStart)
+    b:SetScript("OnDragStop", onDragStop)
+    if secure then
+        b:SetScript("PreClick", securePreClick)
+        b:SetScript("PostClick", securePostClick)
+    end
+end
+
 -- A button's own regions (the template has none); `cooldown` for ours only.
 local function addRegions(b, cooldown)
     local r = {}
@@ -543,11 +708,9 @@ local function makeButton(key)
     b:RegisterForClicks("AnyUp", "AnyDown")
     local r = addRegions(b, true)
     b:SetScript("OnEnter", tooltip)
-    if BY_KEY[key].feed then
-        b:SetAttribute("useOnKeyDown", false)   -- the release acts, for clicks and the binding
-        b:SetScript("PreClick", feedPreClick)
-        b:SetScript("PostClick", feedPostClick)
-    end
+    -- Feed Pet's PreClick / PostClick run inside the editing ones.
+    if BY_KEY[key].feed then b:SetAttribute("useOnKeyDown", false) end   -- the release acts, for clicks and the binding
+    addEditing(b, true)
     buttons[key], regions[b], state[b] = b, r, { key = key }
 end
 
@@ -557,8 +720,9 @@ local function makeLockButton(key)
     b:SetSize(Utility.SIZE, Utility.SIZE)
     b:RegisterForClicks("AnyUp")
     local r = addRegions(b, false)
-    b:SetScript("OnClick", lockClick)
+    b:SetScript("OnClick", guarded(lockClick))
     b:SetScript("OnEnter", tooltip)
+    addEditing(b, false)
     buttons[key], regions[b], state[b] = b, r, { key = key, insecure = true }
 end
 for _, a in ipairs(Utility.ACTIONS) do
@@ -617,9 +781,25 @@ local function makeProviderButton(key)
     b:SetSize(Utility.SIZE, Utility.SIZE)
     b:RegisterForClicks("AnyUp")
     local r = addRegions(b, false)
-    b:SetScript("OnClick", providerClick)
+    b:SetScript("OnClick", guarded(providerClick))
     b:SetScript("OnEnter", providerTooltip)
+    addEditing(b, false)
     buttons[key], regions[b], state[b] = b, r, { key = key, provider = true }
+    if skinned then API.Try("utility:skin", GAB.Buttons.Build, b, r, { maskIcon = true }) end
+    return b
+end
+
+-- A dropped spell's secure button, made the first time it shows (Reconcile:
+-- out of combat), like the built-ins'. No ':' in its name: a CLICK binding
+-- splits on it.
+local function makeSpellButton(key)
+    local b = CreateFrame("Button", Utility.SPELL_PREFIX .. Utility.SpellId(key), frame, "SecureActionButtonTemplate")
+    b:SetSize(Utility.SIZE, Utility.SIZE)
+    b:RegisterForClicks("AnyUp", "AnyDown")
+    local r = addRegions(b, true)
+    b:SetScript("OnEnter", tooltip)
+    addEditing(b, true)
+    buttons[key], regions[b], state[b] = b, r, { key = key }
     if skinned then API.Try("utility:skin", GAB.Buttons.Build, b, r, { maskIcon = true }) end
     return b
 end
@@ -705,6 +885,7 @@ end
 -- ------------------------------------------------------------------
 
 local shownList, lastGeom = {}, nil
+local lastCols = 1   -- columns in the last arrangement: the bar's flow for a drop's side
 
 local function arrange()
     local g = lastGeom
@@ -724,12 +905,206 @@ local function arrange()
         cols = math.ceil(n / rows)
         rows = math.min(rows, n)
     end
+    lastCols = cols
     frame:SetSize(cols * size + (cols - 1) * pad, rows * size + (rows - 1) * pad)
     for i, b in ipairs(shownList) do
         local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
         b:SetSize(size, size)
         b:ClearAllPoints()
         b:SetPoint("TOPLEFT", frame, "TOPLEFT", col * (size + pad), -row * (size + pad))
+    end
+end
+
+-- ------------------------------------------------------------------
+-- Drops and the reorder drag (#86)
+-- ------------------------------------------------------------------
+
+-- The order key a shown button stands for: a camping item's is the group's.
+local function orderKey(key) return key:match("^camp_") and "camping" or key end
+Utility.OrderKeyOf = orderKey
+
+local function plainNumbers(...)
+    for i = 1, select("#", ...) do
+        local v = select(i, ...)
+        if API.IsSecret(v) or type(v) ~= "number" then return false end
+    end
+    return true
+end
+
+-- The pointer in screen pixels, else nil.
+local function pointer()
+    local ok, x, y = pcall(GetCursorPosition)
+    if ok and plainNumbers(x, y) then return x, y end
+end
+
+-- A frame's centre and half sizes in screen pixels, else nil.
+local function screenRect(f)
+    local x, y = f:GetCenter()
+    local w, h, s = f:GetWidth(), f:GetHeight(), f:GetEffectiveScale()
+    if not plainNumbers(x, y, w, h, s) then return nil end
+    return x * s, y * s, w * s / 2, h * s / 2
+end
+
+-- Whether the pointer is on b's trailing half along the bar's flow (left to
+-- right in a row, downwards in a single column).
+local function trailing(b)
+    local px, py = pointer()
+    local cx, cy = screenRect(b)
+    if not (px and cx) then return false end
+    if lastCols > 1 then return px > cx end
+    return py < cy
+end
+
+-- The key a drop on b (its leading or trailing half) goes before; nil: last.
+local function beforeKey(b, after)
+    local mine = orderKey(state[b].key)
+    if not after then return mine end
+    local i
+    for n, x in ipairs(shownList) do if x == b then i = n end end
+    for j = (i or #shownList) + 1, #shownList do
+        local k = orderKey(state[shownList[j]].key)
+        if k ~= mine then return k end
+    end
+    return nil
+end
+
+-- Refusals as Blizzard's own (the red text at the top), when it's there.
+function Utility.Refuse(why)
+    local f = rawget(_G, "UIErrorsFrame")
+    if f and f.AddMessage then pcall(f.AddMessage, f, "Utility bar: " .. why, 1, 0.1, 0.1) end
+end
+
+-- The spell on the cursor: its ID when the cursor plainly holds a spell
+-- ("spell", book slot, bank, ID: measured on 70938), else nil.
+function Utility.CursorSpell()
+    local ok, kind, _, _, id = pcall(GetCursorInfo)
+    if not ok or API.IsSecret(kind) or kind ~= "spell" then return nil end
+    if API.IsSecret(id) or type(id) ~= "number" then return nil end
+    return id
+end
+
+-- The key a dropped spell becomes: a built-in entry's (any of its ranks), or
+-- its own spell:<id>. Else nil and why.
+function Utility.DropKey(id)
+    if API.SpellKnown(id) ~= true then return nil, "not a spell this character knows" end
+    if flag(C_Spell.IsSpellPassive, id) ~= false then return nil, "a passive spell can't go on the bar" end
+    return BUILTIN_SPELL[id] or ("spell:" .. id)
+end
+
+-- The cursor's contents dropped on b: a spell joins the bar there and the
+-- cursor is cleared; anything else stays on the cursor. Out of combat only.
+function Utility.DropOn(b)
+    if InCombatLockdown() or not cursorHolds() then return false end
+    local id = Utility.CursorSpell()
+    if not id then
+        Utility.Refuse("only spells can be added")
+        return false
+    end
+    local ok, why = GAB.Settings.AddUtilitySpell(id, beforeKey(b, trailing(b)))
+    if ok then ClearCursor() else Utility.Refuse(why) end
+    return ok
+end
+
+-- The reorder drag: our own ghost of the icon and a marker between the
+-- buttons; nothing on the real cursor (the Hearthstone, the camping group, a
+-- provider's button and the lock have no cursor form).
+local reorder = nil   -- { button, key }
+local ghost = CreateFrame("Frame", nil, UIParent)
+ghost:SetFrameStrata("TOOLTIP")
+ghost:SetAlpha(0.75)
+ghost:Hide()
+local ghostIcon = ghost:CreateTexture(nil, "ARTWORK")
+ghostIcon:SetAllPoints()
+ghostIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+local marker = CreateFrame("Frame", nil, UIParent)
+marker:SetFrameStrata("TOOLTIP")
+marker:Hide()
+local markerLine = marker:CreateTexture(nil, "OVERLAY")
+markerLine:SetAllPoints()
+markerLine:SetColorTexture(0.5, 0.83, 1, 0.9)
+
+-- Where a drop would land: the shown button nearest the pointer and whether
+-- on its trailing half; nil when the pointer is off the bar (its rect plus
+-- half a button).
+local function dropTarget()
+    local px, py = pointer()
+    local fx, fy, fw, fh = screenRect(frame)
+    if not (px and fx) or #shownList == 0 then return nil end
+    local _, _, bw, bh = screenRect(shownList[1])
+    bw, bh = bw or 0, bh or 0
+    if math.abs(px - fx) > fw + bw or math.abs(py - fy) > fh + bh then return nil end
+    local best, bestD
+    for _, b in ipairs(shownList) do
+        local cx, cy = screenRect(b)
+        if cx then
+            local d = (px - cx) ^ 2 + (py - cy) ^ 2
+            if not bestD or d < bestD then best, bestD = b, d end
+        end
+    end
+    if not best then return nil end
+    return best, trailing(best)
+end
+
+local function placeMarker()
+    local b, after = dropTarget()
+    if not b then marker:Hide() return end
+    local cx, cy, hw, hh = screenRect(b)
+    local s = API.Plain(UIParent:GetEffectiveScale())
+    if not (cx and plainNumbers(s)) then marker:Hide() return end
+    marker:ClearAllPoints()
+    if lastCols > 1 then
+        marker:SetSize(3, hh * 2 / s)
+        marker:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (cx + (after and hw or -hw)) / s, cy / s)
+    else
+        marker:SetSize(hw * 2 / s, 3)
+        marker:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cx / s, (cy + (after and -hh or hh)) / s)
+    end
+    marker:Show()
+end
+
+local function followPointer()
+    local px, py = pointer()
+    local s = API.Plain(UIParent:GetEffectiveScale())
+    if px and plainNumbers(s) then
+        ghost:ClearAllPoints()
+        ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", px / s, py / s)
+    end
+    placeMarker()
+end
+
+function Utility.StartReorder(b)
+    if InCombatLockdown() or not state[b].kind then return end
+    reorder = { button = b, key = orderKey(state[b].key) }
+    ghostIcon:SetTexture(regions[b].icon:GetTexture())
+    local _, _, hw, hh = screenRect(b)
+    local s = API.Plain(UIParent:GetEffectiveScale())
+    if hw and plainNumbers(s) then ghost:SetSize(hw * 2 / s, hh * 2 / s) else ghost:SetSize(Utility.SIZE, Utility.SIZE) end
+    followPointer()
+    ghost:Show()
+    ghost:SetScript("OnUpdate", followPointer)
+end
+
+-- The drag drops nothing (a fight began, the bar hid).
+function Utility.CancelReorder()
+    reorder = nil
+    ghost:SetScript("OnUpdate", nil)
+    ghost:Hide()
+    marker:Hide()
+end
+
+-- The release: over the bar, the entry goes there; off it, it comes off the
+-- bar (a dropped spell leaves it, anything else is unticked, back from Options).
+function Utility.FinishReorder(b)
+    local r = reorder
+    if not r or r.button ~= b then return end
+    local target, after = dropTarget()
+    Utility.CancelReorder()
+    if InCombatLockdown() then return end
+    if target then
+        local before = beforeKey(target, after)
+        if before ~= r.key then GAB.Settings.PlaceUtility(r.key, before) end
+    else
+        GAB.Settings.RemoveUtility(r.key)
     end
 end
 
@@ -869,7 +1244,24 @@ end)
 frame:SetScript("OnHide", function()
     stopDrag()
     updateMover()
+    Utility.CancelReorder()
 end)
+
+-- A shown button's action from its state (items and spells; Feed Pet stays
+-- disarmed at rest, the lock and providers have none). Out of combat.
+function Utility.Arm(b)
+    local s = state[b]
+    if s.provider or s.insecure or InCombatLockdown() then return end
+    if s.kind == "item" then
+        b:SetAttribute("type", "item")
+        b:SetAttribute("spell", nil)
+        b:SetAttribute("item", "item:" .. s.value)
+    elseif s.kind == "spell" then
+        b:SetAttribute("type", "spell")
+        b:SetAttribute("item", nil)
+        b:SetAttribute("spell", s.value)
+    end
+end
 
 local function clear(b)
     if not (state[b].provider or state[b].insecure) then
@@ -940,7 +1332,7 @@ function Utility.Reconcile()
     cleared = false
     local active, list, on = {}, {}, {}
     for _, e in ipairs(Utility.Collect()) do
-        local b = buttons[e.key] or makeProviderButton(e.key)
+        local b = buttons[e.key] or (Utility.SpellId(e.key) and makeSpellButton(e.key)) or makeProviderButton(e.key)
         if e.kind == "provider" then
             regions[b].icon:SetTexture(GAB.ProvidedButton(e.value).icon)
             on[e.value] = true
@@ -951,19 +1343,14 @@ function Utility.Reconcile()
             local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
             regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
         elseif e.kind == "item" then
-            b:SetAttribute("type", e.kind)
-            b:SetAttribute("spell", nil)
-            b:SetAttribute("item", "item:" .. e.value)
             local ok, icon = pcall(C_Item.GetItemIconByID, e.value)
             regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
         else
-            b:SetAttribute("type", e.kind)
-            b:SetAttribute("item", nil)
-            b:SetAttribute("spell", e.value)
             local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
             regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
         end
         state[b].kind, state[b].value, state[b].food = e.kind, e.value, e.food
+        Utility.Arm(b)
         b:Show()
         active[b] = true
         list[#list + 1] = b
@@ -1078,6 +1465,7 @@ function Utility.Start()
         elseif event == "PLAYER_REGEN_DISABLED" then
             -- The last moment before lockdown: a drag stops cleanly, where it is.
             if dragging and not InCombatLockdown() then stopDrag() end
+            Utility.CancelReorder()
             Utility.DisarmFeed()
             updateMover()
         elseif event == "MODIFIER_STATE_CHANGED" then
@@ -1117,4 +1505,5 @@ end
 Utility._test = { regions = regions, state = state, frame = frame,
     shown = function() return shownList end, geom = function() return lastGeom end,
     setCampfire = function(v) campfire = v end, mover = mover, poller = poller,
-    dragging = function() return dragging, stopPending end }
+    dragging = function() return dragging, stopPending end,
+    gesture = gesture, ghost = ghost, marker = marker, reorder = function() return reorder end }

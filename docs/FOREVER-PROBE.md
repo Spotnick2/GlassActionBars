@@ -6,6 +6,42 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
+## Session 9: drops, clicks and pick-up drags on Utility-like buttons (#86), 2026-11-14, build 70938
+
+`/fp steps gab utilitydrag`, run #314, on a level-20-ish hunter. Two probe buttons: S secure
+(`SecureActionButtonTemplate`, AnyUp + AnyDown, a `/run` macro that only counts), P insecure
+(AnyUp). Both carried #86's gesture guard. Every script logged its frame number.
+- **The order, one frame per edge:** `OnMouseDown` -> `PreClick` (down) -> the secure action ->
+  `OnClick` -> `PostClick` (down); a few frames later `OnMouseUp` -> `PreClick` (up) -> ... ->
+  `PostClick` (up). `OnMouseDown` always comes before the down edge's `PreClick`, and
+  `OnMouseUp` before the up edge's. With `ActionButtonUseKeyDown` 1 the action ran on the down
+  edge; with 0, on the up edge.
+- **A CLICK binding fires `OnMouseDown` and `OnMouseUp` too** (Shift+F10 / Shift+F11 bound with
+  `SetOverrideBindingClick`), with `button` "LeftButton", but `IsMouseButtonDown("LeftButton")`
+  false. So `OnMouseDown` alone doesn't tell a mouse press from a key: `IsMouseButtonDown` does.
+  `IsModifiedClick("PICKUPACTION")` read false during those Shift-bound key presses.
+- **A spellbook drag released on a button:** `OnReceiveDrag` only. No mouse event and no click
+  follow. `GetCursorInfo()` there: `"spell", <book slot>, "spell", <spell ID>`.
+- **Click-to-place** (a spell left on the cursor, then a click): a normal click (both edges, the
+  mouse events), the cursor still holding the spell through both edges.
+- **A pick-up drag:** `OnMouseDown` -> the down edge -> `OnDragStart` (a few frames later) ->
+  `OnDragStop` at the release. **No `OnMouseUp` and no up edge after a drag**, released on or off
+  the button. So a gesture that waits for `OnMouseUp` never ends after a drag: it has to end at
+  `OnDragStop` too. (The probe's version waited for `OnMouseUp`; steps 8, 10 and 18 never
+  completed, and the stale gesture then swallowed a plain click on P.)
+- **The guard held:** across 6 drops (3 by `OnReceiveDrag`, 3 by click-to-place), Shift-clicks,
+  Shift-drags and Shift-held-then-released, on both CVar values, neither button acted
+  (fired S+0 P+0 on every check). Stripping `type` in `PreClick` and restoring it in `PostClick`
+  out of combat stopped the secure action on both edges.
+- **Overlap** (Shift + left held, Shift let go, right click, left released): no right-button
+  event was logged on S at all, and nothing acted.
+- **Ranks:** the spellbook lists every rank as its own slot (Raptor Strike 2973 / 14260 / 14261,
+  Arcane Shot, Serpent Sting). A lower rank stays known once a higher one is learned
+  (`IsSpellKnown`, `C_SpellBook.IsSpellKnown`, `IsPlayerSpell` all true), and
+  `C_ActionBar.IsHighestSpellRank` says false for it. `FindSpellOverrideByID` and
+  `FindBaseSpellByID` return the same ID, and `FindSpellBookSlotForSpell` finds its own slot. So
+  a dropped rank keeps working after training, and no ID-only path leads to the highest rank.
+
 ## Session 8: the taint log makes hooked methods nil (#55), 2026-10-20, build 70450
 
 - **Seen:** `attempt to call a nil value` at `MainMenuBarMicroButtons.lua:2008`, 200+ times in
