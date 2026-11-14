@@ -1148,8 +1148,9 @@ end
 local function strip(b) b:SetAttribute("type", nil) end
 local function restore(b) b:SetAttribute("type", "macro") end
 
+-- A CLICK binding fires OnMouseDown too, with the mouse button up (session 9).
 local function onMouseDown(b, mouse)
-    if not gesture[b] and not InCombatLockdown() then
+    if not gesture[b] and not InCombatLockdown() and IsMouseButtonDown(mouse) then
         local kind = cursorHolds() and "place" or pickupMod() and "pickup" or nil
         if kind then gesture[b] = { kind = kind, mouse = mouse } end
     end
@@ -1178,7 +1179,11 @@ local function makeDragButton(name, secure)
     b:SetScript("OnDragStart", function(self, mouse)
         trace(self, "OnDragStart", tostring(mouse))
     end)
-    b:SetScript("OnDragStop", function(self) trace(self, "OnDragStop") end)
+    -- After a drag no OnMouseUp comes (session 9): the gesture ends here too.
+    b:SetScript("OnDragStop", function(self)
+        trace(self, "OnDragStop")
+        if gesture[self] then endLater(self, gesture[self]) end
+    end)
     b:SetScript("OnReceiveDrag", function(self)
         trace(self, "OnReceiveDrag")
         local fresh = not gesture[self]
@@ -1361,6 +1366,7 @@ local function noFireStep(key, text, n)
 end
 
 Probe:Steps("utilitydrag", {
+    rev = 2,
     title = "Drop and drag on Utility-like buttons (#86)",
     { text = "Out of combat. Press Set up: two test buttons appear above the middle of the screen, S (secure, "
         .. "like the Utility bar's spells) and P (plain, like the padlock). Open the console (/fp) if you want "

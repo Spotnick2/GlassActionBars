@@ -329,6 +329,21 @@ for _, cv in ipairs({ "1", "0" }) do
     check(s6 == s4 and d6 == d5 + 1, "  [keydown " .. cv .. "] OnReceiveDrag takes it once, the release casts nothing")
     eq(T.gesture[S], nil, "  [keydown " .. cv .. "] the gesture ended a frame later")
 end
+-- A pick-up drag: no OnMouseUp after it (session 9), OnDragStop ends the gesture.
+WoW.pickupDown = true
+WoW.mouseDown.LeftButton = true
+S:GetScript("OnMouseDown")(S, "LeftButton"); edge(S, "LeftButton", true)
+S:GetScript("OnDragStart")(S, "LeftButton")
+WoW.mouseDown.LeftButton, WoW.pickupDown = nil, false
+S:GetScript("OnDragStop")(S); WoW.flushTimers(0)
+eq(T.gesture[S], nil, "  a drag's gesture ends at OnDragStop")
+-- A key binding fires OnMouseDown with the mouse button up: no gesture, it acts.
+local k0 = fired()
+WoW.pickupDown = true
+S:GetScript("OnMouseDown")(S, "LeftButton"); edge(S, "LeftButton", true); edge(S, "LeftButton", false)
+S:GetScript("OnMouseUp")(S, "LeftButton"); WoW.flushTimers(0)
+WoW.pickupDown = false
+eq((fired()), k0 + 1, "  a Shift key binding's OnMouseDown begins nothing, the key acts")
 -- Overlap: Shift-left down, Shift up, right click, left up: still nothing.
 local s0 = fired()
 WoW.cvars.ActionButtonUseKeyDown = "0"
