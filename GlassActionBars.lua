@@ -418,7 +418,11 @@ end
 function Settings.RemoveUtility(key)
     local U = GAB.Utility
     if not U.ValidKey(key) then return false end
-    if not U.SpellId(key) then return Settings.SetUtilityShown(key, false) end
+    if not U.SpellId(key) then
+        Settings.SetUtilityShown(key, false)
+        refreshUtilityPage()   -- its checkbox, with the page open
+        return true
+    end
     local u = utility()
     local order = U.Order()
     for n = #order, 1, -1 do if order[n] == key then table.remove(order, n) end end

@@ -370,6 +370,16 @@ spellOn(2006)
 at(U.buttons.cooking, "leading")
 receive(U.buttons.cooking)
 check(rows["spell:2006"].frame:IsShown(), "  added again from the bar: its row back")
+-- A built-in dragged off with the page open: its checkbox follows, one click brings it back (PR #87 review).
+rebuild(); layout()
+check(rows.hearthstone.check:GetChecked(), "  the Hearthstone ticked")
+WoW.pickupDown = true
+WoW.press(U.buttons.hearthstone, "LeftButton", { drag = true, during = away })
+WoW.pickupDown = false
+check(not rows.hearthstone.check:GetChecked(), "  dragged off: its checkbox unticked at once")
+rows.hearthstone.check:SetChecked(true)
+rows.hearthstone.check:GetScript("OnClick")(rows.hearthstone.check)
+eq(U.IsShown("hearthstone"), true, "  one click on it: back on the bar")
 eq(next(GAB.failures), nil, "nothing failed")
 
 -- Saved settings cleaned: spells past the cap dropped, a hidden mark without its spell dropped.
