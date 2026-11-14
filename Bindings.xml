@@ -17,7 +17,6 @@
 	<Binding name="CLICK GlassActionBarsUtil_leatherworking:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_tailoring:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_skinning:LeftButton" category="Glass Action Bars"/>
-	<Binding name="CLICK GlassActionBarsUtil_mining:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_herbalism:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_smelting:LeftButton" category="Glass Action Bars"/>
 	<Binding name="CLICK GlassActionBarsUtil_poisons:LeftButton" category="Glass Action Bars"/>

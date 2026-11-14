@@ -97,8 +97,8 @@ Utility.ACTIONS = {
     -- Herbalism's and Skinning's camp-feature spells (#90), not their gathering
     -- casts (a herb or a corpse as the target): learned with the skill
     -- (SkillLineAbility, acquire 2, 70938), like Fishing's Bait and Tackle.
-    { key = "skinning", label = "Tanning", spells = { 1278068 } },
-    { key = "mining", label = "Mining", spells = { 10248, 3564, 2576, 2575 } },
+    -- Mining has none (#92): its entry, a gathering cast, was taken out.
+    { key = "skinning", label = "Tanning", spells = { 1278068 }, measured = true },
     { key = "herbalism", label = "Gardening", spells = { 1278062 }, measured = true },
     { key = "smelting", label = "Smelting", spells = { 2656 } },
     { key = "poisons", label = "Poisons", spells = { 2842 } },
