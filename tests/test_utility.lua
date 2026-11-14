@@ -64,6 +64,23 @@ WoW.known[1296017] = nil
 rebuild()
 eq((attrs("comprehend")), nil, "not known (not a mage): no button")
 
+-- Herbalism and Skinning (#90): their camp-feature spells, Gardening and
+-- Tanning, never the gathering casts (a herb or a corpse as the target).
+for _, p in ipairs({ { "herbalism", 11993, 1278062, "Gardening" }, { "skinning", 10768, 1278068, "Tanning" } }) do
+    local key, gather, camp, label = p[1], p[2], p[3], p[4]
+    WoW.known[gather] = true
+    rebuild()
+    eq((attrs(key)), nil, label .. ": the gathering cast alone shows no button")
+    WoW.known[camp] = true
+    rebuild()
+    t, spell = attrs(key)
+    eq(spell, camp, "  " .. label .. " known: the button casts it")
+    eq(U.Label(key), label, "  its row's label")
+    eq(U.DropKey(camp), key, "  dropped from the spellbook: that entry")
+    WoW.known[gather], WoW.known[camp] = nil, nil
+end
+rebuild()
+
 -- The player's order.
 check(Settings.MoveUtility("cooking", -1), "move Cooking up")
 WoW.tick()

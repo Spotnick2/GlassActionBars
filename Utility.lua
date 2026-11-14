@@ -94,9 +94,12 @@ Utility.ACTIONS = {
     { key = "engineering", label = "Engineering", spells = { 12656, 4038, 4037, 4036 } },
     { key = "leatherworking", label = "Leatherworking", spells = { 10662, 3811, 3104, 2108 }, measured = true },
     { key = "tailoring", label = "Tailoring", spells = { 12180, 3910, 3909, 3908 }, measured = true },
-    { key = "skinning", label = "Skinning", spells = { 10768, 8618, 8617, 8613 }, measured = true },
+    -- Herbalism's and Skinning's camp-feature spells (#90), not their gathering
+    -- casts (a herb or a corpse as the target): learned with the skill
+    -- (SkillLineAbility, acquire 2, 70938), like Fishing's Bait and Tackle.
+    { key = "skinning", label = "Tanning", spells = { 1278068 } },
     { key = "mining", label = "Mining", spells = { 10248, 3564, 2576, 2575 } },
-    { key = "herbalism", label = "Herbalism", spells = { 11993, 3570, 2368, 2366 } },
+    { key = "herbalism", label = "Gardening", spells = { 1278062 }, measured = true },
     { key = "smelting", label = "Smelting", spells = { 2656 } },
     { key = "poisons", label = "Poisons", spells = { 2842 } },
     { key = "disenchant", label = "Disenchant", spells = { 13262 }, measured = true },
