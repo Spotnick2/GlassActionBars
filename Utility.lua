@@ -1023,9 +1023,16 @@ local markerLine = marker:CreateTexture(nil, "OVERLAY")
 markerLine:SetAllPoints()
 markerLine:SetColorTexture(0.5, 0.83, 1, 0.9)
 
+local function shownIndex(b)
+    for n, x in ipairs(shownList) do if x == b then return n end end
+end
+
 -- Where a drop would land: the shown button nearest the pointer and whether
--- on its trailing half; nil when the pointer is off the bar (its rect plus
--- half a button).
+-- after it; nil when the pointer is off the bar (its rect plus half a
+-- button). A moved button takes the target's slot (#88): after it when moving
+-- forward, before it when moving back, whichever half (in a grid, "after the
+-- row's last button" is the next row's first slot, where it came from). A
+-- spell from the spellbook has no slot: after on the target's trailing half.
 local function dropTarget()
     local px, py = pointer()
     local fx, fy, fw, fh = screenRect(frame)
@@ -1042,6 +1049,10 @@ local function dropTarget()
         end
     end
     if not best then return nil end
+    if reorder then
+        local from, to = shownIndex(reorder.button), shownIndex(best)
+        return best, from ~= nil and to > from
+    end
     return best, trailing(best)
 end
 
@@ -1506,4 +1517,5 @@ Utility._test = { regions = regions, state = state, frame = frame,
     shown = function() return shownList end, geom = function() return lastGeom end,
     setCampfire = function(v) campfire = v end, mover = mover, poller = poller,
     dragging = function() return dragging, stopPending end,
-    gesture = gesture, ghost = ghost, marker = marker, reorder = function() return reorder end }
+    gesture = gesture, ghost = ghost, marker = marker, reorder = function() return reorder end,
+    lastCols = function() return lastCols end }

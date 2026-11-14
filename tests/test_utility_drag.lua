@@ -263,6 +263,56 @@ WoW.pickupDown = false
 eq(shown(), "spell:2006 camp_basic cooking hearthstone spell:1978", "  a camping item moves the group")
 check(U.Order()[2] == "camping", "  the order key is the group's")
 
+-- In a grid a moved button takes the slot it's dropped on (#88), whichever
+-- half: two columns, filled row by row (undocked, the owner's bar).
+Settings.SetDock("utility", "bar", false)
+WoW.tick()
+Settings.SetUtilityLayout("orientation", "VERTICAL")
+Settings.SetUtilityLayout("rows", 2)
+local function grid()
+    local list = U._test.shown()
+    for i, b in ipairs(list) do
+        local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+        b._rect = { 1000 + col * 40, 1036 + col * 40, 100 - row * 40, 64 - row * 40 }
+    end
+    U.frame._rect = { 1000, 1076, 100, 64 - (math.ceil(#list / 2) - 1) * 40 }
+end
+local function on(b, side)
+    WoW.cursor = { side == "trailing" and b._rect[2] - 4 or b._rect[1] + 4, (b._rect[3] + b._rect[4]) / 2 }
+end
+local function shiftDrag(b, target, side)
+    rebuild(); grid()
+    WoW.pickupDown = true
+    WoW.press(b, "LeftButton", { drag = true, during = function() on(target, side) end })
+    WoW.pickupDown = false
+end
+rebuild()
+eq(U._test.lastCols(), 2, "two columns")
+-- spell:2006 camp_basic / cooking hearthstone / spell:1978
+shiftDrag(U.buttons.hearthstone, U.buttons.camp_basic, "trailing")
+eq(shown(), "spell:2006 hearthstone camp_basic cooking spell:1978", "  moved back onto the row's last button's right half: its slot")
+shiftDrag(U.buttons.hearthstone, U.buttons["spell:2006"], "trailing")
+eq(shown(), "hearthstone spell:2006 camp_basic cooking spell:1978", "  back onto the first's right half: the first slot")
+shiftDrag(U.buttons.hearthstone, U.buttons.camp_basic, "leading")
+eq(shown(), "spell:2006 camp_basic hearthstone cooking spell:1978", "  forward onto a left half: after it")
+shiftDrag(U.buttons.hearthstone, U.buttons["spell:1978"], "leading")
+eq(shown(), "spell:2006 camp_basic cooking spell:1978 hearthstone", "  forward onto the last: the last slot")
+shiftDrag(U.buttons.camp_basic, U.buttons.cooking, "leading")
+eq(shown(), "spell:2006 cooking camp_basic spell:1978 hearthstone", "  the camping group forward: after it")
+shiftDrag(U.buttons.camp_basic, U.buttons.camp_basic, "trailing")
+eq(shown(), "spell:2006 cooking camp_basic spell:1978 hearthstone", "  onto itself: unchanged")
+-- A spellbook drop keeps the halves: before, or after on the trailing half.
+rebuild(); grid()
+spellOn(2050)
+on(U.buttons.cooking, "trailing")
+receive(U.buttons.cooking)
+eq(shown(), "spell:2006 cooking spell:2050 camp_basic spell:1978 hearthstone", "  a spellbook drop on a right half: after it")
+Settings.RemoveUtility("spell:2050")
+Settings.SetUtilityLayout("orientation", "HORIZONTAL")
+Settings.SetUtilityLayout("rows", 1)
+Settings.SetDock("utility", "bar", 1)
+WoW.tick()
+
 -- Shift-clicks: neither edge acts, on both CVar values; a Shift key binding acts.
 for _, cv in ipairs({ "1", "0" }) do
     WoW.cvars.ActionButtonUseKeyDown = cv
