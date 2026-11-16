@@ -57,6 +57,12 @@
 -- or the bar's own (LAYOUT, Apotheca's keys) when geom is nil. Alt-drag moves
 -- the bar anywhere: the drag undocks it at its start (so no dock pass moves
 -- it mid-drag) and the drop saves the spot; undocked, the bar sits there.
+--
+-- A second bar (#86): off until turned on, client "utility2", docked left of
+-- Action Bar 1. Any entry can be on either bar (utility.bar[key] = 2); its
+-- button moves to that bar's frame at the rebuild. Turned off, a bar's
+-- entries show nowhere. An enabled bar with nothing on it keeps one empty
+-- slot, a place to drop a spell or drag a button to.
 
 GlassActionBars = GlassActionBars or {}
 local GAB = GlassActionBars
@@ -73,6 +79,9 @@ Utility.FEED_PET = 6991
 Utility.FOOD_BAND = 10            -- food within this many levels of the pet: the cheapest (GlassPearls')
 Utility.SIZE, Utility.PADDING = 36, 4
 Utility.DOCK = { bar = 1, side = "RIGHT", align = "END", gap = 4, match = true }
+-- The second bar (#86): off until turned on, docked left of Action Bar 1.
+Utility.DOCK2 = { bar = 1, side = "LEFT", align = "END", gap = 4, match = true }
+Utility.BARS = 2
 -- The bar's own layout (undocked, or docked without matching): Apotheca's
 -- setting keys, so its import is a copy. VERTICAL: `rows` counts columns.
 Utility.LAYOUT = { orientation = "HORIZONTAL", rows = 1, iconSize = Utility.SIZE, iconPadding = Utility.PADDING }
@@ -248,16 +257,24 @@ local function saved()
 end
 
 -- Bar n's own settings: bar 1's are the utility table's own keys
--- (Apotheca's import keys), else nil.
+-- (Apotheca's import keys), bar 2's its `second` table; else nil.
 local function barSettings(n)
-    if (n or 1) == 1 then return saved() end
+    local s = saved()
+    if (n or 1) == 1 then return s end
+    return s and type(s.second) == "table" and s.second or nil
 end
 
--- Bar n (default 1) is on.
+-- Bar n (default 1) is on: bar 1 unless turned off, bar 2 once turned on.
 function Utility.Enabled(n)
     local s = barSettings(n)
     if s and s.enabled ~= nil then return s.enabled == true end
-    return true
+    return (n or 1) == 1
+end
+
+-- The bar an order key is on (#86): 2 when assigned there, else 1.
+function Utility.BarOf(key)
+    local s = saved()
+    return s and type(s.bar) == "table" and s.bar[key] == 2 and 2 or 1
 end
 
 -- A built-in entry shows unless turned off; a provider's or an opt-in one
@@ -408,11 +425,13 @@ function Utility.FoodArrived(id)
     return true
 end
 
--- The ordered list of { key, kind = "spell"|"item"|"provider", value } to show.
-function Utility.Collect()
+-- The ordered list of { key, kind = "spell"|"item"|"provider", value } bar
+-- n (default 1) shows.
+function Utility.Collect(n)
     local list = {}
+    n = n or 1
     for _, key in ipairs(Utility.Order()) do
-        if Utility.IsShown(key) and Utility.Registered(key) then
+        if Utility.BarOf(key) == n and Utility.IsShown(key) and Utility.Registered(key) then
             if Utility.ProviderId(key) then
                 list[#list + 1] = { key = key, kind = "provider", value = Utility.ProviderId(key) }
             elseif Utility.SpellId(key) then
@@ -452,7 +471,7 @@ end
 -- GlassActionBarsDB.utility's own keys (Apotheca's import).
 local bars = {}
 Utility.bars = bars
-local DEFAULT_POINT = { { "RIGHT", "RIGHT", -150, 0 } }
+local DEFAULT_POINT = { { "RIGHT", "RIGHT", -150, 0 }, { "RIGHT", "RIGHT", -150, -60 } }
 
 local function newBar(n)
     local f = CreateFrame("Frame", "GlassActionBarsUtilityFrame" .. (n == 1 and "" or n), UIParent)
@@ -468,7 +487,7 @@ local function newBar(n)
         dragging = false, stopPending = false, dropPos = nil, posPending = false }
     return bars[n]
 end
-newBar(1)
+for n = 1, Utility.BARS do newBar(n) end
 Utility.frame = bars[1].frame
 
 local buttons, regions, state = {}, {}, {}   -- key -> button; button -> regions; button -> { kind, value, key, bar }
@@ -831,6 +850,38 @@ local function makeSpellButton(key)
     return b
 end
 
+-- An enabled bar with nothing to show keeps one empty slot (#86), a place to
+-- drop a spell on or drag a button to: insecure, no action, never a gesture.
+-- Not in `buttons`: it stands for no key. Skinned, it is the glass's empty
+-- slot; unskinned, Blizzard's empty slot art.
+local EMPTY_SLOT = "Interface\\Buttons\\UI-EmptySlot-Disabled"
+local function makePlaceholder(bar)
+    local b = CreateFrame("Button", "GlassActionBarsUtilDrop" .. bar.index, bar.frame)
+    b:SetSize(Utility.SIZE, Utility.SIZE)
+    b:RegisterForClicks("AnyUp")
+    local r = addRegions(b, false)
+    r.icon:SetTexture(EMPTY_SLOT)
+    b:SetScript("OnReceiveDrag", function(self) Utility.DropOn(self) end)
+    b:SetScript("OnClick", function(self) if cursorHolds() then Utility.DropOn(self) end end)
+    b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(bar.index == 1 and "Utility bar" or "Utility bar " .. bar.index)
+        GameTooltip:AddLine("Drop a spell from your spellbook here, or hold Shift and drag a button here.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    regions[b], state[b] = r, { placeholder = true, bar = bar }
+    bar.placeholder = b
+end
+for _, bar in ipairs(bars) do makePlaceholder(bar) end
+
+-- The placeholder's glass: the empty slot's, its art faded under it.
+local function skinPlaceholder(bar)
+    local b = bar.placeholder
+    API.Try("utility:skin", GAB.Buttons.Build, b, regions[b], { maskIcon = true })
+    GAB.Buttons.SetOccupied(b, false)
+    regions[b].icon:SetAlpha(0)
+end
+
 -- ------------------------------------------------------------------
 -- Visuals: cooldowns, key text, counts (no secure change: safe in combat)
 -- ------------------------------------------------------------------
@@ -984,8 +1035,10 @@ local function shownIndex(b)
     for n, x in ipairs(state[b].bar.shown) do if x == b then return n end end
 end
 
--- The key a drop on b (its leading or trailing half) goes before; nil: last.
+-- The key a drop on b (its leading or trailing half) goes before; nil: last
+-- (an empty bar's placeholder too).
 local function beforeKey(b, after)
+    if state[b].placeholder then return nil end
     local mine = orderKey(state[b].key)
     if not after then return mine end
     local list = state[b].bar.shown
@@ -1028,7 +1081,7 @@ function Utility.DropOn(b)
         Utility.Refuse("only spells can be added")
         return false
     end
-    local ok, why = GAB.Settings.AddUtilitySpell(id, beforeKey(b, trailing(b)))
+    local ok, why = GAB.Settings.AddUtilitySpell(id, beforeKey(b, trailing(b)), state[b].bar.index)
     if ok then ClearCursor() else Utility.Refuse(why) end
     return ok
 end
@@ -1133,8 +1186,9 @@ function Utility.CancelReorder()
     marker:Hide()
 end
 
--- The release: over a bar, the entry goes there; off the bars, it comes off
--- (a dropped spell leaves the order, anything else is unticked, back from Options).
+-- The release: over a bar, the entry goes there (the other bar's included);
+-- off the bars, it comes off (a dropped spell leaves the order, anything else
+-- is unticked, back from Options).
 function Utility.FinishReorder(b)
     local r = reorder
     if not r or r.button ~= b then return end
@@ -1143,7 +1197,8 @@ function Utility.FinishReorder(b)
     if InCombatLockdown() then return end
     if target then
         local before = beforeKey(target, after)
-        if before ~= r.key then GAB.Settings.PlaceUtility(r.key, before) end
+        local to = state[target].bar
+        if to ~= state[b].bar or before ~= r.key then GAB.Settings.PlaceUtility(r.key, before, to.index) end
     else
         GAB.Settings.RemoveUtility(r.key)
     end
@@ -1363,13 +1418,42 @@ local function raise()
             for _, b in pairs(buttons) do   -- the glass follows the new level
                 if state[b].bar == bar then GAB.Buttons.Restyle(b) end
             end
+            GAB.Buttons.Restyle(bar.placeholder)
         end
     end
 end
 Utility.Raise = raise
 
-local pending, cleared = false, false
+local pending = false
 local started = false
+
+-- One entry's button, ready on `bar`: made the first time (a dropped spell's,
+-- a provider's), moved to this bar's frame when it was on the other one.
+local function buttonFor(e, bar)
+    local b = buttons[e.key] or (Utility.SpellId(e.key) and makeSpellButton(e.key)) or makeProviderButton(e.key)
+    if state[b].bar ~= bar then
+        b:SetParent(bar.frame)
+        state[b].bar = bar
+        GAB.Buttons.Restyle(b)   -- the glass follows the new parent's level
+    end
+    if e.kind == "provider" then
+        regions[b].icon:SetTexture(GAB.ProvidedButton(e.value).icon)
+    elseif e.kind == "lock" then
+        -- No attributes: an insecure button. Its padlock: RefreshVisuals.
+    elseif e.kind == "item" then
+        local ok, icon = pcall(C_Item.GetItemIconByID, e.value)
+        regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
+    else
+        -- A spell, or Feed Pet (disarmed above: only its click arms it).
+        local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
+        regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
+    end
+    state[b].kind, state[b].value, state[b].food = e.kind, e.value, e.food
+    Utility.Arm(b)
+    b:Show()
+    return b
+end
+
 function Utility.Reconcile()
     if InCombatLockdown() then
         pending = true
@@ -1378,51 +1462,30 @@ function Utility.Reconcile()
     pending = false
     Utility.DisarmFeed()   -- never left armed by a click that didn't finish
     API.Try("utility:raise", raise)
-    local bar = bars[1]
-    if not Utility.Enabled() then
-        if not cleared then
-            for _, b in pairs(buttons) do clear(b) end
-            cleared = true
+    local active, on = {}, {}
+    for _, bar in ipairs(bars) do
+        local list = {}
+        if Utility.Enabled(bar.index) then
+            for _, e in ipairs(Utility.Collect(bar.index)) do
+                local b = buttonFor(e, bar)
+                if e.kind == "provider" then on[e.value] = true end
+                active[b] = true
+                list[#list + 1] = b
+            end
         end
-        bar.shown = {}
-        bar.frame:Hide()
-        notifyHosted({})
-        return
-    end
-    cleared = false
-    local active, list, on = {}, {}, {}
-    for _, e in ipairs(Utility.Collect()) do
-        local b = buttons[e.key] or (Utility.SpellId(e.key) and makeSpellButton(e.key)) or makeProviderButton(e.key)
-        if e.kind == "provider" then
-            regions[b].icon:SetTexture(GAB.ProvidedButton(e.value).icon)
-            on[e.value] = true
-        elseif e.kind == "lock" then
-            -- No attributes: an insecure button. Its padlock: RefreshVisuals.
-        elseif e.kind == "feed" then
-            -- Disarmed (above): only its click arms it.
-            local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
-            regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
-        elseif e.kind == "item" then
-            local ok, icon = pcall(C_Item.GetItemIconByID, e.value)
-            regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
-        else
-            local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
-            regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
-        end
-        state[b].kind, state[b].value, state[b].food = e.kind, e.value, e.food
-        Utility.Arm(b)
-        b:Show()
-        active[b] = true
-        list[#list + 1] = b
+        -- An enabled bar with nothing on it: its empty slot, a place to drop on.
+        local empty = #list == 0 and Utility.Enabled(bar.index)
+        if empty then list[1] = bar.placeholder end
+        bar.placeholder:SetShown(empty)
+        bar.shown = list
+        arrange(bar)
+        bar.frame:SetShown(#list > 0)
+        GAB.Dock.RequestLayout(bar.dockId)
     end
     for _, b in pairs(buttons) do
         if not active[b] then clear(b) end
     end
-    bar.shown = list
-    arrange(bar)
-    bar.frame:SetShown(#list > 0)
     Utility.RefreshVisuals()
-    GAB.Dock.RequestLayout(bar.dockId)
     notifyHosted(on)
 end
 
@@ -1488,9 +1551,10 @@ local function skin()
     for _, b in pairs(buttons) do
         API.Try("utility:skin", GAB.Buttons.Build, b, regions[b], { maskIcon = true })
     end
+    for _, bar in ipairs(bars) do skinPlaceholder(bar) end
 end
 
-local BAR_LABELS, BAR_DOCKS = { "Utility bar" }, { Utility.DOCK }
+local BAR_LABELS, BAR_DOCKS = { "Utility bar", "Utility bar 2" }, { Utility.DOCK, Utility.DOCK2 }
 
 function Utility.Start()
     if started then return end
@@ -1579,4 +1643,4 @@ Utility._test = { regions = regions, state = state, frame = bar1.frame,
     setCampfire = function(v) campfire = v end, mover = bar1.mover, poller = poller,
     dragging = function() return bar1.dragging, bar1.stopPending end,
     gesture = gesture, ghost = ghost, marker = marker, reorder = function() return reorder end,
-    lastCols = function() return bar1.cols end }
+    lastCols = function() return bar1.cols end, bars = bars }

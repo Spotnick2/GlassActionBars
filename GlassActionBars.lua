@@ -94,7 +94,6 @@ local function ensureDefaults()
     if db.utility ~= nil then
         if type(db.utility) ~= "table" then db.utility = nil else
             local u, U = db.utility, GAB.Utility
-            if u.enabled ~= nil and type(u.enabled) ~= "boolean" then u.enabled = nil end
             if u.show ~= nil then
                 if type(u.show) ~= "table" then u.show = nil else
                     for k, v in pairs(u.show) do
@@ -119,18 +118,34 @@ local function ensureDefaults()
                     u.order = clean
                 end
             end
-            -- A dropped spell's hidden mark lives only while it is in the order.
-            if type(u.show) == "table" then
-                local inOrder = {}
-                for _, k in ipairs(type(u.order) == "table" and u.order or {}) do inOrder[k] = true end
-                for k in pairs(u.show) do
-                    if U.SpellId(k) and not inOrder[k] then u.show[k] = nil end
+            -- The second bar's entries (#86): only bar 2 is stored.
+            if u.bar ~= nil then
+                if type(u.bar) ~= "table" then u.bar = nil else
+                    for k, v in pairs(u.bar) do
+                        if not U.ValidKey(k) or v ~= 2 then u.bar[k] = nil end
+                    end
                 end
             end
-            for k in pairs(U.LAYOUT) do
-                if u[k] ~= nil and not U.ValidLayout(k, u[k]) then u[k] = nil end
+            -- A dropped spell's hidden mark and bar live only while it is in the order.
+            local inOrder = {}
+            for _, k in ipairs(type(u.order) == "table" and u.order or {}) do inOrder[k] = true end
+            for _, name in ipairs({ "show", "bar" }) do
+                local t = u[name]
+                if type(t) == "table" then
+                    for k in pairs(t) do
+                        if U.SpellId(k) and not inOrder[k] then t[k] = nil end
+                    end
+                end
             end
-            if u.pos ~= nil and not U.ValidPos(u.pos) then u.pos = nil end
+            -- Each bar's own settings: bar 1's at the top (Apotheca's import keys), bar 2's in `second`.
+            if u.second ~= nil and type(u.second) ~= "table" then u.second = nil end
+            for _, t in ipairs({ u, u.second }) do
+                if t.enabled ~= nil and type(t.enabled) ~= "boolean" then t.enabled = nil end
+                for k in pairs(U.LAYOUT) do
+                    if t[k] ~= nil and not U.ValidLayout(k, t[k]) then t[k] = nil end
+                end
+                if t.pos ~= nil and not U.ValidPos(t.pos) then t.pos = nil end
+            end
         end
     end
     if db.fadeAlpha ~= nil and (type(db.fadeAlpha) ~= "number" or not (db.fadeAlpha >= 0 and db.fadeAlpha <= 1)) then
@@ -307,8 +322,22 @@ local function utility()
     return u
 end
 
-function Settings.SetUtilityEnabled(on)
-    utility().enabled = on == true
+-- Bar n's own settings table (#86): bar 1's is the utility table itself,
+-- bar 2's its `second` (created here). Nil for another n.
+local function utilityBar(n)
+    n = n or 1
+    if n == 1 then return utility() end
+    if n ~= 2 then return nil end
+    local u = utility()
+    if type(u.second) ~= "table" then u.second = {} end
+    return u.second
+end
+
+-- Bar n (default 1) on or off. False for a bar that doesn't exist.
+function Settings.SetUtilityEnabled(on, n)
+    local t = utilityBar(n)
+    if not t then return false end
+    t.enabled = on == true
     GAB.Utility.Reconcile()
     return true
 end
@@ -327,32 +356,49 @@ function Settings.SetUtilityShown(key, on)
     return true
 end
 
--- One of the bar's own layout settings (Utility.LAYOUT's keys), used when it
--- isn't matching a docked bar. False for a bad key or value.
-function Settings.SetUtilityLayout(key, value)
-    if not GAB.Utility.ValidLayout(key, value) then return false end
-    utility()[key] = value
+-- One of bar n's (default 1) own layout settings (Utility.LAYOUT's keys),
+-- used when it isn't matching a docked bar. False for a bad key or value.
+function Settings.SetUtilityLayout(key, value, n)
+    if not GAB.Utility.ValidLayout(key, value) or (n ~= nil and n ~= 1 and n ~= 2) then return false end
+    utilityBar(n)[key] = value
     GAB.Utility.Reconcile()
     return true
 end
 
--- Where the undocked bar sits: its bottom-left corner on UIParent. The
--- Utility bar's drag and undock save it; false for a bad position.
-function Settings.SetUtilityPosition(x, y)
-    if not GAB.Utility.ValidPos({ x = x, y = y }) then return false end
-    utility().pos = { x = x, y = y }
+-- Where undocked bar n (default 1) sits: its bottom-left corner on UIParent.
+-- The bar's drag and undock save it; false for a bad position.
+function Settings.SetUtilityPosition(x, y, n)
+    if not GAB.Utility.ValidPos({ x = x, y = y }) or (n ~= nil and n ~= 1 and n ~= 2) then return false end
+    utilityBar(n).pos = { x = x, y = y }
     return true
 end
 
--- Move an entry one place up (-1) or down (1), past the keys of addons not
--- registered this session (unseen, they keep their slot). False at an end.
+-- An order key put on bar n (#86): only bar 2 is stored.
+local function assignBar(key, n)
+    local u = utility()
+    if n == 2 then
+        u.bar = type(u.bar) == "table" and u.bar or {}
+        u.bar[key] = 2
+    elseif type(u.bar) == "table" then
+        u.bar[key] = nil
+        if next(u.bar) == nil then u.bar = nil end
+    end
+end
+
+-- A bar index a setter takes: nil (keep the entry's bar), 1 or 2.
+local function validBar(n) return n == nil or n == 1 or n == 2 end
+
+-- Move an entry one place up (-1) or down (1) on its bar, past the keys of
+-- addons not registered this session (unseen, they keep their slot) and the
+-- other bar's. False at an end.
 function Settings.MoveUtility(key, delta)
     local U = GAB.Utility
     local order = U.Order()
     local i
     for n, k in ipairs(order) do if k == key then i = n end end
     local j = i and i + delta
-    while j and order[j] and not U.Registered(order[j]) do j = j + delta end
+    local bar = U.BarOf(key)
+    while j and order[j] and (not U.Registered(order[j]) or U.BarOf(order[j]) ~= bar) do j = j + delta end
     if not j or j < 1 or j > #order then return false end
     order[i], order[j] = order[j], order[i]
     utility().order = order
@@ -379,25 +425,29 @@ local function inList(list, v)
     return false
 end
 
--- An entry moved on the bar itself (#86's reorder drag): before `before`
--- (nil: last). False for a key not in the order or placed on itself.
-function Settings.PlaceUtility(key, before)
+-- An entry moved on the bars themselves (#86's reorder drag): before
+-- `before` (nil: last), onto bar n (nil: the one it is on). False for a key
+-- not in the order, placed on itself, or a bar that doesn't exist.
+function Settings.PlaceUtility(key, before, n)
     local U = GAB.Utility
-    if not U.ValidKey(key) or key == before then return false end
+    if not U.ValidKey(key) or key == before or not validBar(n) then return false end
     local order = U.Order()
     if not inList(order, key) then return false end
     placeIn(order, key, before)
     utility().order = order
+    if n then assignBar(key, n) end
     U.Reconcile()
     refreshUtilityPage()
     return true
 end
 
--- A spell dropped on the bar (#86), before `before` (nil: last): a built-in
--- entry's spell turns that entry on, another becomes spell:<id>, shown.
--- True and its key, or false and why (the cursor keeps the spell).
-function Settings.AddUtilitySpell(id, before)
+-- A spell dropped on bar n (#86; nil: bar 1 for a new one, else where it
+-- is), before `before` (nil: last): a built-in entry's spell turns that entry
+-- on, another becomes spell:<id>, shown. True and its key, or false and why
+-- (the cursor keeps the spell).
+function Settings.AddUtilitySpell(id, before, n)
     local U = GAB.Utility
+    if not validBar(n) then return false, "no such bar" end
     local key, why = U.DropKey(id)
     if not key then return false, why end
     local order = U.Order()
@@ -408,6 +458,7 @@ function Settings.AddUtilitySpell(id, before)
     if type(u.show) == "table" then u.show[key] = nil end   -- shown: no built-in here is opt-in
     if key ~= before then placeIn(order, key, before) end   -- dropped on its own button: stays
     u.order = order
+    if n then assignBar(key, n) end
     U.Reconcile()
     refreshUtilityPage()
     return true, key
@@ -428,6 +479,18 @@ function Settings.RemoveUtility(key)
     for n = #order, 1, -1 do if order[n] == key then table.remove(order, n) end end
     u.order = order
     if type(u.show) == "table" then u.show[key] = nil end
+    assignBar(key, 1)
+    U.Reconcile()
+    refreshUtilityPage()
+    return true
+end
+
+-- An entry put on the other bar from Options (#86), keeping its place in
+-- the order. False for a bad key or bar.
+function Settings.SetUtilityBar(key, n)
+    local U = GAB.Utility
+    if not U.ValidKey(key) or (n ~= 1 and n ~= 2) then return false end
+    assignBar(key, n)
     U.Reconcile()
     refreshUtilityPage()
     return true

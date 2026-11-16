@@ -189,6 +189,16 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   is outstanding a secure button's PreClick strips its action and PostClick re-arms it
   (`Utility.Arm`), a placement accepted in the release's PostClick, after the dispatch; insecure
   buttons' clicks are `guarded`. Out of combat only. Measured: docs/FOREVER-PROBE.md session 9.
+  Two bars (#86): `bars[n]` holds each bar's frame, Alt mover, shown list, geometry, dock state
+  and drag. Bar 2: `GlassActionBarsUtilityFrame2`, dock client `utility2` (default left of Action
+  Bar 1, bottom-aligned; the id reserved in API.lua), off until `utility.second.enabled`, its own
+  layout and `pos` in `utility.second` (bar 1's stay at the top: Apotheca's import keys). An
+  order key on bar 2 is `utility.bar[key] = 2` (only 2 stored); Reconcile reparents its button
+  to that bar's frame (out of combat), and a bar turned off shows its keys nowhere. `MoveUtility`
+  steps within a bar; the Shift-drag and a drop take the target's bar; Options lists rows by bar
+  with a Bar 1 / Bar 2 button, and the "Utility bar 2" sub-page has its on/off and layout. An
+  enabled bar with nothing on it keeps one insecure empty slot (`GlassActionBarsUtilDrop<n>`, not
+  in `buttons`) to drop a spell on or drag a button to. Providers' `OnHosted(true)` = on either bar.
   The lock (#34, key `lockbars`, last of the actions, `optIn`: off until ticked, like a provider
   key, so `show.lockbars = true` is what's saved): an insecure button (`state.insecure`: `clear`
   never writes its attributes) whose click flips the CVar `lockActionBars` with `C_CVar.SetCVar`

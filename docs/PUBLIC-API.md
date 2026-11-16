@@ -50,7 +50,7 @@ player's choice: Esc > Options > AddOns > Glass Action Bars > **Dock**, or `/gab
 
 | Field | Type | |
 |---|---|---|
-| `id` | string | Required. Letters, digits and `_`; `utility` is reserved. The player's dock settings are saved under it, so keep it stable. |
+| `id` | string | Required. Letters, digits and `_`; `utility` and `utility2` are reserved. The player's dock settings are saved under it, so keep it stable. |
 | `label` | string | The name in Options. Defaults to `id`. |
 | `frame` | frame | Required. The frame to place. |
 | `OnHosted(isHosted)` | function | Required. See below. |
@@ -147,7 +147,7 @@ the order the player chooses. Glass Action Bars builds and shows it; it is an or
 | `binding` | string | Your key binding's command name (from your `Bindings.xml`). Its key shows on the button. The binding stays yours. |
 | `tooltip` | string or function | A string, or `function(tooltip)` that fills the GameTooltip. |
 | `IsEnabled()` | function | `false` refuses clicks, and dims the button. |
-| `OnHosted(isHosted)` | function | `true` while your button is **on the Utility bar**: the player turned it on and the bar is on. `false` when it isn't. Hide your own launcher only while it is `true`. |
+| `OnHosted(isHosted)` | function | `true` while your button is **on a Utility bar** (either of the two): the player turned it on and that bar is on. `false` when it isn't. Hide your own launcher only while it is `true`. |
 
 - **Off until the player turns it on.** Your button is listed on the Utility bar's options page,
   unticked, under the key `provider:<id>`. The player's choice and its place in the order are
