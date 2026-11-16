@@ -293,6 +293,12 @@ eq(u.show["provider:roulette"], true, "  a provider's button turned on kept befo
 eq(u.show["provider:other"], nil, "  a provider's off dropped: off is its default")
 eq(u.show.hearthstone, nil, "  only false is stored")
 eq(table.concat(u.order, ","), "cooking,provider:x", "  the order deduplicated and cleaned")
+-- Mining's entry is gone (#92): a saved order or tick of it is dropped.
+check(not U.ValidKey("mining") and B.mining == nil, "no Mining entry, no button")
+GlassActionBarsDB = { utility = { show = { mining = false }, order = { "hearthstone", "mining", "cooking" } } }
+u = rawget(ensure(), "utility")
+eq(u.show.mining, nil, "load: Mining's saved tick dropped")
+eq(table.concat(u.order, ","), "hearthstone,cooking", "  and its place in the order")
 GlassActionBarsDB = { utility = {} }
 check(type(rawget(ensure(), "utility")) == "table", "an empty utility table stays (Apotheca's import marker)")
 GlassActionBarsDB = {}
