@@ -458,17 +458,33 @@ Options.UTILITY_LAYOUT = {
     { "iconSize", "Button size", { { 30, "30" }, { 36, "36" }, { 40, "40" }, { 45, "45" } } },
     { "iconPadding", "Spacing", { { 0, "0" }, { 2, "2" }, { 4, "4" }, { 6, "6" } } },
 }
+-- A bar's own layout radios (bar n), under `anchor`; returns the last row's
+-- name and { key -> radio group }.
+local function utilityLayout(page, anchor, n)
+    local last, groups = anchor, {}
+    for _, r in ipairs(Options.UTILITY_LAYOUT) do
+        local name = label(page, r[2])
+        name:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -10)
+        local _, group = Options.radios(page, name, r[3], function() return GAB.Utility.LayoutSetting(r[1], n) end,
+            function(v) GAB.Settings.SetUtilityLayout(r[1], v, n) end, { 200, 90 })
+        groups[r[1]] = group
+        last = name
+    end
+    return last, groups
+end
+
 Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
     local U = GAB.Utility
     local enabled = Options.checkbox(page, title, "Show the Utility bar",
-        function() return U.Enabled() end, GAB.Settings.SetUtilityEnabled)
+        function() return U.Enabled() end, function(on) GAB.Settings.SetUtilityEnabled(on) end)
     local note = label(page, "A button shows only when the character can use it: a profession it knows, an item in "
         .. "its bags. Campfire kits show whenever carried, the other camping items only near a campfire. Key "
         .. "bindings: Esc > Options > Keybindings > Glass Action Bars. Docking: the Dock page. Hold Alt and drag "
         .. "the bar to put it anywhere: that undocks it, and the spot is shared by every character. Buttons from "
         .. "other addons start unticked, and their key bindings stay in that addon's section. Drag a spell from "
         .. "your spellbook onto the bar to add it (it shows on the characters that know it). Hold Shift (the Pick "
-        .. "Up Action key) and drag a button to move it, or off the bar to take it off.",
+        .. "Up Action key) and drag a button to move it, to the other bar, or off the bar to take it off. "
+        .. "A second bar: the Utility bar 2 page.",
         "GameFontHighlightSmall")
     note:SetPoint("TOPLEFT", enabled, "BOTTOMLEFT", 0, -8)
     note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
@@ -476,18 +492,15 @@ Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
     -- Its own layout: undocked, or docked with Match off.
     local head = label(page, "Layout (undocked, or when Match is off on the Dock page)", "GameFontNormal")
     head:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -12)
-    local last = head
-    Options._test.utilityLayout = {}
-    for _, r in ipairs(Options.UTILITY_LAYOUT) do
-        local name = label(page, r[2])
-        name:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -10)
-        local _, group = Options.radios(page, name, r[3], function() return U.LayoutSetting(r[1]) end,
-            function(v) GAB.Settings.SetUtilityLayout(r[1], v) end, { 200, 90 })
-        Options._test.utilityLayout[r[1]] = group
-        last = name
-    end
+    local last
+    last, Options._test.utilityLayout = utilityLayout(page, head, 1)
     local content, top = Options.scrollArea(page, last)
     local rows, sync = {}, nil
+    -- Each bar's heading in the list (#86).
+    local heads = {}
+    for n = 1, U.BARS do
+        heads[n] = label(content, n == 1 and "Utility bar" or "Utility bar " .. n, "GameFontNormal")
+    end
     -- A row per entry, made the first time it is listed (another addon's
     -- button registers at login, after this page may exist).
     local function makeRow(key)
@@ -508,38 +521,71 @@ Options.utilityPage = Options.AddPage("Utility bar", function(page, title)
             b:SetScript("OnClick", function() GAB.Settings.MoveUtility(key, m[1]); sync() end)
             moves[i] = b
         end
+        -- The other bar (#86): the button names where it goes.
+        local move = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+        move:SetSize(52, 20)
+        move:SetPoint("LEFT", r, "LEFT", 300 + 2 * 56, 0)
+        move:SetScript("OnClick", function() GAB.Settings.SetUtilityBar(key, 3 - U.BarOf(key)); sync() end)
         local remove
         if U.SpellId(key) then   -- a dropped spell (#86)
             remove = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
             remove:SetSize(70, 20)
             remove:SetText("Remove")
-            remove:SetPoint("LEFT", r, "LEFT", 300 + 2 * 56, 0)
+            remove:SetPoint("LEFT", r, "LEFT", 300 + 3 * 56, 0)
             remove:SetScript("OnClick", function() GAB.Settings.RemoveUtility(key); sync() end)
         end
-        rows[key] = { frame = r, check = cb, up = moves[1], down = moves[2], remove = remove, text = text }
+        rows[key] = { frame = r, check = cb, up = moves[1], down = moves[2], bar = move, remove = remove, text = text }
         return rows[key]
     end
-    -- The entries registered this session, in order, with no gap for the
-    -- others. Every row hidden first: a removed spell's key is gone from the order.
+    -- The entries registered this session, bar by bar under its heading, in
+    -- order, with no gap for the others. Every row hidden first: a removed
+    -- spell's key is gone from the order.
     sync = function()
         for _, row in pairs(rows) do row.frame:Hide() end
-        local n = 0
-        for _, key in ipairs(U.Order()) do
-            if U.Registered(key) then
-                local row = rows[key] or makeRow(key)
-                n = n + 1
-                row.frame:ClearAllPoints()
-                row.frame:SetPoint("TOPLEFT", top, "TOPLEFT", 0, -(n - 1) * Options.UTILITY_ROW)
-                row.frame:Show()
-                row.check:SetChecked(U.IsShown(key))
-                if U.SpellId(key) then row.text:SetText(U.Label(key)) end   -- a name not loaded at first
+        local y = 0
+        for n = 1, U.BARS do
+            if n > 1 then y = y + 8 end
+            heads[n]:ClearAllPoints()
+            heads[n]:SetPoint("TOPLEFT", top, "TOPLEFT", 0, -y - 4)
+            y = y + Options.UTILITY_ROW
+            for _, key in ipairs(U.Order()) do
+                if U.Registered(key) and U.BarOf(key) == n then
+                    local row = rows[key] or makeRow(key)
+                    row.frame:ClearAllPoints()
+                    row.frame:SetPoint("TOPLEFT", top, "TOPLEFT", 0, -y)
+                    row.frame:Show()
+                    row.check:SetChecked(U.IsShown(key))
+                    row.bar:SetText(n == 1 and "Bar 2" or "Bar 1")
+                    if U.SpellId(key) then row.text:SetText(U.Label(key)) end   -- a name not loaded at first
+                    y = y + Options.UTILITY_ROW
+                end
             end
         end
-        content:SetHeight(n * Options.UTILITY_ROW + 16)
+        content:SetHeight(y + 16)
     end
     sync()
     building[#building + 1] = sync
     Options._test.utilityRows = rows
+    Options._test.utilityHeads = heads
+end)
+
+-- The second Utility bar (#86): on or off, and its own layout. Its entries
+-- are on the Utility bar page.
+Options.utility2Page = Options.AddPage("Utility bar 2", function(page, title)
+    local enabled = Options.checkbox(page, title, "Show Utility bar 2",
+        function() return GAB.Utility.Enabled(2) end, function(on) GAB.Settings.SetUtilityEnabled(on, 2) end)
+    local note = label(page, "A second bar for anything the Utility bar shows: a class's own spells, Feed Pet, a "
+        .. "column beside your action bars. Hold Shift and drag a button from the first bar onto it, drop a spell "
+        .. "from your spellbook on it, or use the Bar 2 buttons on the Utility bar page. Turned off, its buttons "
+        .. "show nowhere. Docking: the Dock page. Hold Alt and drag it to put it anywhere.", "GameFontHighlightSmall")
+    note:SetPoint("TOPLEFT", enabled, "BOTTOMLEFT", 0, -8)
+    note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
+    note:SetJustifyH("LEFT")
+    local head = label(page, "Layout (undocked, or when Match is off on the Dock page)", "GameFontNormal")
+    head:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -12)
+    local _, groups = utilityLayout(page, head, 2)
+    Options._test.utility2Layout = groups
+    Options._test.utility2Enabled = enabled
 end)
 
 -- Called once at PLAYER_LOGIN by GlassActionBars.lua.

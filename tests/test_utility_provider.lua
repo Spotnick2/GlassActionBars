@@ -158,10 +158,11 @@ local rows = GAB.Options._test.utilityRows
 check(rows["provider:roulette"] ~= nil, "the page: a row for Portal Roulette")
 eq(rows["provider:ghost"], nil, "  none for the unregistered key")
 local content = rows.cooking.frame:GetParent()
-eq(content:GetHeight(), (#U.ORDER_KEYS + 2) * GAB.Options.UTILITY_ROW + 16, "  the scroll height counts the rows shown")
+local HEADS = 2 * GAB.Options.UTILITY_ROW + 8   -- each bar's heading (#86), bar 2's after a gap
+eq(content:GetHeight(), (#U.ORDER_KEYS + 2) * GAB.Options.UTILITY_ROW + HEADS + 16, "  the scroll height counts the rows shown")
 local function y(key) return rows[key].frame._points[#rows[key].frame._points][5] end
-eq(y("cooking"), 0, "  Cooking first, no gap")
-eq(y("hearthstone"), -GAB.Options.UTILITY_ROW, "  Hearthstone next: no gap for the unseen key")
+eq(y("cooking"), -GAB.Options.UTILITY_ROW, "  Cooking first under bar 1's heading, no gap")
+eq(y("hearthstone"), -2 * GAB.Options.UTILITY_ROW, "  Hearthstone next: no gap for the unseen key")
 check(rows["provider:roulette"].check:GetChecked(), "  Portal Roulette ticked")
 rows["provider:roulette"].check:SetChecked(false)
 rows["provider:roulette"].check:GetScript("OnClick")(rows["provider:roulette"].check)
@@ -181,7 +182,7 @@ local late = { id = "late", icon = 2, OnClick = function() end, OnHosted = hostL
 check(GAB.RegisterButton(badHosted) and GAB.RegisterButton(late), "two providers register late")
 check(rows["provider:late"] ~= nil and rows["provider:late"].frame:IsShown(), "  the open options page lists it at once")
 check(not rows["provider:late"].check:GetChecked(), "  unticked")
-eq(content:GetHeight(), (#U.ORDER_KEYS + 4) * GAB.Options.UTILITY_ROW + 16, "  the scroll height grows with it")
+eq(content:GetHeight(), (#U.ORDER_KEYS + 4) * GAB.Options.UTILITY_ROW + HEADS + 16, "  the scroll height grows with it")
 WoW.tick()
 eq(seq(hosted.late), "false", "  the bar off: OnHosted(false) once")
 check(GAB.failures["utility:provider:bad"] ~= nil, "  the erroring one recorded")

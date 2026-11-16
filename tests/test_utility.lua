@@ -35,15 +35,18 @@ for _, b in pairs(B) do
     check(icon._masks and #icon._masks == 1 and icon._masks[1]:GetParent() == b, "icon rounded: " .. b:GetName())
 end
 
--- Nothing known, nothing carried: hidden, no attributes.
+-- Nothing known, nothing carried: no attributes, only the empty slot to drop on (#86).
 rebuild()
-check(not U.frame:IsShown(), "nothing to show: hidden")
+local empty = U._test.bars[1].placeholder
+check(U.frame:IsShown() and empty:IsShown(), "nothing to show: the bar keeps its empty slot")
+eq(#U._test.shown(), 1, "  the slot alone")
 eq((attrs("cooking")), nil, "  no attributes")
 
 -- A profession's current rank; the Hearthstone carried.
 WoW.known[3413] = true
 WoW.items[6948] = 1
 rebuild()
+check(not empty:IsShown(), "something to show: the empty slot hidden")
 local t, spell = attrs("cooking")
 eq(t, "spell", "Cooking known: a spell button")
 eq(spell, 3413, "  its known rank")

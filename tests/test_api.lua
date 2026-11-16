@@ -73,6 +73,11 @@ local _, _, d = provider("x")
 refused("bar", "not a table")
 refused({ id = "has space", frame = d.frame, OnHosted = d.OnHosted }, "a bad id")
 refused({ id = "utility", frame = d.frame, OnHosted = d.OnHosted }, "the reserved id")
+-- The Utility bars' own ids, refused as reserved, not only as taken (#86's bar 2).
+for _, id in ipairs({ "utility", "utility2" }) do
+    local _, why = GAB.RegisterBar({ id = id, frame = d.frame, OnHosted = d.OnHosted })
+    check(type(why) == "string" and why:find("reserved") ~= nil, "  " .. id .. ": reserved (" .. tostring(why) .. ")")
+end
 refused({ id = "early", frame = d.frame, OnHosted = d.OnHosted }, "a duplicate id")
 refused({ id = "tex", frame = d.frame:CreateTexture(), OnHosted = d.OnHosted }, "a Texture as the frame")
 refused({ id = "noframe", OnHosted = d.OnHosted }, "no frame")

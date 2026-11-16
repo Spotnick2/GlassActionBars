@@ -22,7 +22,7 @@ local API = GAB.API
 
 GAB.PUBLIC_API_VERSION = 2   -- 2 (#48): Layout's geom carries only what the player matches
 
-local RESERVED = { utility = true }   -- the native Utility bar's dock id
+local RESERVED = { utility = true, utility2 = true }   -- the native Utility bars' dock ids
 
 -- The object's widget type, or nil when it isn't a widget.
 local function kind(obj)
