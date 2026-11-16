@@ -105,5 +105,7 @@ if (-not $ProbeOnly) { Deploy-Addon }
 if ($Probe -or $ProbeOnly) { Deploy-Probe }
 
 Write-Host ""
-Write-Host "/reload is enough, a brand-new addon folder included; restart the client only for new textures." -ForegroundColor Yellow
+# A /reload picks up new files, new textures and TOC changes
+# (References\Docs\PORTING-TBC-TO-FOREVER.md §5, re-measured 2026-11-16, #94).
+Write-Host "Then /reload in game." -ForegroundColor Yellow
 Write-Host "In game:  /console scriptErrors 1   then   /gab help   (probe: /fp gab, /fp steps gab campfire)" -ForegroundColor Green
