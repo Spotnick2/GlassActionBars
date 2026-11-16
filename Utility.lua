@@ -247,8 +247,15 @@ local function saved()
     return type(t) == "table" and t or nil
 end
 
-function Utility.Enabled()
-    local s = saved()
+-- Bar n's own settings: bar 1's are the utility table's own keys
+-- (Apotheca's import keys), else nil.
+local function barSettings(n)
+    if (n or 1) == 1 then return saved() end
+end
+
+-- Bar n (default 1) is on.
+function Utility.Enabled(n)
+    local s = barSettings(n)
     if s and s.enabled ~= nil then return s.enabled == true end
     return true
 end
@@ -270,8 +277,9 @@ function Utility.ValidLayout(key, v)
     return r ~= nil and type(v) == "number" and v >= r[1] and v <= r[2] and (key ~= "rows" or v % 1 == 0)
 end
 
-function Utility.LayoutSetting(key)
-    local s = saved()
+-- One of bar n's (default 1) own layout settings.
+function Utility.LayoutSetting(key, n)
+    local s = barSettings(n)
     if s and Utility.ValidLayout(key, s[key]) then return s[key] end
     return Utility.LAYOUT[key]
 end
@@ -435,19 +443,35 @@ function Utility.Collect()
 end
 
 -- ------------------------------------------------------------------
--- The frame and its buttons (made at load: binding targets exist early)
+-- The bars and their buttons (made at load: binding targets exist early)
 -- ------------------------------------------------------------------
 
-local frame = CreateFrame("Frame", "GlassActionBarsUtilityFrame", UIParent)
-frame:SetSize(Utility.SIZE, Utility.SIZE)
-frame:SetPoint("RIGHT", UIParent, "RIGHT", -150, 0)
-frame:SetFrameStrata("MEDIUM")
-frame:SetMovable(true)            -- before the secure children exist
-frame:SetClampedToScreen(true)
-frame:Hide()
-Utility.frame = frame
+-- One table per bar (#86): its frame, the Alt mover, the buttons it shows,
+-- its layout, its dock state and its drag. Bar 1 is #9's Utility bar: frame
+-- GlassActionBarsUtilityFrame, dock client "utility", its settings
+-- GlassActionBarsDB.utility's own keys (Apotheca's import).
+local bars = {}
+Utility.bars = bars
+local DEFAULT_POINT = { { "RIGHT", "RIGHT", -150, 0 } }
 
-local buttons, regions, state = {}, {}, {}   -- key -> button; button -> regions; button -> { kind, value, key }
+local function newBar(n)
+    local f = CreateFrame("Frame", "GlassActionBarsUtilityFrame" .. (n == 1 and "" or n), UIParent)
+    f:SetSize(Utility.SIZE, Utility.SIZE)
+    local p = DEFAULT_POINT[n]
+    f:SetPoint(p[1], UIParent, p[2], p[3], p[4])
+    f:SetFrameStrata("MEDIUM")
+    f:SetMovable(true)            -- before the secure children exist
+    f:SetClampedToScreen(true)
+    f:Hide()
+    bars[n] = { index = n, frame = f, dockId = n == 1 and "utility" or "utility" .. n,
+        shown = {}, geom = nil, cols = 1, hosted = false,
+        dragging = false, stopPending = false, dropPos = nil, posPending = false }
+    return bars[n]
+end
+newBar(1)
+Utility.frame = bars[1].frame
+
+local buttons, regions, state = {}, {}, {}   -- key -> button; button -> regions; button -> { kind, value, key, bar }
 Utility.buttons = buttons
 
 -- ------------------------------------------------------------------
@@ -704,7 +728,7 @@ local function addRegions(b, cooldown)
 end
 
 local function makeButton(key)
-    local b = CreateFrame("Button", Utility.PREFIX .. key, frame, "SecureActionButtonTemplate")
+    local b = CreateFrame("Button", Utility.PREFIX .. key, bars[1].frame, "SecureActionButtonTemplate")
     b:SetSize(Utility.SIZE, Utility.SIZE)
     -- Both edges: the client acts on the one ActionButtonUseKeyDown picks,
     -- once (Apotheca, measured for clicks and CLICK bindings).
@@ -714,19 +738,19 @@ local function makeButton(key)
     -- Feed Pet's PreClick / PostClick run inside the editing ones.
     if BY_KEY[key].feed then b:SetAttribute("useOnKeyDown", false) end   -- the release acts, for clicks and the binding
     addEditing(b, true)
-    buttons[key], regions[b], state[b] = b, r, { key = key }
+    buttons[key], regions[b], state[b] = b, r, { key = key, bar = bars[1] }
 end
 
 -- The lock's button: insecure (no secure action), no cooldown.
 local function makeLockButton(key)
-    local b = CreateFrame("Button", Utility.PREFIX .. key, frame)
+    local b = CreateFrame("Button", Utility.PREFIX .. key, bars[1].frame)
     b:SetSize(Utility.SIZE, Utility.SIZE)
     b:RegisterForClicks("AnyUp")
     local r = addRegions(b, false)
     b:SetScript("OnClick", guarded(lockClick))
     b:SetScript("OnEnter", tooltip)
     addEditing(b, false)
-    buttons[key], regions[b], state[b] = b, r, { key = key, insecure = true }
+    buttons[key], regions[b], state[b] = b, r, { key = key, insecure = true, bar = bars[1] }
 end
 for _, a in ipairs(Utility.ACTIONS) do
     if a.lock then makeLockButton(a.key) else makeButton(a.key) end
@@ -780,14 +804,14 @@ end
 -- (Reconcile: out of combat), skinned at once when the bar's own are.
 local skinned = false
 local function makeProviderButton(key)
-    local b = CreateFrame("Button", Utility.PROVIDER_PREFIX .. Utility.ProviderId(key), frame)
+    local b = CreateFrame("Button", Utility.PROVIDER_PREFIX .. Utility.ProviderId(key), bars[1].frame)
     b:SetSize(Utility.SIZE, Utility.SIZE)
     b:RegisterForClicks("AnyUp")
     local r = addRegions(b, false)
     b:SetScript("OnClick", guarded(providerClick))
     b:SetScript("OnEnter", providerTooltip)
     addEditing(b, false)
-    buttons[key], regions[b], state[b] = b, r, { key = key, provider = true }
+    buttons[key], regions[b], state[b] = b, r, { key = key, provider = true, bar = bars[1] }
     if skinned then API.Try("utility:skin", GAB.Buttons.Build, b, r, { maskIcon = true }) end
     return b
 end
@@ -796,13 +820,13 @@ end
 -- out of combat), like the built-ins'. No ':' in its name: a CLICK binding
 -- splits on it.
 local function makeSpellButton(key)
-    local b = CreateFrame("Button", Utility.SPELL_PREFIX .. Utility.SpellId(key), frame, "SecureActionButtonTemplate")
+    local b = CreateFrame("Button", Utility.SPELL_PREFIX .. Utility.SpellId(key), bars[1].frame, "SecureActionButtonTemplate")
     b:SetSize(Utility.SIZE, Utility.SIZE)
     b:RegisterForClicks("AnyUp", "AnyDown")
     local r = addRegions(b, true)
     b:SetScript("OnEnter", tooltip)
     addEditing(b, true)
-    buttons[key], regions[b], state[b] = b, r, { key = key }
+    buttons[key], regions[b], state[b] = b, r, { key = key, bar = bars[1] }
     if skinned then API.Try("utility:skin", GAB.Buttons.Build, b, r, { maskIcon = true }) end
     return b
 end
@@ -887,34 +911,32 @@ end
 -- Layout (the dock's callbacks) and the rebuild
 -- ------------------------------------------------------------------
 
-local shownList, lastGeom = {}, nil
-local lastCols = 1   -- columns in the last arrangement: the bar's flow for a drop's side
-
-local function arrange()
-    local g = lastGeom
+local function arrange(bar)
+    local g, n, f = bar.geom, bar.index, bar.frame
     -- Each part the bar's when the dock gives it (the player matches it), else our own.
-    local size = g and g.size or Utility.LayoutSetting("iconSize")
-    local pad = g and g.padding or Utility.LayoutSetting("iconPadding")
-    local rows = math.max(1, g and g.rows or Utility.LayoutSetting("rows"))
+    local size = g and g.size or Utility.LayoutSetting("iconSize", n)
+    local pad = g and g.padding or Utility.LayoutSetting("iconPadding", n)
+    local rows = math.max(1, g and g.rows or Utility.LayoutSetting("rows", n))
     local vertical
-    if g and g.orientation then vertical = g.orientation == 1 else vertical = Utility.LayoutSetting("orientation") == "VERTICAL" end
-    local n = #shownList
-    if n == 0 then frame:SetSize(size, size) return end
+    if g and g.orientation then vertical = g.orientation == 1 else vertical = Utility.LayoutSetting("orientation", n) == "VERTICAL" end
+    local list = bar.shown
+    local count = #list
+    if count == 0 then f:SetSize(size, size) return end
     local cols
     if vertical then
-        cols = math.min(rows, n)
-        rows = math.ceil(n / cols)
+        cols = math.min(rows, count)
+        rows = math.ceil(count / cols)
     else
-        cols = math.ceil(n / rows)
-        rows = math.min(rows, n)
+        cols = math.ceil(count / rows)
+        rows = math.min(rows, count)
     end
-    lastCols = cols
-    frame:SetSize(cols * size + (cols - 1) * pad, rows * size + (rows - 1) * pad)
-    for i, b in ipairs(shownList) do
+    bar.cols = cols   -- the bar's flow, for a drop's side
+    f:SetSize(cols * size + (cols - 1) * pad, rows * size + (rows - 1) * pad)
+    for i, b in ipairs(list) do
         local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
         b:SetSize(size, size)
         b:ClearAllPoints()
-        b:SetPoint("TOPLEFT", frame, "TOPLEFT", col * (size + pad), -row * (size + pad))
+        b:SetPoint("TOPLEFT", f, "TOPLEFT", col * (size + pad), -row * (size + pad))
     end
 end
 
@@ -948,24 +970,27 @@ local function screenRect(f)
     return x * s, y * s, w * s / 2, h * s / 2
 end
 
--- Whether the pointer is on b's trailing half along the bar's flow (left to
+-- Whether the pointer is on b's trailing half along its bar's flow (left to
 -- right in a row, downwards in a single column).
 local function trailing(b)
     local px, py = pointer()
     local cx, cy = screenRect(b)
     if not (px and cx) then return false end
-    if lastCols > 1 then return px > cx end
+    if state[b].bar.cols > 1 then return px > cx end
     return py < cy
+end
+
+local function shownIndex(b)
+    for n, x in ipairs(state[b].bar.shown) do if x == b then return n end end
 end
 
 -- The key a drop on b (its leading or trailing half) goes before; nil: last.
 local function beforeKey(b, after)
     local mine = orderKey(state[b].key)
     if not after then return mine end
-    local i
-    for n, x in ipairs(shownList) do if x == b then i = n end end
-    for j = (i or #shownList) + 1, #shownList do
-        local k = orderKey(state[shownList[j]].key)
+    local list = state[b].bar.shown
+    for j = (shownIndex(b) or #list) + 1, #list do
+        local k = orderKey(state[list[j]].key)
         if k ~= mine then return k end
     end
     return nil
@@ -1026,33 +1051,35 @@ local markerLine = marker:CreateTexture(nil, "OVERLAY")
 markerLine:SetAllPoints()
 markerLine:SetColorTexture(0.5, 0.83, 1, 0.9)
 
-local function shownIndex(b)
-    for n, x in ipairs(shownList) do if x == b then return n end end
-end
-
 -- Where a drop would land: the shown button nearest the pointer and whether
--- after it; nil when the pointer is off the bar (its rect plus half a
+-- after it; nil when the pointer is off every bar (a bar's rect plus half a
 -- button). A moved button takes the target's slot (#88): after it when moving
 -- forward, before it when moving back, whichever half (in a grid, "after the
 -- row's last button" is the next row's first slot, where it came from). A
 -- spell from the spellbook has no slot: after on the target's trailing half.
 local function dropTarget()
     local px, py = pointer()
-    local fx, fy, fw, fh = screenRect(frame)
-    if not (px and fx) or #shownList == 0 then return nil end
-    local _, _, bw, bh = screenRect(shownList[1])
-    bw, bh = bw or 0, bh or 0
-    if math.abs(px - fx) > fw + bw or math.abs(py - fy) > fh + bh then return nil end
+    if not px then return nil end
     local best, bestD
-    for _, b in ipairs(shownList) do
-        local cx, cy = screenRect(b)
-        if cx then
-            local d = (px - cx) ^ 2 + (py - cy) ^ 2
-            if not bestD or d < bestD then best, bestD = b, d end
+    for _, bar in ipairs(bars) do
+        local list = bar.shown
+        local fx, fy, fw, fh = screenRect(bar.frame)
+        if fx and #list > 0 then
+            local _, _, bw, bh = screenRect(list[1])
+            bw, bh = bw or 0, bh or 0
+            if math.abs(px - fx) <= fw + bw and math.abs(py - fy) <= fh + bh then
+                for _, b in ipairs(list) do
+                    local cx, cy = screenRect(b)
+                    if cx then
+                        local d = (px - cx) ^ 2 + (py - cy) ^ 2
+                        if not bestD or d < bestD then best, bestD = b, d end
+                    end
+                end
+            end
         end
     end
     if not best then return nil end
-    if reorder then
+    if reorder and state[reorder.button].bar == state[best].bar then
         local from, to = shownIndex(reorder.button), shownIndex(best)
         return best, from ~= nil and to > from
     end
@@ -1066,7 +1093,7 @@ local function placeMarker()
     local s = API.Plain(UIParent:GetEffectiveScale())
     if not (cx and plainNumbers(s)) then marker:Hide() return end
     marker:ClearAllPoints()
-    if lastCols > 1 then
+    if state[b].bar.cols > 1 then
         marker:SetSize(3, hh * 2 / s)
         marker:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (cx + (after and hw or -hw)) / s, cy / s)
     else
@@ -1098,7 +1125,7 @@ function Utility.StartReorder(b)
     ghost:SetScript("OnUpdate", followPointer)
 end
 
--- The drag drops nothing (a fight began, the bar hid).
+-- The drag drops nothing (a fight began, a bar hid).
 function Utility.CancelReorder()
     reorder = nil
     ghost:SetScript("OnUpdate", nil)
@@ -1106,8 +1133,8 @@ function Utility.CancelReorder()
     marker:Hide()
 end
 
--- The release: over the bar, the entry goes there; off it, it comes off the
--- bar (a dropped spell leaves it, anything else is unticked, back from Options).
+-- The release: over a bar, the entry goes there; off the bars, it comes off
+-- (a dropped spell leaves the order, anything else is unticked, back from Options).
 function Utility.FinishReorder(b)
     local r = reorder
     if not r or r.button ~= b then return end
@@ -1122,37 +1149,54 @@ function Utility.FinishReorder(b)
     end
 end
 
--- The dock's Layout(geom): the bar's geometry, or nil for our own.
-function Utility.Layout(geom)
-    lastGeom = geom
-    arrange()
-end
-
--- The undocked spot: the saved one, else the default point.
-local function savedPos()
-    local s = saved()
+-- The undocked spot: the saved one, else the bar's default point.
+local function savedPos(bar)
+    local s = barSettings(bar.index)
     return s and Utility.ValidPos(s.pos) and s.pos or nil
 end
-local function placeAt(x, y)
-    frame:ClearAllPoints()
-    frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
+local function placeAt(bar, x, y)
+    bar.frame:ClearAllPoints()
+    bar.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
     GAB.Edges.Request()   -- placed by hand: the screen edges may have moved
 end
-local function restorePos()
-    local p = savedPos()
-    if p then placeAt(p.x, p.y) else
-        frame:ClearAllPoints()
-        frame:SetPoint("RIGHT", UIParent, "RIGHT", -150, 0)
+local function restorePos(bar)
+    local p = savedPos(bar)
+    if p then placeAt(bar, p.x, p.y) else
+        local d = DEFAULT_POINT[bar.index]
+        bar.frame:ClearAllPoints()
+        bar.frame:SetPoint(d[1], UIParent, d[2], d[3], d[4])
     end
 end
 
 -- The frame's bottom-left corner, saved and anchored there; false when
 -- unreadable (the frame stays as it is).
-local function saveHere()
-    local x, y = API.Plain(frame:GetLeft()), API.Plain(frame:GetBottom())
-    if not GAB.Settings.SetUtilityPosition(x, y) then return false end
-    placeAt(x, y)
+local function saveHere(bar)
+    local x, y = API.Plain(bar.frame:GetLeft()), API.Plain(bar.frame:GetBottom())
+    if not GAB.Settings.SetUtilityPosition(x, y, bar.index) then return false end
+    placeAt(bar, x, y)
     return true
+end
+
+-- The dock's Layout(geom) for bar n (default 1): the bar's geometry, or nil for our own.
+function Utility.Layout(geom, n)
+    local bar = bars[n or 1]
+    bar.geom = geom
+    arrange(bar)
+end
+
+-- Undocked by the player (or a first placement failed): our own geometry, at
+-- the saved spot; undocking with none saves where the dock had it. Never
+-- during a drag: the drop places it.
+function Utility.OnHosted(isHosted, n)
+    local bar = bars[n or 1]
+    if isHosted then bar.hosted = true return end
+    local was = bar.hosted
+    bar.hosted, bar.geom = false, nil
+    if InCombatLockdown() then return end
+    arrange(bar)
+    if bar.dragging then return end
+    if savedPos(bar) then restorePos(bar)
+    elseif was and GAB.Dock.Setting(bar.dockId, "bar") == false then saveHere(bar) end
 end
 
 -- Dragging (Apotheca's, measured there): no StartMoving or
@@ -1160,60 +1204,29 @@ end
 -- PLAYER_REGEN_DISABLED stops a drag before lockdown; if lockdown is already
 -- on, the stop waits for the fight's end, the overlay staying up to keep
 -- clicks off the buttons, and the bar goes where combat caught it.
-local dragging, stopPending, dropPos = false, false, nil
-local hosted = false
-
--- Undocked by the player (or a first placement failed): our own geometry, at
--- the saved spot; undocking with none saves where the dock had it. Never
--- during a drag: the drop places it.
-function Utility.OnHosted(isHosted)
-    if isHosted then hosted = true return end
-    local was = hosted
-    hosted, lastGeom = false, nil
-    if InCombatLockdown() then return end
-    arrange()
-    if dragging then return end
-    if savedPos() then restorePos()
-    elseif was and GAB.Dock.Setting("utility", "bar") == false then saveHere() end
-end
-
-local function stopDrag()
-    if not dragging then return end
+local function stopDrag(bar)
+    if not bar.dragging then return end
+    local f = bar.frame
     if InCombatLockdown() then
-        if not stopPending then
-            dropPos = { x = API.Plain(frame:GetLeft()), y = API.Plain(frame:GetBottom()) }
+        if not bar.stopPending then
+            bar.dropPos = { x = API.Plain(f:GetLeft()), y = API.Plain(f:GetBottom()) }
         end
-        stopPending = true
+        bar.stopPending = true
         return
     end
-    frame:StopMovingOrSizing()
-    local p = dropPos
-    dragging, stopPending, dropPos = false, false, nil
+    f:StopMovingOrSizing()
+    local p = bar.dropPos
+    bar.dragging, bar.stopPending, bar.dropPos = false, false, nil
     if p then
-        if GAB.Settings.SetUtilityPosition(p.x, p.y) then placeAt(p.x, p.y) else restorePos() end
-    elseif not saveHere() then
-        restorePos()
+        if GAB.Settings.SetUtilityPosition(p.x, p.y, bar.index) then placeAt(bar, p.x, p.y) else restorePos(bar) end
+    elseif not saveHere(bar) then
+        restorePos(bar)
     end
 end
 
--- The overlay: shown while Alt is held over the bar out of combat; it takes
+-- The overlay: shown while Alt is held over a bar out of combat; it takes
 -- the drag and keeps clicks off the secure buttons under it. Polled while
 -- Alt is down (no event says the pointer reached the bar), up or dragging.
-local mover = CreateFrame("Frame", nil, frame)
-mover:SetAllPoints(frame)
-mover:SetFrameStrata("DIALOG")
-mover:EnableMouse(true)
-mover:RegisterForDrag("LeftButton")
-mover:Hide()
-do
-    local bg = mover:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0.5, 0.83, 1, 0.35)
-    local text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    text:SetPoint("CENTER")
-    text:SetText("Drag")
-end
-
 local poller = CreateFrame("Frame")
 local updateMover
 local sincePoll = 0
@@ -1225,41 +1238,68 @@ local function poll(_, elapsed)
     end
 end
 
-function updateMover()
-    if dragging then
-        if stopPending then
-            if not InCombatLockdown() then stopDrag(); mover:Hide() end
+-- One bar's overlay; true while it still needs the poll.
+local function updateBarMover(bar)
+    local mover, f = bar.mover, bar.frame
+    if bar.dragging then
+        if bar.stopPending then
+            if not InCombatLockdown() then stopDrag(bar); mover:Hide() end
         elseif not IsAltKeyDown() or InCombatLockdown() then
-            stopDrag()
-            if not stopPending then mover:Hide() end
+            stopDrag(bar)
+            if not bar.stopPending then mover:Hide() end
         end
-    elseif IsAltKeyDown() and not InCombatLockdown() and API.Plain(frame:IsVisible()) == true
-            and API.Plain(frame:IsMouseOver()) == true then
+    elseif IsAltKeyDown() and not InCombatLockdown() and API.Plain(f:IsVisible()) == true
+            and API.Plain(f:IsMouseOver()) == true then
         mover:Show()
     else
         mover:Hide()
     end
-    poller:SetScript("OnUpdate", (dragging or mover:IsShown() or IsAltKeyDown()) and poll or nil)
+    return bar.dragging or mover:IsShown()
+end
+
+function updateMover()
+    local busy = IsAltKeyDown()
+    for _, bar in ipairs(bars) do
+        if updateBarMover(bar) then busy = true end
+    end
+    poller:SetScript("OnUpdate", busy and poll or nil)
 end
 Utility.UpdateMover = updateMover
 
-mover:SetScript("OnDragStart", function()
-    if InCombatLockdown() or not IsAltKeyDown() then return end
-    -- Undock first: a dock pass never moves the bar under the pointer.
-    if GAB.Dock.Setting("utility", "bar") ~= false then GAB.Settings.SetDock("utility", "bar", false) end
-    dragging = true
-    frame:StartMoving()
-end)
-mover:SetScript("OnDragStop", function()
-    stopDrag()
-    updateMover()
-end)
--- Never leave the frame on the pointer (in combat this only marks the stop).
-frame:SetScript("OnHide", function()
-    stopDrag()
-    updateMover()
-    Utility.CancelReorder()
-end)
+local function makeMover(bar)
+    local f = bar.frame
+    local mover = CreateFrame("Frame", nil, f)
+    mover:SetAllPoints(f)
+    mover:SetFrameStrata("DIALOG")
+    mover:EnableMouse(true)
+    mover:RegisterForDrag("LeftButton")
+    mover:Hide()
+    local bg = mover:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.5, 0.83, 1, 0.35)
+    local text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    text:SetPoint("CENTER")
+    text:SetText("Drag")
+    mover:SetScript("OnDragStart", function()
+        if InCombatLockdown() or not IsAltKeyDown() then return end
+        -- Undock first: a dock pass never moves the bar under the pointer.
+        if GAB.Dock.Setting(bar.dockId, "bar") ~= false then GAB.Settings.SetDock(bar.dockId, "bar", false) end
+        bar.dragging = true
+        f:StartMoving()
+    end)
+    mover:SetScript("OnDragStop", function()
+        stopDrag(bar)
+        updateMover()
+    end)
+    -- Never leave the frame on the pointer (in combat this only marks the stop).
+    f:SetScript("OnHide", function()
+        stopDrag(bar)
+        updateMover()
+        Utility.CancelReorder()
+    end)
+    bar.mover = mover
+end
+for _, bar in ipairs(bars) do makeMover(bar) end
 
 -- A shown button's action from its state (items and spells; Feed Pet stays
 -- disarmed at rest, the lock and providers have none). Out of combat.
@@ -1317,9 +1357,14 @@ local function raise()
         end
     end
     local want = top + 2
-    if API.Plain(frame:GetFrameLevel()) == want then return end
-    frame:SetFrameLevel(want)
-    for _, b in pairs(buttons) do GAB.Buttons.Restyle(b) end   -- the glass follows the new level
+    for _, bar in ipairs(bars) do
+        if API.Plain(bar.frame:GetFrameLevel()) ~= want then
+            bar.frame:SetFrameLevel(want)
+            for _, b in pairs(buttons) do   -- the glass follows the new level
+                if state[b].bar == bar then GAB.Buttons.Restyle(b) end
+            end
+        end
+    end
 end
 Utility.Raise = raise
 
@@ -1333,13 +1378,14 @@ function Utility.Reconcile()
     pending = false
     Utility.DisarmFeed()   -- never left armed by a click that didn't finish
     API.Try("utility:raise", raise)
+    local bar = bars[1]
     if not Utility.Enabled() then
         if not cleared then
             for _, b in pairs(buttons) do clear(b) end
             cleared = true
         end
-        shownList = {}
-        frame:Hide()
+        bar.shown = {}
+        bar.frame:Hide()
         notifyHosted({})
         return
     end
@@ -1372,11 +1418,11 @@ function Utility.Reconcile()
     for _, b in pairs(buttons) do
         if not active[b] then clear(b) end
     end
-    shownList = list
-    arrange()
-    frame:SetShown(#list > 0)
+    bar.shown = list
+    arrange(bar)
+    bar.frame:SetShown(#list > 0)
     Utility.RefreshVisuals()
-    GAB.Dock.RequestLayout("utility")
+    GAB.Dock.RequestLayout(bar.dockId)
     notifyHosted(on)
 end
 
@@ -1444,19 +1490,26 @@ local function skin()
     end
 end
 
+local BAR_LABELS, BAR_DOCKS = { "Utility bar" }, { Utility.DOCK }
+
 function Utility.Start()
     if started then return end
     started = true
     if not InCombatLockdown() then skin() end
-    GAB.Dock.Register({ id = "utility", label = "Utility bar", frame = frame, default = Utility.DOCK,
-        Layout = Utility.Layout, OnHosted = Utility.OnHosted })
+    for _, bar in ipairs(bars) do
+        local n = bar.index
+        GAB.Dock.Register({ id = bar.dockId, label = BAR_LABELS[n], frame = bar.frame, default = BAR_DOCKS[n],
+            Layout = function(geom) Utility.Layout(geom, n) end,
+            OnHosted = function(isHosted) Utility.OnHosted(isHosted, n) end })
+    end
     Utility.LocalizeBindingNames()
     Utility.ReadCampfire()
     -- The saved spot until a dock pass places the bar (its target may be
     -- unavailable on this character); a /reload in combat waits for the fight.
-    local posPending = false
-    if savedPos() then
-        if InCombatLockdown() then posPending = true else restorePos() end
+    for _, bar in ipairs(bars) do
+        if savedPos(bar) then
+            if InCombatLockdown() then bar.posPending = true else restorePos(bar) end
+        end
     end
     local petDead = flag(UnitIsDead, "pet")
     driver:SetScript("OnEvent", function(_, event, arg1)
@@ -1468,9 +1521,11 @@ function Utility.Start()
         if event == "PLAYER_REGEN_ENABLED" then
             -- An interrupted drag ends first (updateMover), before a rebuild can resize or hide the frame.
             updateMover()
-            if posPending then
-                posPending = false
-                if not hosted then restorePos() end
+            for _, bar in ipairs(bars) do
+                if bar.posPending then
+                    bar.posPending = false
+                    if not bar.hosted then restorePos(bar) end
+                end
             end
             skin()
             Utility.DisarmFeed()   -- whatever a fight interrupted
@@ -1478,7 +1533,9 @@ function Utility.Start()
             if Utility.ReadCampfire() or pending then Utility.Reconcile() end
         elseif event == "PLAYER_REGEN_DISABLED" then
             -- The last moment before lockdown: a drag stops cleanly, where it is.
-            if dragging and not InCombatLockdown() then stopDrag() end
+            for _, bar in ipairs(bars) do
+                if bar.dragging and not InCombatLockdown() then stopDrag(bar) end
+            end
             Utility.CancelReorder()
             Utility.DisarmFeed()
             updateMover()
@@ -1516,9 +1573,10 @@ function Utility.Start()
     Utility.Refresh()
 end
 
-Utility._test = { regions = regions, state = state, frame = frame,
-    shown = function() return shownList end, geom = function() return lastGeom end,
-    setCampfire = function(v) campfire = v end, mover = mover, poller = poller,
-    dragging = function() return dragging, stopPending end,
+local bar1 = bars[1]
+Utility._test = { regions = regions, state = state, frame = bar1.frame,
+    shown = function() return bar1.shown end, geom = function() return bar1.geom end,
+    setCampfire = function(v) campfire = v end, mover = bar1.mover, poller = poller,
+    dragging = function() return bar1.dragging, bar1.stopPending end,
     gesture = gesture, ghost = ghost, marker = marker, reorder = function() return reorder end,
-    lastCols = function() return lastCols end }
+    lastCols = function() return bar1.cols end }
