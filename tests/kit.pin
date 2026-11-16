@@ -1,6 +1,5 @@
 # WowTestKit for these tests: the commit, and the client build to test against.
-# 70790: GAB's MEASURED_ON_BUILD (#75). The kit has 70938 too; moving to it is
-# a build bump of its own. api=2 since #84 (the kit's docs/MIGRATING.md).
+# 70938: GAB's MEASURED_ON_BUILD (#99). api=2 since #84 (the kit's docs/MIGRATING.md).
 sha=8e8789285d2d87534ea3f5f63ea767b001a0c68f
-build=70790
+build=70938
 api=2
