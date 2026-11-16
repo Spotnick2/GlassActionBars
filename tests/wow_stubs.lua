@@ -10,27 +10,19 @@
 -- bar's spells and items) and replaces a WoW.Methods entry where a test
 -- relies on it.
 
--- WowTestKit #8: a test that loads this file again for a fresh client
--- (test_bags_micro, test_pearl, test_skin_fail) keeps its counts: the kit,
--- with its assertions, is loaded once; a reload rebuilds only the stub core.
-if rawget(_G, "Kit") and Kit.counts then
-    local strays = WoW.strays
-    setmetatable(_G, nil)
-    dofile(Kit.ROOT .. "/core/stubs.lua")
-    for _, line in ipairs(strays) do table.insert(WoW.strays, line) end
-else
-    dofile("tests/kit.lua")
-end
+-- Loading this file again (test_bags_micro, test_pearl, test_skin_fail) is a
+-- fresh client that keeps the file's counts: the kit's own (API 2).
+dofile("tests/kit.lua")
 local Methods = WoW.Methods
 local newWidget = WoW.newWidget
 
--- WowTestKit #9: one rendered frame moves the clock too, as on the client
--- (Fade.lua times its fade-out by GetTime() inside OnUpdate).
-local coreTick = WoW.tick
-function WoW.tick(elapsed)
-    WoW.now = (WoW.now or 0) + (elapsed or 0.02)
-    coreTick(elapsed)
-end
+-- GameTooltip's setters are Lua methods on the client (TooltipDataHandlerMixin,
+-- Blizzard_SharedXMLGame/Tooltip/TooltipDataHandler.lua), not in the dump's
+-- widget walk: the Utility bar's tooltips call these two.
+Kit.allowMethods({
+    ["GameTooltip:SetSpellByID"] = "Blizzard_SharedXMLGame/Tooltip/TooltipDataHandler.lua",
+    ["GameTooltip:SetItemByID"] = "Blizzard_SharedXMLGame/Tooltip/TooltipDataHandler.lua",
+})
 
 -- State a test may set, cleared with the core's.
 local function resetState() WoW.cvars = {} end
@@ -78,15 +70,15 @@ function Methods.GetCenter(w)
     return (r[1] + r[2]) / 2, (r[3] + r[4]) / 2
 end
 function Methods.SetTexCoord(w, ...) w._texcoord = { ... } end
--- Moving: like the client, refused on a protected frame (or one with
--- protected children: the test marks it _protected) in combat.
+-- Moving: like the client, refused on a protected frame (or one that parents
+-- protected frames: WoW.isProtected) in combat.
 function Methods.SetMovable(w, v) w._movable = v end
 function Methods.StartMoving(w)
-    if WoW.combat and w._protected then table.insert(WoW.violations, "StartMoving in combat") return end
+    if WoW.combat and WoW.isProtected(w) then table.insert(WoW.violations, "StartMoving in combat") return end
     w._moving = true
 end
 function Methods.StopMovingOrSizing(w)
-    if WoW.combat and w._protected then table.insert(WoW.violations, "StopMovingOrSizing in combat") return end
+    if WoW.combat and WoW.isProtected(w) then table.insert(WoW.violations, "StopMovingOrSizing in combat") return end
     w._moving = false
 end
 -- The pointer: WoW.hover[frame] = true (or a secret, as IsMouseOver's
@@ -427,19 +419,21 @@ function GameTooltip_Hide() GameTooltip:Hide() end
 
 WoW.violations = {}
 -- Blizzard's own secure code may show, hide or move a protected frame in
--- combat; the core refuses it only to addon code. fn runs as Blizzard's, with
--- f's protection lifted (a bar Blizzard hides mid-fight, test_edges).
+-- combat; the core refuses it only to addon code. fn runs as Blizzard's, out
+-- of combat for the call (a bar Blizzard hides mid-fight, test_edges):
+-- clearing f._protected no longer frees a frame that parents protected ones
+-- (the kit's MIGRATING.md, API 2).
 function WoW.blizzard(f, fn)
-    local p = f._protected
-    f._protected = nil
+    local c = WoW.combat
+    WoW.combat = false
     fn()
-    f._protected = p
+    WoW.combat = c
 end
 for _, m in ipairs({ "SetPoint", "ClearAllPoints", "SetAllPoints", "SetParent", "SetSize", "SetWidth",
                      "SetHeight", "Show", "Hide", "SetShown", "SetFrameLevel", "SetScale", "SetAttribute" }) do
     local impl = Methods[m]
     Methods[m] = function(w, ...)
-        if WoW.combat and w._protected then
+        if WoW.combat and WoW.isProtected(w) then
             table.insert(WoW.violations, (w._name or w._type) .. ":" .. m)
             if m == "SetAttribute" then return end
         end
