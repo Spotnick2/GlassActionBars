@@ -10,10 +10,10 @@
   - Refused and left on your cursor: passive spells, items and macros (with the reason at the
     top of the screen), and anything during combat. Up to 40 added spells.
   - Added spells have a **Remove** button on the Utility bar options page.
-- **Rearrange it on the bar**: hold Shift (Blizzard's Pick Up Action key) and drag a button. It
-  takes the place of the button you drop it on. Drag it off the bar to take it off: an added spell
-  leaves the bar, any other button is unticked (tick it again on the options page). A Shift-click
-  never casts.
+- **Rearrange it on the bar**, out of combat: hold Shift (Blizzard's Pick Up Action key) and drag
+  a button. It takes the place of the button you drop it on. Drag it off the bar to take it off:
+  an added spell leaves the bar, any other button is unticked (tick it again on the options page).
+  Out of combat a Shift-click never casts; in a fight it is an ordinary click.
 - **Utility bar 2**, off until you tick it on its own options page: a second bar for anything the
   first one shows, such as a class's spells or Feed Pet in a column beside your action bars. It has
   its own layout, docking (by default left of Action Bar 1) and Alt-drag position. Shift-drag a
