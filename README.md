@@ -55,6 +55,14 @@ key binding (Esc > Options > Keybindings > Glass Action Bars). **Alt-drag** it t
 instead. Choose and order its buttons on the **Utility bar** options page; other addons can add
 theirs there too (unticked until you turn them on).
 
+**Edit it on the bar**: drag a spell from your spellbook onto the Utility bar to add it (class
+buffs, resurrections, utility spells; it shows on the characters that know it, with no key
+binding of its own), and hold Shift (Blizzard's Pick Up Action key) and drag a button to move
+it, or off the bar to take it off.
+**Utility bar 2**, off until you tick it on its own options page, holds anything the first one
+does, such as a class column beside your action bars, with its own layout, docking and position:
+Shift-drag a button from one bar to the other.
+
 **Dock**: smart bars dock beside one of Edit Mode's Action Bars 1-8 and follow it, matching its
 button size and spacing, its rows and direction, or both (the **Dock** options page, `/gab dock`).
 

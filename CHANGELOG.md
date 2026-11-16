@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.1.0 - 2026-11-16
+
+- **Add spells to the Utility bar**: drag a spell from your spellbook onto it, or click a button
+  with the spell on the cursor. Class buffs, resurrections, utility spells: it goes where you
+  drop it, and shows on the characters that know it.
+  - A spell the bar already has a button for (a profession, Feed Pet, Disenchant...) turns that
+    button on instead of adding a copy.
+  - Refused and left on your cursor: passive spells, items and macros (with the reason at the
+    top of the screen), and anything during combat. Up to 40 added spells.
+  - Added spells have a **Remove** button on the Utility bar options page.
+- **Rearrange it on the bar**: hold Shift (Blizzard's Pick Up Action key) and drag a button. It
+  takes the place of the button you drop it on. Drag it off the bar to take it off: an added spell
+  leaves the bar, any other button is unticked (tick it again on the options page). A Shift-click
+  never casts.
+- **Utility bar 2**, off until you tick it on its own options page: a second bar for anything the
+  first one shows, such as a class's spells or Feed Pet in a column beside your action bars. It has
+  its own layout, docking (by default left of Action Bar 1) and Alt-drag position. Shift-drag a
+  button from one bar to the other, drop a spell on it, or use the **Bar 1 / Bar 2** buttons on
+  the Utility bar options page. Turned off, its buttons show nowhere.
+- An empty Utility bar keeps one empty slot, a place to drop a spell or drag a button.
+- **Gardening and Tanning**: the Herbalism and Skinning buttons now cast them (each opens that
+  profession's camp features), not the gathering spells, which did nothing from a bar. Your order,
+  ticks and key bindings carry over.
+- **The Mining button is gone**: it cast the gathering spell, and Mining has no camp feature.
+  Smelting and Mining's camp features stay.
+- **Russian, Korean and Chinese clients**: key bindings and counts on the buttons use a font with
+  your language's letters instead of boxes.
+
 ## v1.0.2 - 2026-11-06
 
 - `/gab` help and usage lines no longer lose letters: the choices are separated by `/`, not `|`.
