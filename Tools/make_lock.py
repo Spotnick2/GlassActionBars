@@ -28,7 +28,7 @@ SLOT_W, SLOT_BOTTOM = 2.4, 45.5   # its slot
 
 
 def write_tga(name, rgba):
-    """rgba: float array (h, w, 4) in 0..1, row 0 = top (LibGlass's writer, as make_rim.py)."""
+    """rgba: float array (h, w, 4) in 0..1, row 0 = top (LibGlass's writer, Tools/make_textures.py there)."""
     h, w, _ = rgba.shape
     px = (np.clip(rgba, 0, 1) * 255 + 0.5).astype(np.uint8)
     bgra = px[::-1, :, [2, 1, 0, 3]]

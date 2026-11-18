@@ -274,7 +274,7 @@ pwsh tests\run.ps1 -KitDev                                           # against t
 pwsh Tools\deploy.ps1 -Probe                                         # copy the addon (+ GABProbe) into AddOns
 ```
 
-- Default AddOns path: `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns`
+- Default AddOns path: `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns`
   (`-AddOnsPath` to change).
 - In game: `/console scriptErrors 1` and `/console taintLog 1`, then `/reload`.
 - Shell heredocs in this environment can collapse `\\` to `\`: write files that contain Lua
