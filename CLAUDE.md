@@ -249,7 +249,7 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
 
 - `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md`: measured, addon-agnostic field notes.
   New addon-agnostic findings go there, not into a copy here.
-- `C:\Projects\WoW\References\Forever\api\forever-api-1.60.1.70938.md`: the API dump (take the highest build there).
+- `C:\Projects\WoW\References\Forever\api\forever-api-1.60.1.70959.md`: the API dump (take the highest build there).
   **Presence is not a contract.**
 - `C:\Projects\WoW\References\Docs\EMBEDDED-LIBRARIES.md`, `LIBGLASS-MIGRATION.md`, `RELEASING.md`.
 - `C:\Projects\WoW\References\Addons\ActionBars\Bartender4`: a behaviour reference (its Forever art
