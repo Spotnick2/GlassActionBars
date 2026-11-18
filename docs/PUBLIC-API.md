@@ -116,6 +116,9 @@ its glass (before its `PLAYER_LOGIN`) waits, its regions and owner kept, and is 
 
 Other keys are ignored. A button already in glass returns `true`. **In combat** the skin is applied
 when the fight ends. If the player turned the glass off (`/gab skin off`), it returns `false`.
+A button that another addon's LibGlass already skins (its own glass, built without Glass Action
+Bars) returns `false, "skinned by another addon's glass"`; one waiting for the end of a fight is
+dropped then. Added within version 2 (v1.1.1, LibGlass r13's button skin).
 
 **The skin isn't undone** when your bar is undocked: it stays until a `/reload`. If your buttons
 need their standalone look back as soon as they are undocked, don't call `SkinButton` on them;

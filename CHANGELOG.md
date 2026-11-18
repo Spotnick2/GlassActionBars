@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.1 - 2026-11-18
+
+- **The button glass now comes from LibGlass**, the library the Glass addons share, so Apotheca
+  can give its buttons the same look without Glass Action Bars. Your bars look the same.
+- Checked on the 1.60.1.70959 client.
+- For addon authors: `SkinButton` returns `false, "skinned by another addon's glass"` for a
+  button that another addon's LibGlass already skins.
+
 ## v1.1.0 - 2026-11-16
 
 - **Add spells to the Utility bar**: drag a spell from your spellbook onto it, or click a button
