@@ -37,27 +37,20 @@ eq(GlassActionBars.Glass.MEDIA, "Interface\\AddOns\\GlassActionBars\\Libs\\LibGl
     "MEDIA is the embedded copy's")
 eq(GlassActionBars.MEDIA, "Interface\\AddOns\\GlassActionBars\\Media\\", "our own media folder")
 
--- Our own textures ship, as uncompressed 32-bit TGA (what Tools/make_rim.py writes).
-local tga = io.open("Media/ButtonRim.tga", "rb")
-check(tga ~= nil, "Media/ButtonRim.tga exists")
-if tga then
-    local header = tga:read(18)
-    tga:close()
-    eq(header:byte(3), 2, "  uncompressed truecolour")
-    eq(header:byte(13) + 256 * header:byte(14), 32, "  32 wide (body_mask_small's size)")
-    eq(header:byte(15) + 256 * header:byte(16), 32, "  32 high")
-    eq(header:byte(17), 32, "  32 bits, with alpha")
-end
-
-for _, asset in ipairs({ { "ButtonGloss", 64 }, { "ButtonSocketRim", 32 }, { "ButtonSocketShade", 32 } }) do
-    local f = io.open("Media/" .. asset[1] .. ".tga", "rb")
-    check(f ~= nil, "Pearl asset ships: " .. asset[1])
+-- The button skin's textures ship with the library (LibGlass r13, #105), as
+-- uncompressed 32-bit TGA; the sizes GAB's builder had (body_mask_small's 32).
+for _, asset in ipairs({ { "button_rim", 32 }, { "button_gloss", 64 }, { "button_socket_rim", 32 },
+                         { "button_socket_shade", 32 }, { "button_halo" }, { "button_ripple" }, { "button_mask" } }) do
+    local f = io.open(root .. "/Media/" .. asset[1] .. ".tga", "rb")
+    check(f ~= nil, "the skin's texture ships with the library: " .. asset[1])
     if f then
         local h = f:read(18)
         f:close()
         eq(h:byte(3), 2, asset[1] .. ": uncompressed truecolour")
-        eq(h:byte(13) + 256 * h:byte(14), asset[2], asset[1] .. ": width")
-        eq(h:byte(15) + 256 * h:byte(16), asset[2], asset[1] .. ": height")
+        if asset[2] then
+            eq(h:byte(13) + 256 * h:byte(14), asset[2], asset[1] .. ": width")
+            eq(h:byte(15) + 256 * h:byte(16), asset[2], asset[1] .. ": height")
+        end
         eq(h:byte(17), 32, asset[1] .. ": alpha channel")
     end
 end

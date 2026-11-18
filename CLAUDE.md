@@ -67,27 +67,32 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   else `Look.DEFAULTS`. `Look.Get(key)` is the one read. `Suite.Report`: built, look, own,
   tenants (`SkinButton`'s owners). The live refresh is colours and alphas only (combat-safe).
 - **`Theme.lua`**: clear / smoked / class glass (GlassMiniMap's), repainted live on every
-  registered surface; only body regions (tint, wash), never the rims.
-- **`Buttons.lua`**: the skin. `Build(button, regions)` (shared by every family, and later by the
-  provider API): a body frame one level under the button, its rim raised one level over it, the
-  stock frame art faded, the pushed texture made a bright rim, the text in the glass font.
-  `SetOccupied` makes the rim bright or faint. Family adapters: action buttons hook their own
-  `UpdateButtonArt` / `Update` / `UpdateHotkeys`; stance and pet hook their bar's
-  `UpdateState` / `Update`. A login in combat waits for the fight to end.
-  Feedback (#34): `Buttons.LOOK` (hover off/glow/halo, press off/flash/ripple, emptySlots),
-  `Buttons.PRESETS` (glass = defaults: glow, flash, frosted; soft; minimal), `Buttons.Preset()`
-  ("custom" when none). The halo (Media/ButtonHalo, 16 px padding, sliced at 24) and the ripple
-  (ButtonRipple, masked by ButtonMask) are our textures on `g.top`, driven by one OnUpdate only
-  while one moves, from `HookScript` OnEnter/OnLeave/OnHide/OnMouseDown (a click only: key presses
-  have no hookable signal, they flash). The empty factor goes through the theme's scale callback
-  and the rim once (`Theme.Repaint` per surface); every family takes it, the bag slots too (#50). The key text stays where Blizzard puts it: moving it above the buttons was tried and
-  taken out (docs/FOREVER-PROBE.md session 5). Textures from `Tools/make_rim.py`.
-  Pearl's face (#44, the owner's FFXIV reference; Pearl built only): `Buttons.PEARL` overrides
-  `TUNE`'s defaults (`TuneDefault`; a saved tune of a PEARL key is never pruned, the material is
-  only known at login), a neutral frosted fill, a frosted empty slot's recessed socket
-  (ButtonSocketRim / ButtonSocketShade in place of the rim and inner line) and a filled slot's
-  reflection (ButtonGloss, masked by ButtonMask), all on `g.top`: over the cooldown sweep like the
-  rim, by choice (a fixed order); `/gab tune gloss 0` takes it off. GABProbe's `pearl` checks it.
+  registered surface (the micro menu's pill); only body regions (tint, wash), never the rims.
+  The buttons read it through `ButtonTint()` (the colour, nil = as built, and the wash factor);
+  `Refresh` repaints them too, and `Retry` (PLAYER_ENTERING_WORLD) repaints on the class theme.
+- **`Buttons.lua`**: the skin is LibGlass's (r13, `Glass.Button`; LibGlass#46, moved there from
+  here so Apotheca can wear it, #105). What stays here: `Build(button, regions, opts)` (shared by
+  every family and the provider API) maps GAB's region names to the library's roles (`normal`,
+  `slotArt`, `slotBackground` under `fade`; `cooldown` never passed: an unknown role throws) and
+  passes the look as getters read at each paint and hook (`Look.Get`'s hover/press/emptySlots,
+  `Theme.ButtonTint`, `/gab tune`'s saved numbers, the hotkey / macro-name settings) and
+  `onError` -> `API.Fail("skin:<step>:<button>")`. Built out of combat only (the library refuses
+  `nil, "combat"`; `"skinned"`: another addon's glass holds the button, which `SkinButton`
+  reports). `State(b)` is the library's handle (button, body, g, regions, occupied, small,
+  failures). `SetOccupied` -> `SetButtonEmpty`, `Restyle` / the `UpdateButtonArt` hook ->
+  `RestyleButton` (allowed in combat), `Refresh` -> `RefreshButtons`. Family adapters: action
+  buttons hook their own `UpdateButtonArt` / `Update`; stance and pet hook their bar's
+  `UpdateState` / `Update`. A login in combat waits for the fight to end (the bag bar too).
+  Feedback (#34): `Buttons.LOOK` (the library's choices: hover off/glow/halo, press
+  off/flash/ripple, emptySlots), `Buttons.PRESETS` (glass = defaults: glow, flash, frosted;
+  soft; minimal), `Buttons.Preset()` ("custom" when none). `Buttons.TUNE` is `/gab tune`'s words;
+  the defaults are the library's by material (`TuneDefault` = `Glass.ButtonDefault`, after login
+  only: Pearl has its own), so the saved tune is pruned by key and range only. The key text stays
+  where Blizzard puts it: moving it above the buttons was tried and taken out
+  (docs/FOREVER-PROBE.md session 5). Pearl's face (#44: a frosted empty slot's recessed socket, a
+  filled slot's reflection, over the cooldown sweep by choice) is the library's on a Pearl
+  instance; `/gab tune gloss 0` takes it off, GABProbe's `pearl` checks it. The tests'
+  `PARITY` (harness.lua) writes out the old builder's numbers to check the library's paint.
 - **`Bars.lua`**: the main bar's `BorderArt`, its pooled dividers (re-faded after
   `UpdateDividers`) and the end caps' textures (`/gab gryphons`), re-applied on
   `EDIT_MODE_LAYOUTS_UPDATED`.
@@ -269,7 +274,7 @@ pwsh tests\run.ps1 -KitDev                                           # against t
 pwsh Tools\deploy.ps1 -Probe                                         # copy the addon (+ GABProbe) into AddOns
 ```
 
-- Default AddOns path: `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns`
+- Default AddOns path: `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns`
   (`-AddOnsPath` to change).
 - In game: `/console scriptErrors 1` and `/console taintLog 1`, then `/reload`.
 - Shell heredocs in this environment can collapse `\\` to `\`: write files that contain Lua

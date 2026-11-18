@@ -87,10 +87,10 @@ local function copyLook(look)
     end
 end
 
--- Repaint everything live (combat-safe: textures, colours and alphas only).
+-- Repaint everything live (combat-safe: colours, alphas and fonts only):
+-- Theme.Refresh repaints the surfaces and every button's skin.
 function Look.Refresh()
     GAB.Theme.Refresh()
-    GAB.Buttons.RefreshFeedback()
     Look.Report()
 end
 

@@ -38,7 +38,7 @@ for _, f in ipairs(FRAMES) do
 end
 
 -- Bags: full glass.
-local rimFile = GAB.MEDIA .. "ButtonRim"
+local rimFile = PARITY.media("button_rim")
 for _, b in ipairs(BAGS) do
     local s = GAB.Buttons.State(b)
     check(s ~= nil, b._name .. " is skinned")
@@ -53,7 +53,7 @@ local B = GAB.Buttons
 local function rim(b) return B.State(b).g.rim:GetAlpha() end
 local function socket(b) return B.State(b).socketRim:GetAlpha() end
 local function frosted(b)   -- Pearl's recessed socket, in the pale fill
-    local s, frost = B.State(b), B.Frost()
+    local s, frost = B.State(b), PARITY.frost(GAB)
     local c = s.g.tint._color
     return rim(b) == 0 and close(socket(b), B.Tune("rim") * B.Tune("empty") * B.Tune("frostRim"))
         and s.g.tint:IsShown() and close(c[1], frost[1]) and close(c[4], frost[4])
@@ -104,7 +104,7 @@ CharacterBag0Slot.icon:SetAlpha(1)
 
 -- It follows the empty-slots look (/gab look).
 GAB.Settings.SetLook("emptySlots", "faint")
-check(close(rim(CharacterBag1Slot), B.Tune("rim") * B.Tune("empty") * B.EMPTY.faint) and socket(CharacterBag1Slot) == 0,
+check(close(rim(CharacterBag1Slot), B.Tune("rim") * B.Tune("empty") * PARITY.EMPTY.faint) and socket(CharacterBag1Slot) == 0,
     "faint: the empty bag slot's rim")
 check(filled(CharacterBag0Slot), "  the slot with a bag unchanged")
 GAB.Settings.SetLook("emptySlots", "hidden")

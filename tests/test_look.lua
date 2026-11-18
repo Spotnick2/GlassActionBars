@@ -14,13 +14,13 @@ eq(next(GAB.failures), nil, "nothing failed")
 local b = ActionButton1
 local s = B.State(b)
 local function scale()
-    for _, x in ipairs(GAB.Theme._test.surfaces) do if x.g == s.g then return x.scale() end end
+    return PARITY.scale(GAB, s)
 end
 
 -- The Glass preset, the default: Blizzard's glow, the flash, frosted empty slots (owner).
 eq(B.Preset(), "glass", "defaults: the Glass preset")
 eq(B.Look("emptySlots"), "frosted", "  empty slots frosted by default")
-check(close(b.HighlightTexture:GetAlpha(), B.HIGHLIGHT), "  Blizzard's highlight softened (glow)")
+check(close(b.HighlightTexture:GetAlpha(), PARITY.HIGHLIGHT), "  Blizzard's highlight softened (glow)")
 eq(s.halo:GetAlpha(), 0, "  the halo made, at rest")
 eq(b.PushedTexture:GetAlpha(), 1, "  the pushed rim shown (flash)")
 
@@ -46,7 +46,7 @@ b:Show()
 WoW.hover[b] = true
 Settings.SetLook("hover", "glow")
 eq(s.halo:GetAlpha(), 0, "glow: the halo off at once")
-check(close(b.HighlightTexture:GetAlpha(), B.HIGHLIGHT), "  Blizzard's highlight back")
+check(close(b.HighlightTexture:GetAlpha(), PARITY.HIGHLIGHT), "  Blizzard's highlight back")
 Settings.SetLook("hover", "halo")
 WoW.tick(0.2)
 eq(s.halo:GetAlpha(), 1, "halo turned on under a still pointer: shown")
@@ -108,7 +108,7 @@ local _, _, own = scale()
 eq(own, nil, "frosted, on a filled slot: the theme's own glass")
 B.SetOccupied(b, false)
 wash, body, own = scale()
-local frost = B.Frost()
+local frost = PARITY.frost(GAB)
 check(own and close(own[1], frost[1]) and close(own[4], frost[4]) and body == 1, "frosted, empty: the pale neutral fill in place of the theme's tint")
 check(close(s.socketRim:GetAlpha(), B.Tune("rim") * B.Tune("empty") * B.Tune("frostRim")), "  a softer socket rim")
 check(s.g.tint:IsShown(), "  the fill shown")
