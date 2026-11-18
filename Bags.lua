@@ -90,9 +90,24 @@ function Bags.Refresh()
     API.Try("bags:dividers", fadeDividers)
 end
 
-local started = false
+-- At PLAYER_LOGIN. The skin is built out of combat only (LibGlass refuses
+-- one in a fight), so a login in combat (a /reload mid-fight) waits for the
+-- fight to end, as Buttons.Start does.
+local started, waiter = false, nil
 function Bags.Start()
     if started or GAB.db.skin == false or not BagsBar then return end
+    if API.InCombat() then
+        if waiter then return end
+        waiter = CreateFrame("Frame")
+        waiter:SetScript("OnEvent", function(self, event)
+            API.NoteCombat(event)
+            if API.InCombat() then return end
+            self:UnregisterAllEvents()
+            Bags.Start()
+        end)
+        API.RegisterEvents(waiter, { "PLAYER_REGEN_ENABLED" }, "bags")
+        return
+    end
     started = true
     for _, name in ipairs(Bags.BUTTONS) do
         local b = _G[name]

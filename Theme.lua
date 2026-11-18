@@ -8,8 +8,10 @@
 --         surface then stays clear and PLAYER_ENTERING_WORLD paints it again.
 --
 -- GlassMiniMap's Theme.lua, without its orb kind. Every glass surface this
--- addon builds registers here by its g. Only body regions are touched (tint
--- colour, grain and wash alpha): the rims are the button skin's.
+-- addon builds registers here by its g (the micro menu's pill); the buttons
+-- are LibGlass's skins, which read the tint through ButtonTint and are
+-- repainted by Refresh. Only body regions are touched (tint colour, grain
+-- and wash alpha).
 
 GlassActionBars = GlassActionBars or {}
 local GAB = GlassActionBars
@@ -100,18 +102,29 @@ function Theme.Repaint(g)
     if s then API.Try("theme:paint", paint, s, current(), (tintFor(current()))) end
 end
 
--- Repaint every surface. Returns false while the class colour is unreadable.
+-- The buttons' tint (LibGlass's skin paints them, Buttons.lua): the theme's
+-- colour { r, g, b, a? }, or nil for the material as built (clear glass, and
+-- the class colour while it can't be read); and the theme's factor on the wash.
+function Theme.ButtonTint()
+    local name = current()
+    return (tintFor(name)), Theme.PRESETS[name].wash or 1
+end
+
+-- Repaint every surface and every button. Returns false while the class
+-- colour is unreadable.
 function Theme.Refresh()
     local name = current()
     local tint, known = tintFor(name)
     for _, s in ipairs(surfaces) do API.Try("theme:paint", paint, s, name, tint) end
     Theme.pending = not known
+    if GAB.Buttons then GAB.Buttons.Refresh() end
     return known
 end
 
--- PLAYER_ENTERING_WORLD: the class colour can be read by now.
+-- PLAYER_ENTERING_WORLD: the class colour can be read by now. The buttons
+-- register no surface here, so the class theme repaints whatever pending says.
 function Theme.Retry()
-    if Theme.pending then Theme.Refresh() end
+    if Theme.pending or current() == "class" then Theme.Refresh() end
 end
 
 Theme._test = { surfaces = surfaces }

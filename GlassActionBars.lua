@@ -50,16 +50,15 @@ local function ensureDefaults()
     end
     if db.material ~= nil and not GAB.IsMaterial(db.material) then db.material = nil end
     if db.microStyle ~= nil and not GAB.Micro.IsStyle(db.microStyle) then db.microStyle = nil end
-    -- /gab tune: only known keys with a number in 0..1 survive. A key Pearl
-    -- sets its own default for (#44) is kept whatever its value: the material
-    -- is only known at login (Glass UI's, maybe), so no value is "the default".
+    -- /gab tune: only known keys with a number in 0..1 survive. A value equal
+    -- to a default is kept too: the defaults are LibGlass's, by the material,
+    -- and the material is only known at login (Glass UI's, maybe), so no
+    -- value is "the default" here (#105).
     if db.tune ~= nil then
         if type(db.tune) ~= "table" then db.tune = nil else
             for k, v in pairs(db.tune) do
-                local known = GAB.Buttons.TUNE[k]
-                if not known or type(v) ~= "number" or not (v >= 0 and v <= 1)
-                        or (GAB.Buttons.PEARL[k] == nil and v == known[1]) then
-                    db.tune[k] = nil   -- unknown, out of range, or the one built-in value
+                if not GAB.Buttons.TUNE[k] or type(v) ~= "number" or not (v >= 0 and v <= 1) then
+                    db.tune[k] = nil   -- unknown or out of range
                 end
             end
             if next(db.tune) == nil then db.tune = nil end
@@ -596,10 +595,10 @@ local function slash(msg)
             say("tune: the built-in values")
         elseif key == "" then
             for _, k in ipairs(GAB.Buttons.TUNE_ORDER) do
-                say(("tune %s %.2f - %s"):format(k, GAB.Buttons.Tune(k), GAB.Buttons.TUNE[k][2]))
+                say(("tune %s %.2f - %s"):format(k, GAB.Buttons.Tune(k), GAB.Buttons.TUNE[k]))
             end
         elseif GAB.Buttons.TUNE[key] and value == "" then
-            say(("tune %s %.2f - %s"):format(key, GAB.Buttons.Tune(key), GAB.Buttons.TUNE[key][2]))
+            say(("tune %s %.2f - %s"):format(key, GAB.Buttons.Tune(key), GAB.Buttons.TUNE[key]))
         elseif tonumber(value) and Settings.SetTune(key, tonumber(value)) then
             say(("tune %s %.2f"):format(key, GAB.Buttons.Tune(key)))
         else

@@ -22,7 +22,7 @@ rawset(ActionButton5, "GetFrameLevel", function() error("boom") end)
 
 local GAB = loadAddon()
 check(refused > 0, "the client refused the pressed look")
-check(GAB.failures["skin:pushed"] ~= nil, "the refusal is recorded")
+check(GAB.failures["skin:pushed:ActionButton1"] ~= nil, "the refusal is recorded, under its button")
 check(GAB.failures["skin:level:ActionButton5"] ~= nil, "the level failure is recorded under its button")
 for _, b in ipairs({ ActionButton1, ActionButton5, MultiBarBottomLeftButton3, StanceButton1 }) do
     local s = GAB.Buttons.State(b)

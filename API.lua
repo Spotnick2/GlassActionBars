@@ -101,6 +101,8 @@ function GAB.FlushSkinRequests()
     if InCombatLockdown() or not GAB.GlassBuilt() then return end
     for button, regions in pairs(pending) do
         if GAB.db.skin ~= false and not GAB.Buttons.IsSkinned(button) then
+            -- Refused ("skinned": another addon's glass holds it) is recorded
+            -- by Build; the kept empty answer is then dropped, never applied.
             API.Try("api:skin", GAB.Buttons.Build, button, regions, ROUND)
         end
         settle(button)
@@ -149,10 +151,11 @@ function GAB.SkinButton(button, regions, owner)
         end
         return true
     end
-    API.Try("api:skin", GAB.Buttons.Build, button, copy, ROUND)
+    local _, why = API.Try("api:skin", GAB.Buttons.Build, button, copy, ROUND)
     -- Out of combat before GAB's own flush (the provider's PLAYER_REGEN_ENABLED
     -- ran first): this build takes over the waiting request.
     if pending[button] and GAB.Buttons.IsSkinned(button) then settle(button) end
+    if why == "skinned" then return false, "skinned by another addon's glass" end
     return GAB.Buttons.IsSkinned(button)
 end
 

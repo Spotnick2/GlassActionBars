@@ -98,6 +98,39 @@ function loadAddon(opts)
     return GlassActionBars
 end
 
+-- The skin's parity with GAB's own builder before LibGlass r13 (#105): its
+-- numbers written out here, never read from the library, so the library's
+-- paint is checked against them.
+PARITY = { HIGHLIGHT = 0.4, EMPTY = { hidden = 0, faint = 0.25, half = 0.5, full = 1 } }
+
+-- The frosted empty slot's fill: a neutral grey on Pearl, a cool one otherwise.
+function PARITY.frost(GAB)
+    local B = GAB.Buttons
+    local g = B.Tune("frostGrey")
+    if GAB.GlassPreset == "pearl" then return { g, g, g, B.Tune("frostAlpha") } end
+    return { g, math.min(1, g + 0.01), math.min(1, g + 0.04), B.Tune("frostAlpha") }
+end
+
+-- One of the library's own textures (the skin's are there now).
+function PARITY.media(name) return GlassActionBars.Glass.MEDIA .. name end
+
+-- What the old theme callback returned for a button, read back from its
+-- paint: the wash and body factors, and the frosted fill when it is the one
+-- painted (body 1: the fill's own alpha).
+function PARITY.scale(GAB, s)
+    local g, STYLE = s.g, GAB.Glass.STYLE
+    local built = g.tint.glassColor or STYLE.tint
+    local c = g.tint._color or {}
+    local grad = g.wash._gradient and g.wash._gradient[3]
+    local wash = (STYLE.wash or 0) > 0 and (grad and grad.a or 0) / STYLE.wash or 0
+    local frost = PARITY.frost(GAB)
+    local function near(a, b) return type(a) == "number" and type(b) == "number" and math.abs(a - b) < 1e-6 end
+    if near(c[1], frost[1]) and near(c[2], frost[2]) and near(c[3], frost[3]) and near(c[4], frost[4]) then
+        return wash, 1, { c[1], c[2], c[3], c[4] }
+    end
+    return wash, (c[4] or 0) / built[4], nil
+end
+
 -- Chat lines printed since the last call.
 local seenChat = 0
 function newChat()

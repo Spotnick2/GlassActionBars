@@ -147,7 +147,7 @@ local masks = regions.icon._masks
 eq(masks and #masks, 1, "  the icon masked, once")
 local m = masks and masks[1]
 check(m and m:GetParent() == btn, "  the mask on the icon's own frame")
-check(m and tostring(m._file):find("ButtonMask") ~= nil, "  the rim's rounded square")
+check(m and tostring(m._file):find("button_mask") ~= nil, "  the rim's rounded square")
 check(m and m._points[1] and m._points[1][1] == "ALL" and m._points[1][2] == regions.icon, "  over the icon")
 GAB.SkinButton(btn, regions)
 eq(#regions.icon._masks, 1, "  a repeat call adds none")
@@ -242,4 +242,37 @@ eq(GAB.Buttons.State(rb).occupied, false, "  the kept answer applied")
 check(GAB.SetButtonEmpty(rb, false), "  then filled")
 WoW.fire("PLAYER_REGEN_ENABLED")
 eq(GAB.Buttons.State(rb).occupied, true, "  GAB's flush after it: still filled, not the older answer")
+
+-- The regions as LibGlass takes them (#105): Blizzard's frame art under
+-- `fade`, the cooldown never the skin's.
+local st = GAB.Buttons.State(ActionButton1)
+eq(st.regions.cooldown, nil, "a stock button: its cooldown not passed to the skin")
+eq(st.regions.fade and st.regions.fade.normal, ActionButton1.NormalTexture, "  its frame art under fade")
+eq(st.regions.fade and st.regions.fade.slotArt, ActionButton1.SlotArt, "  its slot art too")
+eq(st.regions.pushed, ActionButton1.PushedTexture, "  the pushed texture by its role")
+
+-- Another addon's glass holds the button (LibGlass keeps one skin per
+-- button): refused, saying so.
+local other = LibStub("LibGlass-1.0"):New({ preset = "clean" })
+local held = CreateFrame("Button", "ProvButtonHeld", own)
+check(other.Button(held, {}) ~= nil, "another addon's glass skins a button")
+ok, why = GAB.SkinButton(held, { icon = held:CreateTexture() })
+check(ok == false and why == "skinned by another addon's glass", "SkinButton on it: refused, saying so")
+check(not GAB.Buttons.IsSkinned(held), "  GAB holds no skin on it")
+check(GAB.failures["skin:build:ProvButtonHeld"] ~= nil, "  recorded for /gab failures")
+
+-- The same from the queue: accepted in combat, refused at the flush, and
+-- the kept empty answer never reaches their skin.
+local held2 = CreateFrame("Button", "ProvButtonHeld2", own)
+WoW.combat = true
+WoW.fire("PLAYER_REGEN_DISABLED")
+check(GAB.SkinButton(held2, { icon = held2:CreateTexture() }), "in combat: accepted (queued)")
+check(GAB.SetButtonEmpty(held2, true), "  an empty answer kept")
+WoW.combat = false
+local theirs = other.Button(held2, {})   -- theirs built first, out of combat
+WoW.fire("PLAYER_REGEN_ENABLED")
+check(not GAB.Buttons.IsSkinned(held2), "  the flush: refused")
+eq(theirs and theirs.occupied, true, "  their skin keeps its own state")
+check(GAB.failures["skin:build:ProvButtonHeld2"] ~= nil, "  recorded")
+check(GAB.SetButtonEmpty(held2, false) == false, "  no request left waiting")
 done("test_api")

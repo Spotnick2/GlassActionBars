@@ -45,7 +45,7 @@ end
 
 -- Every button is skinned; its stock art faded, not hidden.
 local Glass = GAB.Glass
-local rimFile = GAB.MEDIA .. "ButtonRim"
+local rimFile = PARITY.media("button_rim")
 for _, f in ipairs(FRAMES) do
     if f._type == "CheckButton" then
         local name = f._name
@@ -59,7 +59,7 @@ for _, f in ipairs(FRAMES) do
         eq(f.PushedTexture._slice and f.PushedTexture._slice[1], 8, name .. ": pressed, sliced like the mask")
         eq(T.skins[f].g.rim._file, rimFile, name .. ": our own rim")
         eq(T.skins[f].g.rim._slice and T.skins[f].g.rim._slice[1], 8, name .. ": the rim sliced like the mask")
-        eq(f.HighlightTexture:GetAlpha(), GAB.Buttons.HIGHLIGHT, name .. ": hover softened")
+        eq(f.HighlightTexture:GetAlpha(), PARITY.HIGHLIGHT, name .. ": hover softened")
         local s = T.skins[f]
         check(s.body:GetFrameLevel() < f:GetFrameLevel(), name .. ": the body under the button")
         check(s.g.top:GetFrameLevel() > f:GetFrameLevel(), name .. ": the rim over the icon")
@@ -84,7 +84,7 @@ local full = GAB.Buttons.Tune("rim")
 -- An empty slot's rim: the tune's fraction, times the empty-slots setting's factor (#34).
 local function emptyFactor()   -- the empty-slots setting's factor; frosted's is the frostRim tune
     local mode = GAB.Buttons.Look("emptySlots")
-    return mode == "frosted" and GAB.Buttons.Tune("frostRim") or GAB.Buttons.EMPTY[mode]
+    return mode == "frosted" and GAB.Buttons.Tune("frostRim") or PARITY.EMPTY[mode]
 end
 local emptyF = GAB.Buttons.Tune("empty") * emptyFactor()
 check(close(rim(ActionButton1), full), "a slot with an action: full rim")
@@ -175,13 +175,14 @@ check(chatHas("tune rim 0.50"), "/gab tune rim prints, changes nothing")
 SlashCmdList.GLASSACTIONBARS("tune reset")
 eq(rawget(GlassActionBarsDB, "tune"), nil, "tune reset: nothing saved")
 check(close(rim(ActionButton1), GAB.Buttons.TuneDefault("rim")), "  the built-in rim back")
-GlassActionBarsDB = { tune = { rim = 0.3, bogus = 1, dark = 7, empty = GAB.Buttons.TUNE.empty[1] } }
+GlassActionBarsDB = { tune = { rim = 0.3, bogus = 1, dark = 7, empty = 0.75 } }
 local db = GAB._test.ensureDefaults()
 eq(db.tune.rim, 0.3, "a saved tune value survives a load")
-eq(db.tune.empty, nil, "  one equal to the built-in value is dropped")
+eq(db.tune.empty, 0.75, "  one equal to a built-in value kept: the defaults depend on the material, known at login (#105)")
 eq(db.tune.bogus, nil, "  an unknown key doesn't")
 eq(db.tune.dark, nil, "  nor an out-of-range value")
 GAB.db = db
+GAB.Settings.SetTune("empty", nil)
 GAB.Settings.SetTune("rim", nil)
 eq(rawget(GAB.db, "tune"), nil, "the last tune value cleared: no tune table left")
 

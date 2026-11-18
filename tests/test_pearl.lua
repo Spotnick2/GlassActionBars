@@ -67,18 +67,18 @@ for _, material in ipairs({ "clean", "classic" }) do
     eq(old.gloss, nil, material .. ": no Pearl face")
     eq(B.Tune("rim"), 0.85, material .. ": old rim")
     eq(B.Tune("frostAlpha"), 0.08, material .. ": old fill")
-    local frost = B.Frost()
+    local frost = PARITY.frost(GAB)
     check(close(frost[1], 0.9) and close(frost[2], 0.91) and close(frost[3], 0.94), material .. ": old tint")
 end
 
--- The reflection's shape (Media/ButtonGloss, Tools/make_rim.py): a soft
+-- The reflection's shape (LibGlass's Media/button_gloss, Tools/make_textures.py there): a soft
 -- highlight under the top edge, strongest in the middle, fading smoothly. Not
 -- the rejected band (an even cap down to 30% with a sharp edge: a grey slab on
 -- dark icons, owner 2026-10-19), nor a haze across the whole width.
-local f = io.open("Media/ButtonGloss.tga", "rb")
+local f = io.open(libGlassRoot() .. "/Media/button_gloss.tga", "rb")
 local tga = f and f:read("*a")
 if f then f:close() end
-check(tga ~= nil, "ButtonGloss ships")
+check(tga ~= nil, "button_gloss ships with the library")
 if tga then
     local n = tga:byte(13) + 256 * tga:byte(14)
     local function alpha(row, col)   -- 0..1 at pixel row (0 top) and col, of the bottom-up BGRA rows
