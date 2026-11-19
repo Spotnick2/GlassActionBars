@@ -310,7 +310,7 @@ and an in-game checklist.
   after pushing.
 - **The owner merges and closes PRs and launches reviews.**
 - **Plans** get an adversarial review before coding: Codex via the `codex-consult` skill,
-  `gpt-6-astra` at high effort, looping until consensus without overengineering.
+  `gpt-6.2-astra` at high effort, looping until consensus without overengineering.
 - Provider work (Apotheca, 123, PortalRoulette) is an issue and PR in that addon's own repo.
 - A `v*` tag publishes three times (`References\Docs\RELEASING.md`). CurseForge (project 1744070,
   https://www.curseforge.com/wow/addons/glass-action-bars) builds its own file from the tag
