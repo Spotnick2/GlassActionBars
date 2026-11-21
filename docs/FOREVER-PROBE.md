@@ -6,6 +6,31 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
+## Session 10: what a proc alert can see (#115), 2026-11-21, build 71037
+
+`/fp steps gab procs`, run #551, on the owner's level 32 frost mage in Razorfen Kraul (a group,
+boss fights), with SpellActivationOverlay 3.0.0 on. Three fights.
+- **Spell ids:** Ice Lance is **400640** and Deep Freeze **428739** on Forever (SAO's "SoD" ids);
+  30455 / 42913 / 42914 / 44572 don't exist (`GetSpellName` nil). Fingers of Frost is 400670.
+- **Fingers of Frost can't be read in combat.** `C_Secrets.GetSpellAuraSecrecy(400670)` is **2**
+  (`ContextuallySecret`, `SecretWrapperConstantsDocumentation.lua`); 44544 and 74396 too.
+  `GetPlayerAuraBySpellID(400670)` returned **nil, quietly** (no throw, no secret) in all 276 reads
+  in combat, though the owner saw SAO's Fingers of Frost overlay in the first fight. So "absent"
+  can't be told from "hidden"; SAO draws this overlay through Blizzard's AuraContainer instead.
+- **`ShouldAurasBeSecret()`** went true with each fight and false after it, and also **out of
+  combat** at a boss: `ADDON_RESTRICTION_STATE_CHANGED` 1 (Encounter) and 5 (Chat) went active
+  before the pull.
+- **Blizzard's own proc system is silent:** no `SPELL_ACTIVATION_OVERLAY_SHOW`, no
+  `..._GLOW_SHOW` / `_HIDE`, and `C_SpellActivationOverlay.IsSpellOverlayed(400640)` stayed
+  false. Only `SPELL_ACTIVATION_OVERLAY_HIDE` fired, with no spell, 41 times (in and out of
+  combat). Ice Lance never glowed on its own.
+- **`UNIT_AURA`'s payload** passed `canaccessvalue` every time, in combat too (19 of 19). Its
+  fields weren't read.
+- **`C_ActionBar.GetSpell(slot)`** reads plain in combat (400640).
+- **Not measured:** the test glows. The owner was in combat through those steps, which made nothing
+  out of combat. Round 2 (`/fp steps gab procglow`) waits for combat to end first, and tries a glow
+  that Blizzard's aura engine shows and hides.
+
 ## Session 9: drops, clicks and pick-up drags on Utility-like buttons (#86), 2026-11-14, build 70938
 
 `/fp steps gab utilitydrag`, run #314, on a level-20-ish hunter. Two probe buttons: S secure

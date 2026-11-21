@@ -13,7 +13,7 @@
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
 -- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53), micro (#57), feedpet (#65),
--- lock (#34), utilitydrag (#86) and procs (#115): /fp steps gab <name>.
+-- lock (#34), utilitydrag (#86), procs and procglow (#115): /fp steps gab <name>.
 -- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, pet, lock, drag, ranks, procs, clear.
 
 local ADDON, NS = ...
@@ -1565,6 +1565,13 @@ local function poll()
         pw.slotInCombat = true
         say("procs: Ice Lance's slot in combat reads " .. (ok and Show(id) or "error"))
     end
+    -- The engine-driven glow (procglow): can addon code read whether it shows?
+    if pw.slot then
+        local ok, s = pcall(pw.slot.IsShown, pw.slot)
+        local okV, v = pcall(pw.slot.IsVisible, pw.slot)
+        changed("glow slot shown/visible", (ok and (secret(s) and "<secret>" or tostring(s)) or "error") .. "/"
+            .. (okV and (secret(v) and "<secret>" or tostring(v)) or "error"))
+    end
 end
 
 -- Blizzard's own alert on every button showing `id`: shown, its level, the
@@ -1688,8 +1695,67 @@ local function glowInCombat()
     return true, a, b, c, d, "blocked " .. (pw.blocked - before)
 end
 
+-- procglow (#115, round 2): round 1 measured Fingers of Frost (400670,
+-- ContextuallySecret) as quietly absent from GetPlayerAuraBySpellID in every
+-- combat read while SAO's overlay showed, and no SPELL_ACTIVATION_OVERLAY_SHOW
+-- or GLOW_* event: addon code can't see the proc in combat. SAO's overlays for
+-- such auras are Blizzard's AuraContainer (the engine fills and shows them).
+-- So the glow goes in one too: a CustomAuraContainerTemplate container over
+-- the Ice Lance button, one slot for the buff whose frame holds an
+-- ActionButtonSpellAlertTemplate glow; the engine shows the slot while the
+-- buff is up. Does it light up with the proc and go out when it's spent, in
+-- combat, without addon code reading anything? Does the button still click?
+local function containerGlow()
+    if InCombatLockdown() then return false, "out of combat only" end
+    if pw.container then return "already built" end
+    if not pw.ice then procSetup() end
+    local b = pw.ice and pw.ice.button
+    if not b then return false, "no Ice Lance on a visible bar" end
+    local load = api("C_AddOns", "LoadAddOn")
+    if load then
+        local ok, loaded, why = pcall(load, "Blizzard_AuraContainer")
+        say("procs: LoadAddOn Blizzard_AuraContainer " .. Show(ok) .. " " .. Show(loaded) .. " " .. Show(why))
+    end
+    local ok, c = pcall(CreateFrame, "AuraContainer", nil, b, "CustomAuraContainerTemplate")
+    if not ok then return false, "container: " .. tostring(c) end
+    local w, h = b:GetSize()
+    local built, err = pcall(function()
+        c:SetAllPoints(b)
+        c:SetFrameLevel(b:GetFrameLevel() + 5)
+        c:EnableMouse(false)
+        c:SetUnit("player")
+        c:SetEnabled(true)
+        pw.slot = c:AddAuraSlot("fof", "HELPFUL", {
+            initializeFrame = function(f)
+                f:EnableMouse(false)
+                f:ClearAllPoints()
+                f:SetAllPoints(c)
+                if f.GetIcon and f:GetIcon() then f:GetIcon():Hide() end
+                local g = CreateFrame("Frame", nil, f, "ActionButtonSpellAlertTemplate")
+                g:SetSize(w * 1.4, h * 1.4)
+                g:SetPoint("CENTER", f, "CENTER", 0, 0)
+                g.animationPlaying = true   -- the mixin's OnShow replays the loop (ActionButtonSpellAlerts.lua:155)
+                g:Show()
+                if g.ProcLoop then g.ProcLoop:Play() end
+                pw.slotGlow = g
+            end,
+            sortMethod = rawget(_G, "AuraContainerSortMethod") and AuraContainerSortMethod.ExpirationOnly or nil,
+            sortDirection = rawget(_G, "AuraContainerSortDirection") and AuraContainerSortDirection.Reverse or nil,
+            candidateFilters = { includeSpellIDs = { [PROC_AURAS[1]] = true } },
+        })
+    end)
+    pw.container = c
+    if not built then return false, "slot: " .. tostring(err) end
+    return "built", "slot " .. Show(pw.slot and pw.slot:GetObjectType()), "glow " .. Show(pw.slotGlow ~= nil),
+        "container level " .. Show(c:GetFrameLevel()), "button " .. Show(b:GetFrameLevel())
+end
+
 local function procTeardown()
     hideGlow()
+    if pw.container then
+        pcall(pw.container.SetEnabled, pw.container, false)
+        pw.container:Hide()
+    end
     if pw.ticker then pw.ticker:Cancel() end
     procFrame:UnregisterAllEvents()
     Probe:OnBlocked(nil)
@@ -1729,6 +1795,41 @@ Probe:Steps("procs", {
     { text = "Press Reload now (or type /reload) to save the results.", reload = true },
 })
 
+local function outOfCombat()
+    if InCombatLockdown() then return false, "waiting for combat to end" end
+    local class, ice, deep = procSetup()
+    procStart()
+    return true, class, ice, deep
+end
+
+Probe:Steps("procglow", {
+    rev = 1,
+    title = "Proc glow driven by Blizzard's aura engine (#115, round 2)",
+    { text = "Out of combat, with Ice Lance on a visible bar: reading the bars and starting the watcher.",
+      wait = outOfCombat, timeout = 600,
+      check = function() return pw.ice ~= nil, "Ice Lance on a visible bar (else put it there, Back, and again)" end },
+    { text = "A test glow on Ice Lance at the glass's level (where Blizzard's own would be).", auto = true,
+      run = function() return showGlow(1) end, screenshot = "test glow at the glass's level" },
+    { text = "Is that glow clear and bright, over the glass?", ask = true },
+    { text = "The same glow five levels up.", auto = true, run = function() return showGlow(5) end,
+      screenshot = "test glow above the glass" },
+    { text = "Is this one clearer than the last?", ask = true },
+    { text = "Hiding it, and building the engine-driven glow on Ice Lance (out of combat).", auto = true,
+      run = function() hideGlow(); return containerGlow() end,
+      check = function() return pw.slot ~= nil, "the slot was made" end },
+    { text = "Without Fingers of Frost up, Ice Lance should NOT glow now. Is it unlit?", ask = true,
+      screenshot = "no proc: no glow" },
+    { text = "Hover Ice Lance and click it on a target (or press its key): tooltip and cast as usual?", ask = true },
+    { text = "Fight (a dummy or open-world mobs is best: outside a dungeon boss) until Fingers of Frost procs "
+        .. "2 or 3 times. Each time, look at Ice Lance and press Shot while it glows; spend the charges with "
+        .. "Ice Lance. Then let combat end: this step ends itself.", wait = fightOver, timeout = 900 },
+    { text = "Did Ice Lance glow while Fingers of Frost was up?", ask = true },
+    { text = "Did the glow go out when the charges were spent (and never light without the proc)?", ask = true },
+    { text = "Stopping the watcher and removing both glows.", auto = true, run = procTeardown,
+      check = function() return lastBlocked == 0, "nothing blocked while watching" end },
+    { text = "Press Reload now (or type /reload) to save the results.", reload = true },
+})
+
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
 boot:SetScript("OnEvent", function(_, event, name)
@@ -1752,4 +1853,5 @@ NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCa
     drag = drag, dragButtons = dragButtons, gesture = gesture, dragSetup = dragSetup, dragTeardown = dragTeardown,
     flipKeyDown = flipKeyDown, readRanks = readRanks, since = since,
     procSetup = procSetup, procStart = procStart, auraState = auraState, fightOver = fightOver, showGlow = showGlow,
-    hideGlow = hideGlow, glowInCombat = glowInCombat, procTeardown = procTeardown, procState = function() return pw end }
+    hideGlow = hideGlow, glowInCombat = glowInCombat, procTeardown = procTeardown, procState = function() return pw end,
+    containerGlow = containerGlow, outOfCombat = outOfCombat }

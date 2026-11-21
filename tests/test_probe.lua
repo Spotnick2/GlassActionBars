@@ -454,6 +454,43 @@ rec = ForeverProbeDB.steps.records["GABProbe/procs"]
 check(rec and rec.status == "active", "/fp steps gab procs starts")
 SlashCmdList.FOREVERPROBE("steps stop")
 T.procTeardown()
+
+-- procglow: the engine-driven glow. The stub container records its slot's
+-- options and makes the slot frame as Blizzard's frame provider does.
+local slotOpts
+WoW.templates.CustomAuraButtonTemplate = function(w) w:EnableMouse(true) end   -- a button: takes clicks
+WoW.templates.CustomAuraContainerTemplate = function(w)
+    w:EnableMouse(true)                         -- assume the worst: the probe must turn it off
+    rawset(w, "SetUnit", function(self, u) self._unit = u end)
+    rawset(w, "SetEnabled", function(self, on) self._enabled = on end)
+    rawset(w, "AddAuraSlot", function(self, key, filter, opts)
+        slotOpts = { key = key, filter = filter, opts = opts }
+        local f = CreateFrame("AuraButton", nil, self, "CustomAuraButtonTemplate")
+        if opts.initializeFrame then opts.initializeFrame(f) end
+        return f
+    end)
+end
+WoW.combat = true
+eq((T.outOfCombat()), false, "procglow: waits for combat to end")
+eq((T.containerGlow()), false, "  the container isn't built in combat")
+WoW.combat = false
+eq((T.outOfCombat()), true, "  then reads the bars and watches")
+local built = T.containerGlow()
+eq(built, "built", "the engine-driven glow is built")
+local P = T.procState()
+local c = P.container
+check(c and c:GetParent() == ActionButton3 and c._unit == "player" and c._enabled == true, "  a player container on Ice Lance")
+check(c:GetFrameLevel() == ActionButton3:GetFrameLevel() + 5 and c:IsMouseEnabled() == false, "  above the glass, clicks through")
+check(slotOpts.filter == "HELPFUL" and slotOpts.opts.candidateFilters.includeSpellIDs[400670] == true,
+    "  one slot for Fingers of Frost only")
+check(P.slot:IsMouseEnabled() == false and P.slotGlow and P.slotGlow:GetParent() == P.slot, "  the slot holds the glow, clicks through")
+check(P.slotGlow.animationPlaying == true and P.slotGlow.ProcLoop.playing, "  looping, replayed on each show")
+eq((T.containerGlow()), "already built", "  once")
+P.slot:Hide()
+WoW.fire("UNIT_AURA", "player", {})
+check(logHas("glow slot shown/visible nil %-> false/false"), "  whether the slot shows is logged")
+T.procTeardown()
+check(not c:IsShown() and c._enabled == false, "teardown: the container off and hidden")
 check(#WoW.chat == chatBefore, "  nothing in chat")
 
 done("test_probe")
