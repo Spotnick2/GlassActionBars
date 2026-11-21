@@ -20,10 +20,12 @@ boss fights), with SpellActivationOverlay 3.0.0 on. Three fights.
 - **`ShouldAurasBeSecret()`** went true with each fight and false after it, and also **out of
   combat** at a boss: `ADDON_RESTRICTION_STATE_CHANGED` 1 (Encounter) and 5 (Chat) went active
   before the pull.
-- **Blizzard's own proc system is silent:** no `SPELL_ACTIVATION_OVERLAY_SHOW`, no
-  `..._GLOW_SHOW` / `_HIDE`, and `C_SpellActivationOverlay.IsSpellOverlayed(400640)` stayed
-  false. Only `SPELL_ACTIVATION_OVERLAY_HIDE` fired, with no spell, 41 times (in and out of
-  combat). Ice Lance never glowed on its own.
+- **Blizzard's own proc system stayed silent in these fights** (Fingers of Frost on one mage):
+  no `SPELL_ACTIVATION_OVERLAY_SHOW`, no `..._GLOW_SHOW` / `_HIDE`, and
+  `C_SpellActivationOverlay.IsSpellOverlayed(400640)` stayed false. Only
+  `SPELL_ACTIVATION_OVERLAY_HIDE` fired, with no spell, 41 times (in and out of combat). Ice Lance
+  never glowed on its own. **Still open:** whether other spells or classes get native events; the
+  plan has to check before it assumes none do.
 - **`UNIT_AURA`'s payload** passed `canaccessvalue` every time, in combat too (19 of 19). Its
   fields weren't read.
 - **`C_ActionBar.GetSpell(slot)`** reads plain in combat (400640).
@@ -48,8 +50,12 @@ fight):
   + 1 (the glass's level, 53) and at + 5 looked the same in the screenshots: the bright gold
   ring over the rim. Made after the glass, it drew over it at the same level. Level + 5 stays the
   safe choice.
-- `GetPlayerAuraBySpellID(400670)` was again absent in all 317 reads in combat, and Blizzard's proc
-  events were again silent, apart from `SPELL_ACTIVATION_OVERLAY_HIDE` with no spell.
+- `GetPlayerAuraBySpellID(400670)` was again absent in all 317 reads in combat. Blizzard's proc
+  events were again silent for Fingers of Frost, apart from `SPELL_ACTIVATION_OVERLAY_HIDE` with no
+  spell.
+- **Coverage:** neither run recorded whether its event subscriptions and the blocked-action
+  listener were on. Its "nothing blocked" and "no events" rest on `Probe:RegisterEvents` logging
+  no refusal and no `UNIT_AURA` error. The probe now records both (Codex, PR #116).
 
 ## Session 9: drops, clicks and pick-up drags on Utility-like buttons (#86), 2026-11-14, build 70938
 

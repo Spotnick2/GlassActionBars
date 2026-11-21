@@ -1447,10 +1447,11 @@ local function inList(list, v)
 end
 local function fresh()
     return { counts = {}, uaInfo = { inCombat = {}, out = {} }, reads = { inCombat = {}, out = {} },
-             last = {}, fightsEnded = 0, blocked = 0 }
+             last = {}, fightsEnded = 0, blocked = 0, coverage = {} }
 end
 local pw = fresh()   -- the procs watcher's state; nothing of it is saved
 local lastBlocked    -- blocked actions seen by the last watcher, read by the teardown's check
+local lastListening  -- whether that watcher's blocked-action listener was on
 
 local function tally(t, k) t[k] = (t[k] or 0) + 1 end
 local function where() return InCombatLockdown() and "inCombat" or "out" end
@@ -1623,20 +1624,31 @@ end)
 local function procStart()
     if pw.on then return "already watching" end
     pw.on = true
-    local all = Probe:RegisterEvents(procFrame, PROC_EVENTS)
-    local ok, err = pcall(procFrame.RegisterUnitEvent, procFrame, "UNIT_AURA", "player")
-    if not ok then say("procs: UNIT_AURA: ERROR " .. tostring(err)) end
+    -- What the evidence covers: an event refused (RegisterUnitEvent returns
+    -- false without throwing) or no blocked-action listener leaves an empty
+    -- tally that would read as a measured "none".
+    local cov = pw.coverage
+    cov.events = Probe:RegisterEvents(procFrame, PROC_EVENTS) == true
+    local ok, registered = pcall(procFrame.RegisterUnitEvent, procFrame, "UNIT_AURA", "player")
+    cov.unitAura = ok and registered ~= false
+    if not cov.unitAura then say("procs: UNIT_AURA not registered: " .. (ok and "refused" or ("ERROR " .. tostring(registered)))) end
     pw.ticker = C_Timer.NewTicker(0.2, poll)
-    Probe:OnBlocked(function(event, addon, func)
+    cov.blocked = Probe:OnBlocked(function(event, addon, func)
         pw.blocked = pw.blocked + 1
         say("procs: blocked " .. Show(event) .. " " .. Show(addon) .. " " .. Show(func))
-    end)
+    end) == true
+    if not cov.blocked then say("procs: the blocked-action listener isn't on: 'nothing blocked' is unmeasured") end
     poll()
-    return all and "watching" or "watching, some events refused (see the log)", ok
+    return cov.events and "watching" or "watching, some events refused (see the log)", cov.unitAura, cov.blocked
 end
 
+local function coverage()
+    local c = pw.coverage
+    return ("coverage: events %s, UNIT_AURA %s, blocked listener %s"):format(c.events and "all" or "NOT ALL",
+        c.unitAura and "registered" or "NOT REGISTERED", c.blocked and "on" or "OFF")
+end
 local function summary()
-    return "events: " .. tallies(pw.counts), "UNIT_AURA payload in combat: " .. tallies(pw.uaInfo.inCombat),
+    return coverage(), "events: " .. tallies(pw.counts), "UNIT_AURA payload in combat: " .. tallies(pw.uaInfo.inCombat),
         "out: " .. tallies(pw.uaInfo.out), "aura reads in combat: " .. tallies(pw.reads.inCombat),
         "out: " .. tallies(pw.reads.out)
 end
@@ -1759,19 +1771,40 @@ local function procTeardown()
     if pw.ticker then pw.ticker:Cancel() end
     procFrame:UnregisterAllEvents()
     Probe:OnBlocked(nil)
-    lastBlocked = pw.blocked
+    lastBlocked, lastListening = pw.blocked, pw.coverage.blocked == true
     local s = { summary() }
     pw = fresh()
     return "blocked " .. lastBlocked, unpack(s)
 end
+local function nothingBlocked()
+    if not lastListening then return false, "unmeasured: the blocked-action listener wasn't on" end
+    return lastBlocked == 0, "nothing blocked while watching"
+end
+
+-- A run starts from nothing: whatever an earlier run left (a /reload drops it
+-- all anyway) is torn down first.
+local function startClean()
+    if pw.on or pw.glow or pw.container then procTeardown() end
+end
+
+-- Stop, or another procedure started, leaves the step "stopped": nothing of
+-- a proc run may outlive it (the glow on the button, the container, the
+-- ticker, the events, the blocked-action listener), and a new run starts clean.
+local function leaveProcs(outcome)
+    if outcome == "stopped" then procTeardown() end
+end
+local function withLeave(def)
+    for _, step in ipairs(def) do step.leave = leaveProcs end
+    return def
+end
 
 Probe:Command("procs", function() procSetup() end, "Fingers of Frost's secrecy, Ice Lance's slot, every spell on the bars")
 
-Probe:Steps("procs", {
-    rev = 1,
+Probe:Steps("procs", withLeave({
+    rev = 2,
     title = "Proc alerts: Fingers of Frost and Ice Lance (#115)",
     { text = "Reading your class, the Fingers of Frost buff and your action bars (out of combat). "
-        .. "Ice Lance must be on a visible bar.", auto = true, run = procSetup,
+        .. "Ice Lance must be on a visible bar.", auto = true, run = function() startClean(); return procSetup() end,
       check = function() return pw.ice ~= nil, "Ice Lance on a visible bar (else put it there and press Retry)" end },
     { text = "Starting the watcher: Blizzard's proc events and the buff, read 5 times a second. Keep "
         .. "SpellActivationOverlay on: its overlay tells you when it procs.", auto = true, run = procStart },
@@ -1791,19 +1824,20 @@ Probe:Steps("procs", {
       timeout = 600, screenshot = "test glow in combat" },
     { text = "Did the glow show in the fight?", ask = true },
     { text = "Stopping the watcher and removing the test glow.", auto = true, run = procTeardown,
-      check = function() return lastBlocked == 0, "nothing blocked while watching" end },
+      check = nothingBlocked },
     { text = "Press Reload now (or type /reload) to save the results.", reload = true },
-})
+}))
 
 local function outOfCombat()
     if InCombatLockdown() then return false, "waiting for combat to end" end
+    startClean()
     local class, ice, deep = procSetup()
     procStart()
     return true, class, ice, deep
 end
 
-Probe:Steps("procglow", {
-    rev = 1,
+Probe:Steps("procglow", withLeave({
+    rev = 2,
     title = "Proc glow driven by Blizzard's aura engine (#115, round 2)",
     { text = "Out of combat, with Ice Lance on a visible bar: reading the bars and starting the watcher.",
       wait = outOfCombat, timeout = 600,
@@ -1826,9 +1860,9 @@ Probe:Steps("procglow", {
     { text = "Did Ice Lance glow while Fingers of Frost was up?", ask = true },
     { text = "Did the glow go out when the charges were spent (and never light without the proc)?", ask = true },
     { text = "Stopping the watcher and removing both glows.", auto = true, run = procTeardown,
-      check = function() return lastBlocked == 0, "nothing blocked while watching" end },
+      check = nothingBlocked },
     { text = "Press Reload now (or type /reload) to save the results.", reload = true },
-})
+}))
 
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
@@ -1854,4 +1888,4 @@ NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCa
     flipKeyDown = flipKeyDown, readRanks = readRanks, since = since,
     procSetup = procSetup, procStart = procStart, auraState = auraState, fightOver = fightOver, showGlow = showGlow,
     hideGlow = hideGlow, glowInCombat = glowInCombat, procTeardown = procTeardown, procState = function() return pw end,
-    containerGlow = containerGlow, outOfCombat = outOfCombat }
+    containerGlow = containerGlow, outOfCombat = outOfCombat, nothingBlocked = nothingBlocked, procFrame = procFrame }

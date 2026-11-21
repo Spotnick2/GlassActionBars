@@ -422,8 +422,9 @@ check(logHas("ActionButton3 alert none, shown nil"), "  and Blizzard's alert on 
 WoW.combat = false
 WoW.auras[400670] = nil
 WoW.fire("PLAYER_REGEN_ENABLED")
-local over, events, uaIn, uaOut = T.fightOver()
+local over, cov0, events, uaIn, uaOut = T.fightOver()
 eq(over, true, "  the fight step ends with the fight")
+eq(cov0, "coverage: events all, UNIT_AURA registered, blocked listener on", "  every listener on")
 check(uaIn == "UNIT_AURA payload in combat: secret 2" and uaOut == "out: accessible 1", "  the payload tallied by combat")
 check(events:find("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW 1", 1, true), "  the events counted")
 
@@ -491,6 +492,43 @@ WoW.fire("UNIT_AURA", "player", {})
 check(logHas("glow slot shown/visible nil %-> false/false"), "  whether the slot shows is logged")
 T.procTeardown()
 check(not c:IsShown() and c._enabled == false, "teardown: the container off and hidden")
+
+-- Stopped through the host (Codex, PR #116): nothing of the run outlives it.
+SlashCmdList.FOREVERPROBE("steps gab procs")
+eq(T.procState().on, true, "procs started through the host: watching")
+T.showGlow(1)
+local stale = T.procState().glow
+check(stale and stale:IsShown(), "  a test glow on Ice Lance")
+SlashCmdList.FOREVERPROBE("steps stop")
+check(not stale:IsShown() and T.procState().on == nil and T.procState().glow == nil, "  /fp steps stop: glow hidden, watcher reset")
+lines = #GABProbeDB.log
+WoW.fire("UNIT_AURA", "player", {})
+eq(#GABProbeDB.log, lines, "  its events unregistered")
+-- A run left live (no Stop) is torn down when the next one starts.
+T.procStart(); T.showGlow(1)
+stale = T.procState().glow
+SlashCmdList.FOREVERPROBE("steps gab procs")
+check(not stale:IsShown() and T.procState().glow ~= stale and T.procState().on == true, "  a new run starts clean")
+SlashCmdList.FOREVERPROBE("steps stop")
+
+-- Coverage: a refused subscription isn't a measured "none".
+WoW.REFUSED_EVENTS.SPELL_ACTIVATION_OVERLAY_SHOW = true
+rawset(T.procFrame, "RegisterUnitEvent", function() return false end)
+rawset(T.Probe, "OnBlocked", function() return false end)
+local _, unitAura, listening = T.procStart()
+eq((T.procStart()), "already watching", "coverage: started")
+check(unitAura == false and listening == false, "  UNIT_AURA refused and no blocked listener: reported")
+local _, cov = T.procTeardown()
+eq(cov, "coverage: events NOT ALL, UNIT_AURA NOT REGISTERED, blocked listener OFF", "  the summary says what wasn't covered")
+local passed, why = T.nothingBlocked()
+check(passed == false and why:find("unmeasured"), "  'nothing blocked' isn't a pass without the listener")
+WoW.REFUSED_EVENTS.SPELL_ACTIVATION_OVERLAY_SHOW = nil
+rawset(T.procFrame, "RegisterUnitEvent", nil)
+rawset(T.Probe, "OnBlocked", nil)
+T.procStart()
+_, cov = T.procTeardown()
+eq(cov, "coverage: events all, UNIT_AURA registered, blocked listener on", "  all covered")
+check(T.nothingBlocked() == true, "  then 'nothing blocked' passes")
 check(#WoW.chat == chatBefore, "  nothing in chat")
 
 done("test_probe")
