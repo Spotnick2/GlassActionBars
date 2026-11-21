@@ -369,4 +369,91 @@ check(T.dragTeardown() == true and WoW.overrides[_G.GABProbeDragHost] == nil, " 
 eq(WoW.cvars.ActionButtonUseKeyDown, "0", "  and puts the setting back")
 check(#WoW.chat == chatBefore, "  nothing in chat")
 
+-- procs (#115): Fingers of Frost's reads, Ice Lance's slot and button, the
+-- watcher's tallies, the test glow over the glass, in combat too.
+local slots, overlayed = { [3] = 400640, [7] = 116 }, false
+slots[5] = WoW.Secret("slot")
+rawset(_G, "C_ActionBar", { GetSpell = function(slot) return slots[slot] end })
+rawset(_G, "C_Secrets", { GetSpellAuraSecrecy = function(id) return id == 400670 and 0 or 1 end,
+    ShouldAurasBeSecret = function() return WoW.combat == true end })
+rawset(_G, "C_SpellActivationOverlay", { IsSpellOverlayed = function() return overlayed end })
+rawset(_G, "canaccessvalue", function(v) return not issecretvalue(v) end)
+WoW.templates.ActionButtonSpellAlertTemplate = function(w)
+    w.ProcLoop = { Play = function(s) s.playing = true end, Stop = function(s) s.playing = false end }
+end
+WoW.spellNames = WoW.spellNames or {}
+WoW.spellNames[400640], WoW.spellNames[400670] = "Ice Lance", "Fingers of Frost"
+WoW.auras[400670] = nil
+local class, ice, deep = T.procSetup()
+eq(ice, "Ice Lance 400640 in slot 3 on ActionButton3", "procs: Ice Lance found by id, on its stock button")
+eq(deep, "Deep Freeze not on a visible bar", "  Deep Freeze absent: said so")
+check(logHas("slot 5 spell <secret>"), "  a secret slot logged as such")
+check(logHas("aura 400670 \"Fingers of Frost\": secrecy 0, now absent"), "  the buff's secrecy and state")
+eq(T.auraState(400670), "absent", "auraState: absent")
+WoW.auras[400670] = { applications = 2 }
+eq(T.auraState(400670), "present x2", "  present, with stacks")
+WoW.auras[400670] = { applications = WoW.Secret("n") }
+eq(T.auraState(400670), "present x<secret>", "  only the stacks hidden")
+WoW.auras[400670] = WoW.Secret("a")
+eq(T.auraState(400670), "secret", "  the aura secret")
+WoW.auras[400670] = "throw"
+eq(T.auraState(400670), "error", "  a refused read")
+WoW.auras[400670] = nil
+
+eq((T.procStart()), "watching", "the watcher starts")
+eq((T.procStart()), "already watching", "  once")
+eq((T.fightOver()), false, "  the fight step waits for a fight")
+WoW.auras[400670] = { applications = 1 }
+WoW.fire("UNIT_AURA", "player", { isFullUpdate = false })
+check(logHas("aura 400670 absent %-> present x1 %(out%)"), "  a proc is a transition line")
+WoW.combat = true
+WoW.fire("PLAYER_REGEN_DISABLED")
+WoW.auras[400670] = WoW.Secret("a")
+WoW.fire("UNIT_AURA", "player", WoW.Secret("info"))
+check(logHas("aura 400670 present x1 %-> secret %(inCombat%)"), "  a secret read in combat, said so")
+overlayed = true
+WoW.fire("UNIT_AURA", "player", WoW.Secret("info"))
+check(logHas("IsSpellOverlayed 400640 false %-> true"), "  Blizzard's overlay state for Ice Lance")
+check(logHas("Ice Lance's slot in combat reads 400640"), "  the slot read once in combat")
+WoW.fire("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", 400640)
+WoW.flushTimers(0)
+check(logHas("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW 400640"), "  a native glow event logged")
+check(logHas("ActionButton3 alert none, shown nil"), "  and Blizzard's alert on that button read")
+WoW.combat = false
+WoW.auras[400670] = nil
+WoW.fire("PLAYER_REGEN_ENABLED")
+local over, events, uaIn, uaOut = T.fightOver()
+eq(over, true, "  the fight step ends with the fight")
+check(uaIn == "UNIT_AURA payload in combat: secret 2" and uaOut == "out: accessible 1", "  the payload tallied by combat")
+check(events:find("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW 1", 1, true), "  the events counted")
+
+local level = ActionButton3:GetFrameLevel()
+local g1, _, glass = T.showGlow(1)
+eq(g1, "glow level " .. (level + 1), "the test glow at the glass's level")
+eq(glass, "glass " .. (level + 1), "  the glass's level read from GAB's skin")
+local glow = T.procState().glow
+check(glow and glow:IsShown() and glow.ProcLoop.playing and glow:GetParent() == ActionButton3, "  shown on Ice Lance, looping")
+eq((T.showGlow(5)), "glow level " .. (level + 5), "  then five up")
+T.hideGlow()
+check(not glow:IsShown() and not glow.ProcLoop.playing, "  hidden")
+eq((T.glowInCombat()), false, "the combat glow waits for a fight")
+local v0 = #WoW.violations
+WoW.combat = true
+local shownIn, _, _, _, inCombat, blocked = T.glowInCombat()
+check(shownIn == true and glow:IsShown() and inCombat == "in combat true", "  shown in combat")
+eq(blocked, "blocked 0", "  nothing blocked")
+eq(#WoW.violations, v0, "  no change on a protected frame")
+WoW.combat = false
+eq((T.procTeardown()), "blocked 0", "teardown: the blocked count")
+check(not glow:IsShown() and T.procState().on == nil, "  the glow hidden, the watcher reset")
+local lines = #GABProbeDB.log
+WoW.fire("UNIT_AURA", "player", {})
+eq(#GABProbeDB.log, lines, "  its events unregistered")
+SlashCmdList.FOREVERPROBE("steps gab procs")
+rec = ForeverProbeDB.steps.records["GABProbe/procs"]
+check(rec and rec.status == "active", "/fp steps gab procs starts")
+SlashCmdList.FOREVERPROBE("steps stop")
+T.procTeardown()
+check(#WoW.chat == chatBefore, "  nothing in chat")
+
 done("test_probe")
