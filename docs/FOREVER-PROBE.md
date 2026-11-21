@@ -27,9 +27,29 @@ boss fights), with SpellActivationOverlay 3.0.0 on. Three fights.
 - **`UNIT_AURA`'s payload** passed `canaccessvalue` every time, in combat too (19 of 19). Its
   fields weren't read.
 - **`C_ActionBar.GetSpell(slot)`** reads plain in combat (400640).
-- **Not measured:** the test glows. The owner was in combat through those steps, which made nothing
-  out of combat. Round 2 (`/fp steps gab procglow`) waits for combat to end first, and tries a glow
-  that Blizzard's aura engine shows and hides.
+- **Not measured in round 1:** the test glows. The owner was in combat through those steps, so
+  nothing was made out of combat.
+
+**Round 2, `/fp steps gab procglow`, run #554** (same mage, out of the dungeon, an open-world
+fight):
+- **A glow Blizzard's aura engine drives works, in combat.** A container
+  `CreateFrame("AuraContainer", nil, IceLanceButton, "CustomAuraContainerTemplate")` (after
+  `C_AddOns.LoadAddOn("Blizzard_AuraContainer")`), `SetUnit("player")`, `SetEnabled(true)`,
+  `EnableMouse(false)`, at the button's level + 5, and one `AddAuraSlot("fof", "HELPFUL",
+  { initializeFrame, candidateFilters = { includeSpellIDs = { [400670] = true } } })`. Its
+  `initializeFrame` disables the mouse, hides the slot's icon, and puts an addon-made
+  `ActionButtonSpellAlertTemplate` frame inside the slot, its loop playing. The owner saw Ice Lance
+  **unlit without the proc, glowing while Fingers of Frost was up, and dark again once the charges
+  were spent**. Nothing was blocked, and no addon code read the aura.
+- **The button still works under it:** tooltip on hover and the cast on click or key, as usual.
+- **Addon code can't read the engine's decision:** the slot's `IsShown()` / `IsVisible()` return
+  secrets out of combat and **throw** in combat. So GAB can't use the glow to learn about the proc.
+- **The glow over the glass:** the addon-made `ActionButtonSpellAlertTemplate` at the button's level
+  + 1 (the glass's level, 53) and at + 5 looked the same in the screenshots: the bright gold
+  ring over the rim. Made after the glass, it drew over it at the same level. Level + 5 stays the
+  safe choice.
+- `GetPlayerAuraBySpellID(400670)` was again absent in all 317 reads in combat, and Blizzard's proc
+  events were again silent, apart from `SPELL_ACTIVATION_OVERLAY_HIDE` with no spell.
 
 ## Session 9: drops, clicks and pick-up drags on Utility-like buttons (#86), 2026-11-14, build 70938
 
