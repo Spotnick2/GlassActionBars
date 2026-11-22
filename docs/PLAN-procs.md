@@ -37,6 +37,8 @@ Review: Codex (gpt-6.2-astra, high).
   - every container's setup is spelled out (the engine's load, the unit, `SetEnabled(true)`), and
     Phase 0 adds a clean run with SAO disabled;
   - Eclipse's texture ships as a `.tga`, so deployment and the package check carry it.
+- **Its follow-up (commit 1e5f3ad):** one P2, folded in: turning an option back on calls `Show()`
+  as well as `SetEnabled(true)`, with an off -> on check in Phase 0.
 
 ## What was measured (docs/FOREVER-PROBE.md session 10, build 71037)
 
@@ -140,7 +142,11 @@ Each container, overlay or glow, is set up as the probe's `containerGlow` was:
    (`Blizzard_AuraContainer.lua:157`), so a missing `SetEnabled` leaves it frozen.
 4. Its slots, then `UpdateAllAuras()`.
 
-Turning a feature off is `SetEnabled(false)` and `Hide()`, as the probe's teardown did.
+Turning a feature off is `SetEnabled(false)` and `Hide()`, as the probe's teardown did. Turning it
+back on reuses the containers: `Show()`, then `SetEnabled(true)`. Both are needed, since a hidden
+container registers no `UNIT_AURA` even when enabled (`Blizzard_AuraContainer.lua:28`, `:157`).
+`Show()` re-registers and refreshes (`OnShow_Intrinsic`), and so does `SetEnabled` on a change. A
+unit test checks that an off -> on toggle leaves every container shown and enabled.
 
 ### Overlays: one screen container
 
@@ -288,7 +294,8 @@ A change rebuilds out of combat. In combat the rebuild is queued to `PLAYER_REGE
 6. **A clean launch with SAO disabled.** SAO turned off in the AddOns list and a `/reload`, then
    the probe's containers alone: the engine's load result logged, and a proc seen to appear and
    clear on both an overlay and a ring. Rounds 1 and 2 ran with SAO loaded, which may have loaded
-   the engine for us.
+   the engine for us. Then both options off and on again, with no reload: the next proc must show
+   the overlay and the ring again.
 7. **Native events on other classes (passive).** A logger of `SPELL_ACTIVATION_OVERLAY_*` and
    `IsSpellOverlayed` across the owner's normal play on several classes (Codex on PR #116). If
    some spells do fire, Blizzard's own alert shows on those buttons. GAB then makes sure the glass
