@@ -453,6 +453,8 @@ T.fightOver()
 T.fightOver()
 T.fightOver()
 eq(scans() - scans0, 1, "  no Ice Lance found: the fight step scans the bars once")
+check(T.showGlow(1) == false and scans() - scans0 == 2, "  the test glow, run by hand, scans again")
+check(T.containerGlow() == false and scans() - scans0 == 3, "  the engine's glow too")
 T.procTeardown()
 for k, v in pairs(savedIce) do slots[k] = v end
 T.procSetup()

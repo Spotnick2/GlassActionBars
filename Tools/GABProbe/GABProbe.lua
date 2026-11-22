@@ -1670,7 +1670,8 @@ end
 -- The fight step: done once a fight has ended since it began.
 local function fightOver()
     if not pw.on then procStart() end
-    -- Once: a wait polls every second, and the scan is 50 lines.
+    -- Once: a wait polls every second, and the scan is 50 lines. The glow
+    -- steps, run by hand, scan again each time (Ice Lance may be placed since).
     if not pw.ice and not pw.scanned then procSetup() end
     if pw.fightMark == nil then pw.fightMark = pw.fightsEnded end
     if pw.fightsEnded > pw.fightMark then
@@ -1684,7 +1685,7 @@ end
 -- ActionButtonSpellAlertTemplate frame, made out of combat, at the button's
 -- level + `up`; its loop played (the start flipbook would be mid-way in a shot).
 local function showGlow(up)
-    if not pw.ice and not pw.scanned and not InCombatLockdown() then procSetup() end
+    if not pw.ice and not InCombatLockdown() then procSetup() end
     local b = pw.ice and pw.ice.button
     if not b then return false, "no Ice Lance on a visible bar" end
     if not pw.glow then
@@ -1735,7 +1736,7 @@ end
 local function containerGlow()
     if InCombatLockdown() then return false, "out of combat only" end
     if pw.container then return "already built" end
-    if not pw.ice and not pw.scanned then procSetup() end
+    if not pw.ice then procSetup() end
     local b = pw.ice and pw.ice.button
     if not b then return false, "no Ice Lance on a visible bar" end
     local load = api("C_AddOns", "LoadAddOn")
