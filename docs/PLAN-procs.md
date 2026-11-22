@@ -175,8 +175,21 @@ unit test checks that an off -> on toggle leaves every container shown and enabl
 - **Pulse:** SAO's scale loop (1.08 ↔ 0.926, 0.5 s each way) on the texture, per the effect's
   `pulse` flag.
 - **Settings:** opacity, scale, offset from the centre.
-- **Left out of v1:** the countdown shrink and number, sound (`C_UnitAuras.AddAuraSound`, the
-  engine's), and the out-of-combat dimming.
+- **Left out of v1:** the countdown shrink and number, and the out-of-combat dimming.
+
+### Sound (v1, the owner's call, 2026-11-22)
+
+- **The engine plays it:** `C_UnitAuras.AddAuraSound(trigger, { unitToken, spellID, soundFileID })`
+  per aura id, on `Added` and on `ApplicationsIncreased`, as SAO does (`components/sound.lua`). No
+  addon code decides when it plays, so it works on a secret aura.
+- **The file is the game's own:** SoundKit 23287 (`UI_POWER_AURA_GENERIC`, SAO's sound) is file
+  568016 in the build's `SoundKitEntry`, so GAB ships no `.ogg`. SAO passes the kit id as a file id
+  outside Forever, and ships its own copy on Forever; the file id is what Phase 0 tests.
+- **One registration per aura id** of an enabled effect, made when the overlays or glows are built
+  and removed with `RemoveAuraSound` when they're turned off or the effect is unticked.
+- **Setting:** `sound`, on by default (SAO's default), off with SAO loaded like the other two.
+- **If the engine refuses** (a nil id, or a throw at an Encounter restriction), it's recorded
+  through `API.Fail` and the alerts go on silently.
 
 ### Button glow: one retargetable slot per button and unit
 
@@ -251,6 +264,7 @@ If they don't, they are out, and Blizzard's own usable tint stays the only cue.
 |---|---|---|
 | `overlays` | on | the screen overlays |
 | `glow` | on | the button glow |
+| `sound` | on | the proc sound |
 | `opacity`, `scale`, `offset` | 1, 1, 0 | the overlays' look (radios: Options has no slider) |
 | `off[effectKey]` | | an effect turned off |
 
@@ -274,7 +288,8 @@ A change rebuilds out of combat. In combat the rebuild is queued to `PLAYER_REGE
    - page away from Ice Lance and back, through `SetAuraSlotCandidateFilters` /
      `SetAuraSlotEnabled`;
    - check the old ring clears, both copies light, and a click casts the spell shown;
-   - also a form change, and a conditional macro (`C_ActionBar.GetSpell` on a macro slot).
+   - also a conditional macro (`C_ActionBar.GetSpell` on a macro slot). The form change needs a
+     class with forms, so it's checked with PR 2's first class that has one (a mage has none).
 
    This decides the "in combat" fallback above. `AddAuraSlot` in combat isn't tried: no design
    needs it.
@@ -287,8 +302,8 @@ A change rebuilds out of combat. In combat the rebuild is queued to `PLAYER_REGE
    - the cue must not survive the switch.
 4. **Stack gating and composites.** On Fingers of Frost, an application bar with
    `minApplications = 2`: shown at 2, hidden at 1. A screen overlay slot at `LEFT` and `RIGHT`,
-   with the flip. Heating Up's three layers at reduced opacity, to choose between the composite and
-   the simplification.
+   with the flip. Heating Up's three layers as a static mock (plain textures at SAO's scales and
+   greys, no aura: the owner plays frost), to choose between the composite and the simplification.
 5. **At a boss before the pull** (the Encounter restriction, out of combat): a settings change that
    rebuilds the containers, with the blocked-action listener confirmed on.
 6. **A clean launch with SAO disabled.** SAO turned off in the AddOns list and a `/reload`, then
@@ -301,6 +316,12 @@ A change rebuilds out of combat. In combat the rebuild is queued to `PLAYER_REGE
    some spells do fire, Blizzard's own alert shows on those buttons. GAB then makes sure the glass
    doesn't cover it, and doesn't double it. Each class's result gates only that class's release; the
    mage slice goes ahead on the mage evidence.
+
+8. **The sound:** `AddAuraSound` with file 568016 on Fingers of Frost, heard on each proc and on
+   the second charge, in combat.
+
+GABProbe's `procs3` runs items 1-4, 6 and 8 in one procedure; `procboss` is item 5, and item 7 is
+counted per class from load while the probe is installed (`GABProbeDB.native`).
 
 Counters are measured in PR 3's own probe round, not here. A readable cooldown table alone doesn't
 make a working counter. That round tests, for each supported spell:
@@ -318,7 +339,7 @@ The probe is removed from the client when the findings are written (owner, 2026-
 - **PR 2, the other classes:** their aura effects, glow pairs confirmed per class in play,
   Revelation.
 - **PR 3, counters:** its own probe round first (above). They ship only if it allows them.
-- **Later issues:** sound, the countdown, a glass-styled glow, a proc revealing a faded bar if ever
+- **Later issues:** the countdown, a glass-styled glow, a proc revealing a faded bar if ever
   measurable, and the stance, pet and Utility buttons.
 
 ## Testing
@@ -344,5 +365,5 @@ The probe is removed from the client when the findings are written (owner, 2026-
 
 ## Open questions for the owner
 
-- Sound on proc (SAO's default on Forever is on): v1, or later?
+- ~~Sound on proc: v1, or later?~~ v1 (owner, 2026-11-22).
 - Faded bars: is it acceptable that a proc glow fades with its bar?
