@@ -529,6 +529,208 @@ T.procStart()
 _, cov = T.procTeardown()
 eq(cov, "coverage: events all, UNIT_AURA registered, blocked listener on", "  all covered")
 check(T.nothingBlocked() == true, "  then 'nothing blocked' passes")
+
+-- procs3 (#115, round 3): the plan's design. The stub container records the
+-- order of its setup calls, its slots' filters and enabled states, and its
+-- UpdateAllAuras calls; a slot frame takes an application bar.
+local calls, made = {}, {}
+WoW.templates.CustomAuraButtonTemplate = function(w)
+    w:EnableMouse(true)
+    rawset(w, "SetApplicationBar", function(self, bar, o) self._bar = { bar = bar, min = o.minApplications } end)
+end
+WoW.templates.CustomAuraContainerTemplate = function(w)
+    w:EnableMouse(true)
+    w._slots, w._order, w._refreshes = {}, {}, 0
+    made[#made + 1] = w
+    local function note(s) w._order[#w._order + 1] = s end
+    rawset(w, "SetUnit", function(self, u) self._unit = u; note("unit") end)
+    rawset(w, "SetEnabled", function(self, on) self._enabled = on; note("enabled") end)
+    rawset(w, "AddAuraSlot", function(self, key, filter, opts)
+        note("slot")
+        local f = CreateFrame("AuraButton", nil, self, "CustomAuraButtonTemplate")
+        self._slots[key] = { filter = filter, ids = opts.candidateFilters.includeSpellIDs, enabled = true, frame = f }
+        if opts.initializeFrame then opts.initializeFrame(f) end
+        return f
+    end)
+    rawset(w, "SetAuraSlotCandidateFilters", function(self, key, cf)
+        assert(self._slots[key], "no slot " .. key)
+        self._slots[key].ids = cf.includeSpellIDs
+        calls[#calls + 1] = "filter"
+    end)
+    rawset(w, "SetAuraSlotEnabled", function(self, key, on)
+        assert(self._slots[key] and type(on) == "boolean", "slot key and a boolean")
+        self._slots[key].enabled = on
+        calls[#calls + 1] = on and "enable" or "disable"
+    end)
+    rawset(w, "UpdateAllAuras", function(self) self._refreshes = self._refreshes + 1 end)
+end
+local addons = { SpellActivationOverlay = true }
+C_AddOns.IsAddOnLoaded = function(name) return addons[name] == true end
+C_AddOns.LoadAddOn = function(name) addons[name] = true; return true end
+local sounds, removed = {}, {}
+C_UnitAuras.AddAuraSound = function(trigger, info) sounds[#sounds + 1] = { trigger = trigger, info = info }; return 100 + #sounds end
+C_UnitAuras.RemoveAuraSound = function(id) removed[#removed + 1] = id end
+Enum.UnitAuraSoundTrigger = { Added = 0, ApplicationsIncreased = 1, Removed = 2 }
+local macroSlot = 9
+rawset(_G, "GetActionInfo", function(slot) if slot == macroSlot then return "macro", 1 end end)
+slots[5] = nil
+
+local ready, why = T.r3ready()
+check(ready == false and why:find("SpellActivationOverlay"), "procs3: waits while SAO is loaded")
+check(T.r3build() == false and #made == 0, "  and builds nothing")
+addons.SpellActivationOverlay = nil
+slots[3] = nil
+ready, why = T.r3ready()
+check(ready == false and why:find("needs two"), "  waits for two Ice Lance buttons")
+slots[3] = 400640
+WoW.combat = true
+check(T.r3ready() == false, "  waits for combat to end")
+WoW.combat = false
+check(T.r3ready() == true and logHas("macro on ActionButton9"), "  ready: Ice Lance on two bars, the macro read")
+
+local ok3, engine, nButtons, overlay, snd = T.r3build()
+check(ok3 == true, "procs3: built")
+eq(engine, "engine: loaded before false, LoadAddOn true nil, after true", "  the engine loaded first, logged")
+local R = T.r3state()
+local nStock = 0
+for b in pairs(R.side) do nStock = nStock + 1 end
+eq(nStock, 96, "  a glow on every stock button of bars 1-8")
+eq(nButtons, "96 buttons, 8 glowing now", "  Ice Lance's slot on each bar lights")
+local s3 = R.side[ActionButton3]
+check(s3.player._order[1] == "unit" and s3.player._order[2] == "enabled" and s3.player._order[3] == "slot",
+    "  the plan's order: unit, enabled, then the slot")
+check(s3.player._refreshes >= 1 and s3.player._unit == "player" and s3.target._unit == "target", "  refreshed; player and target")
+local ps, ts = s3.player._slots.glow, s3.target._slots.glow
+check(ps.filter == "HELPFUL" and ps.ids[400670] and ps.enabled, "  Ice Lance's player slot: Fingers of Frost, on")
+check(ts.filter == "HARMFUL" and ts.ids[122] and ts.ids[5276] == nil and ts.enabled, "  its target slot: the freeze aliases, not 5276")
+check(R.side[ActionButton1].player._slots.glow.enabled == false, "  a spell nothing glows: the slot off")
+check(s3.player:GetFrameLevel() == ActionButton3:GetFrameLevel() + 5 and s3.player:IsMouseEnabled() == false, "  above the glass, clicks through")
+check(ps.frame:IsMouseEnabled() == false, "  the slot frame clicks through")
+eq(overlay, "overlay built", "  the screen overlay")
+local ov = R.overlay
+check(ov._slots.fof1 and ov._slots.fof1.frame._bar == nil, "  left: shown with any charge")
+check(ov._slots.fof2 and ov._slots.fof2.frame._bar and ov._slots.fof2.frame._bar.min == 2, "  right: at 2 charges")
+check(#sounds == 2 and sounds[1].trigger == 0 and sounds[2].trigger == 1, "  the sound on Added and ApplicationsIncreased")
+check(sounds[1].info.soundFileID == 568016 and sounds[1].info.spellID == 400670 and sounds[1].info.unitToken == "player",
+    "  the game's file, on Fingers of Frost")
+eq(snd, "sounds: Added 101, ApplicationsIncreased 102", "  their ids")
+eq(T.r3build(), "already built", "  once")
+
+-- Paging: the button's own Update retargets; an unchanged one isn't written.
+calls = {}
+slots[3] = 116
+ActionButton3:Update()
+check(ps.enabled == false and ts.enabled == false and s3.key.player == nil, "the page changes: both slots off")
+check(logHas("ActionButton3 player \"ice\" %-> nil %(Update"), "  logged")
+local n0 = #calls
+ActionButton3:Update()
+eq(#calls, n0, "  an unchanged spell isn't written again")
+slots[3] = 400640
+ActionButton3:Update()
+check(ps.enabled and ps.ids[400670] and ts.enabled and ts.ids[122], "  back: filters written, slots on again")
+check(calls[#calls] == "enable" and calls[#calls - 1] == "filter", "  the filter, then enabled")
+slots[3] = 428739
+ActionButton3:Update()
+check(ps.enabled and ts.enabled == false, "  Deep Freeze: Fingers of Frost lights it, a frozen target doesn't")
+slots[3] = 400640
+ActionButton3:Update()
+
+-- Drift: the spell changed with no Update. Logged, not corrected.
+slots[3] = 116
+T.driftPoll()
+check(logHas("DRIFT on ActionButton3: shows 116, filter \"ice\""), "drift: logged")
+eq(s3.key.player, "ice", "  not corrected by the poll")
+ActionButton3:Update()
+T.driftPoll()
+check(logHas("drift on ActionButton3 ended after"), "  ended by the Update")
+slots[3] = 400640
+ActionButton3:Update()
+
+-- A target change refreshes the target glows a frame later.
+local r0 = s3.target._refreshes
+local r1 = R.side[ActionButton1].target._refreshes
+WoW.fire("PLAYER_TARGET_CHANGED")
+eq(s3.target._refreshes, r0, "target change: not at once")
+WoW.flushTimers(0)
+eq(s3.target._refreshes, r0 + 1, "  then refreshed")
+eq(R.side[ActionButton1].target._refreshes, r1, "  only where a target glow is on")
+
+-- Off, then on again with no reload.
+T.r3off()
+check(not s3.player:IsShown() and s3.player._enabled == false and not ov:IsShown(), "off: disabled and hidden")
+slots[3] = 116
+n0 = #calls
+ActionButton3:Update()
+eq(#calls, n0, "  nothing written while off")
+local onMsg = T.r3on()
+check(s3.player:IsShown() and s3.player._enabled == true and ov:IsShown() and ov._enabled == true, "on: shown and enabled")
+eq(onMsg, "on: 193 containers shown and enabled", "  every container")
+check(ps.enabled == false, "  and the page change made while off is caught up")
+slots[3] = 400640
+ActionButton3:Update()
+
+-- Blink: hidden and shown again, in combat only, no protected change.
+T.blink()
+eq(R.blinks, 0, "blink: not out of combat")
+local v3 = #WoW.violations
+WoW.combat = true
+T.blink()
+check(not s3.player:IsShown() and R.side[ActionButton1].player:IsShown(), "  in combat: the lit buttons' glows hidden")
+WoW.flushTimers(0.3)
+check(s3.player:IsShown() and R.blinks == 1, "  shown again")
+eq(#WoW.violations, v3, "  no change on a protected frame")
+WoW.combat = false
+
+-- Heating Up's mock: three layers, or the top one alone.
+eq(T.heatingMock(false), "all three layers", "heating mock")
+local shown = 0
+for _, e in ipairs(R.mock.tex) do if e.t:IsShown() then shown = shown + 1 end end
+eq(shown, 6, "  three layers, both sides")
+T.heatingMock(true)
+shown = 0
+for _, e in ipairs(R.mock.tex) do if e.t:IsShown() then shown = shown + 1 end end
+eq(shown, 2, "  the top layer alone")
+
+-- Teardown: nothing left.
+T.r3end()
+check(not s3.player:IsShown() and s3.player._enabled == false and not ov:IsShown() and not R.mock:IsShown(), "teardown: all off")
+check(#removed == 2 and removed[1] == 101 and removed[2] == 102, "  both sounds removed")
+check(T.r3state().on == nil and T.procState().on == nil, "  round 3 and the watcher reset")
+slots[3] = 116
+n0 = #calls
+ActionButton3:Update()
+eq(#calls, n0, "  the Update hook is inert after teardown")
+eq(T.r3state().updates, 0, "  and counts nothing")
+slots[3] = 400640
+lines = #GABProbeDB.log
+WoW.fire("PLAYER_TARGET_CHANGED")
+WoW.flushTimers(0)
+eq(#GABProbeDB.log, lines, "  the target event unregistered")
+
+-- Stopped through the host: torn down too.
+SlashCmdList.FOREVERPROBE("steps gab procs3")
+WoW.flushTimers()
+T.r3build()
+check(T.r3state().on == true, "procs3 through the host: built")
+SlashCmdList.FOREVERPROBE("steps stop")
+check(T.r3state().on == nil and T.procState().on == nil, "  /fp steps stop: torn down")
+
+-- At a boss: the Encounter restriction out of combat starts the build.
+check(T.atBoss() == false, "procboss: waits for the restriction")
+local secretOut = true
+C_Secrets.ShouldAurasBeSecret = function() return secretOut end
+check(T.atBoss() == true, "  on at the boss, out of combat")
+local okB, listener = T.bossBuild()
+check(okB == true and listener == "listener on" and T.r3state().on == true, "  built with the listener on")
+T.r3end()
+C_Secrets.ShouldAurasBeSecret = function() return WoW.combat == true end
+
+-- Native proc events, counted per class while the probe is installed.
+WoW.fire("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", 400640)
+local nat = GABProbeDB.native
+local _, cls = UnitClass("player")
+check(nat and nat[cls] and nat[cls]["GLOW_SHOW 400640"] >= 1, "native: counted per class and spell")
+check(logHas("native: .- GLOW_SHOW 400640"), "  logged")
 check(#WoW.chat == chatBefore, "  nothing in chat")
 
 done("test_probe")

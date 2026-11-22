@@ -1864,6 +1864,574 @@ Probe:Steps("procglow", withLeave({
     { text = "Press Reload now (or type /reload) to save the results.", reload = true },
 }))
 
+-- ------------------------------------------------------------------
+-- Round 3 (#115, docs/PLAN-procs.md "Phase 0"): the plan's design, measured
+-- before it's code, with SpellActivationOverlay off.
+-- * A glow container per stock action button (bars 1-8), one for the player
+--   and one for the target, one "glow" slot each. The slot's filter follows
+--   the button's spell from the button's own Update hook (paging, drags,
+--   macros). A poll logs any drift between the spell shown and the filter,
+--   but never corrects it: whether the hook is enough is the measurement.
+-- * Fingers of Frost's screen overlay: left at 1 charge, right (flipped)
+--   joining at 2 through an application bar (">= n" stacks).
+-- * The proc sound: C_UnitAuras.AddAuraSound with the game's own file.
+-- * Off -> on without a reload (Show, then SetEnabled(true)), the glow
+--   containers hidden and shown mid-fight (a real OnHide), the target-freeze
+--   glow across target changes, a static mock of Heating Up's layers.
+-- ------------------------------------------------------------------
+
+-- SAO's frozen aliases (mage.lua:161-173), never its display stand-in 5276.
+local FREEZE = { 12494, 122, 865, 6131, 10230, 27088, 42917, 3355, 14308, 14309, 33395, 55080,
+    44572, 428739, 49203, 83301, 83302, 82691 }
+-- SoundKit 23287 (UI_POWER_AURA_GENERIC, SAO's sound): its file in SoundKitEntry, build 71037.
+local POWER_AURA_FILE = 568016
+local FROZEN_FINGERS, HOT_STREAK = 449489, 449490   -- SAO's textures/texname.lua
+local LONG, SHORT = 256 * 0.8, 128 * 0.8            -- SAO's overlay geometry
+-- Heating Up (SAO's heating_up_forever): each stack's scale and grey.
+local HEATING = { { 0.5, 200 }, { 0.7, 222 }, { 0.9, 255 } }
+local BLINK_EVERY = 4
+
+local function idSet(list)
+    local t = {}
+    for _, id in ipairs(list) do t[id] = true end
+    return t
+end
+-- What lights a spell, per unit: Fingers of Frost lights Ice Lance and Deep
+-- Freeze; a frozen target lights Ice Lance.
+local FILTERS = {
+    player = { ice = idSet(PROC_AURAS), deep = idSet(PROC_AURAS) },
+    target = { ice = idSet(FREEZE) },
+}
+local UNITS = { "player", "target" }
+
+local function r3fresh()
+    return { side = {}, writes = {}, skipped = 0, drifts = 0, updates = 0, targets = 0, refreshErrors = 0,
+             blinks = 0, sounds = {}, errors = 0 }
+end
+local r3 = r3fresh()
+local r3hooked = {}   -- buttons whose Update is hooked (a hook can't be taken back: it checks r3.on)
+
+local function glowKey(spell)
+    if type(spell) ~= "number" then return nil end
+    if inList(ICE_LANCE, spell) then return "ice" end
+    if inList(DEEP_FREEZE, spell) then return "deep" end
+end
+local function spellOf(b)
+    local ok, id = pcall(api("C_ActionBar", "GetSpell") or error, b.action)
+    if not ok then return nil, "error" end
+    if secret(id) then return nil, "<secret>" end
+    return id
+end
+local function wantFor(unit, k) return k and FILTERS[unit][k] and k or nil end
+
+local function stockButtons()
+    local list = {}
+    for _, p in ipairs(BUTTON_PREFIXES) do
+        for i = 1, 12 do
+            local b = rawget(_G, p .. i)
+            if b then list[#list + 1] = b end
+        end
+    end
+    return list
+end
+
+-- Every visible Ice Lance button and every macro on the bars.
+local function r3scan(quiet)
+    local ice, macros, paging = {}, {}, false
+    local info = rawget(_G, "GetActionInfo")
+    for _, b in ipairs(stockButtons()) do
+        local spell, why = spellOf(b)
+        local okI, kind = pcall(info or error, b.action or 0)
+        if okI and kind == "macro" then
+            macros[#macros + 1] = b:GetName()
+            if not quiet then say(("procs3: macro on %s (slot %s) shows %s"):format(b:GetName(), Show(b.action), Show(spell or why))) end
+        end
+        if glowKey(spell) == "ice" and b:IsVisible() then
+            ice[#ice + 1] = b:GetName()
+            if b:GetName():match("^ActionButton%d") then paging = true end
+        end
+    end
+    if not quiet then
+        say("procs3: Ice Lance on " .. (#ice > 0 and table.concat(ice, ", ") or "no visible button")
+            .. "; macros: " .. (#macros > 0 and table.concat(macros, ", ") or "none"))
+    end
+    return ice, macros, paging
+end
+
+local function saoLoaded()
+    local fn = api("C_AddOns", "IsAddOnLoaded")
+    local ok, loaded = pcall(fn or error, "SpellActivationOverlay")
+    return ok and loaded and true or false
+end
+
+-- The ring inside a slot frame: the probe's procglow recipe (round 2).
+local function ringInit(c, w, h)
+    return function(f)
+        f:EnableMouse(false)
+        f:ClearAllPoints()
+        f:SetAllPoints(c)
+        if f.GetIcon and f:GetIcon() then f:GetIcon():Hide() end
+        local g = CreateFrame("Frame", nil, f, "ActionButtonSpellAlertTemplate")
+        g:SetSize(w * 1.4, h * 1.4)
+        g:SetPoint("CENTER", f, "CENTER", 0, 0)
+        g.animationPlaying = true
+        g:Show()
+        if g.ProcLoop then g.ProcLoop:Play() end
+    end
+end
+
+-- The plan's setup, in its order: the engine loaded (by the caller), the
+-- container made, its unit, enabled; then its slots and UpdateAllAuras.
+local function newContainer(parent, unit)
+    local c = CreateFrame("AuraContainer", nil, parent, "CustomAuraContainerTemplate")
+    c:EnableMouse(false)
+    c:SetUnit(unit)
+    c:SetEnabled(true)
+    return c
+end
+
+local function sortOpts(o)
+    o.sortMethod = rawget(_G, "AuraContainerSortMethod") and AuraContainerSortMethod.ExpirationOnly or nil
+    o.sortDirection = rawget(_G, "AuraContainerSortDirection") and AuraContainerSortDirection.Reverse or nil
+    return o
+end
+
+-- One button's slots follow its spell. An unchanged key isn't written again;
+-- a disabled slot has key nil, so coming back writes the filter and enables.
+local function retarget(b, why)
+    local st = r3.side[b]
+    if not st or r3.off then return end
+    local spell, unreadable = spellOf(b)
+    local k = glowKey(spell)
+    for _, unit in ipairs(UNITS) do
+        local want, had = wantFor(unit, k), st.key[unit]
+        if want == had then
+            r3.skipped = r3.skipped + 1
+        else
+            local c = st[unit]
+            local ok, err = pcall(function()
+                if want then
+                    c:SetAuraSlotCandidateFilters("glow", { includeSpellIDs = FILTERS[unit][want] })
+                    c:SetAuraSlotEnabled("glow", true)
+                else
+                    c:SetAuraSlotEnabled("glow", false)
+                end
+            end)
+            tally(r3.writes, where() .. (ok and " ok" or " ERROR"))
+            if ok then st.key[unit] = want else r3.errors = r3.errors + 1 end
+            say(("procs3: %s %s %s -> %s (%s, %s, spell %s)%s"):format(b:GetName(), unit, Show(had), Show(want), why,
+                where(), Show(spell or unreadable), ok and "" or (" ERROR " .. tostring(err))))
+        end
+    end
+end
+
+-- The poll: the spell a button shows against the filter it has, logged when
+-- they part and when they meet again. Never corrected here.
+local function driftPoll()
+    if not r3.on or r3.off then return end
+    for b, st in pairs(r3.side) do
+        local spell = spellOf(b)
+        local want = wantFor("player", glowKey(spell))
+        if want ~= st.key.player then
+            if not st.driftAt then
+                st.driftAt = GetTime()
+                r3.drifts = r3.drifts + 1
+                say(("procs3: DRIFT on %s: shows %s, filter %s (%s)"):format(b:GetName(), Show(spell), Show(st.key.player), where()))
+            end
+        elseif st.driftAt then
+            say(("procs3: drift on %s ended after %.1f s"):format(b:GetName(), GetTime() - st.driftAt))
+            st.driftAt = nil
+        end
+    end
+end
+
+local function buttonGlow(b)
+    local w, h = b:GetSize()
+    local k = glowKey((spellOf(b)))
+    local st = { key = {} }
+    for _, unit in ipairs(UNITS) do
+        local c = newContainer(b, unit)
+        c:SetAllPoints(b)
+        c:SetFrameLevel(b:GetFrameLevel() + 5)
+        local want = wantFor(unit, k)
+        -- A slot is made with a real filter (an empty include set's meaning
+        -- isn't ours to guess), then disabled when nothing glows the spell.
+        c:AddAuraSlot("glow", unit == "player" and "HELPFUL" or "HARMFUL", sortOpts({
+            initializeFrame = ringInit(c, w, h),
+            candidateFilters = { includeSpellIDs = FILTERS[unit][want or "ice"] },
+        }))
+        if not want then c:SetAuraSlotEnabled("glow", false) end
+        c:UpdateAllAuras()
+        st[unit], st.key[unit] = c, want
+    end
+    r3.side[b] = st
+    if not r3hooked[b] then
+        r3hooked[b] = true
+        hooksecurefunc(b, "Update", function(self)
+            if r3.on then
+                r3.updates = r3.updates + 1
+                retarget(self, "Update")
+            end
+        end)
+    end
+    return k
+end
+
+-- Fingers of Frost on screen: left at 1 charge, right (flipped) at 2.
+local function overlaySide(c, f, point, rel, flip, gate)
+    f:EnableMouse(false)
+    f:ClearAllPoints()
+    f:SetPoint(point, c, rel, 0, 0)
+    f:SetSize(SHORT, LONG)
+    if f.GetIcon and f:GetIcon() then f:GetIcon():Hide() end
+    local holder = f
+    if gate then
+        holder = CreateFrame("StatusBar", nil, f)
+        holder:SetAllPoints(f)
+    end
+    local t = holder:CreateTexture(nil, "ARTWORK")
+    t:SetAllPoints(holder)
+    t:SetTexture(FROZEN_FINGERS)
+    if flip then t:SetTexCoord(1, 0, 0, 1) end
+    if gate then f:SetApplicationBar(holder, { minApplications = gate, maxApplications = gate }) end
+end
+local function buildOverlay()
+    local c = newContainer(UIParent, "player")
+    c:SetSize(256, 256)
+    c:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    c:AddAuraSlot("fof1", "HELPFUL", sortOpts({ candidateFilters = { includeSpellIDs = idSet(PROC_AURAS) },
+        initializeFrame = function(f) overlaySide(c, f, "RIGHT", "LEFT", false) end }))
+    c:AddAuraSlot("fof2", "HELPFUL", sortOpts({ candidateFilters = { includeSpellIDs = idSet(PROC_AURAS) },
+        initializeFrame = function(f) overlaySide(c, f, "LEFT", "RIGHT", true, 2) end }))
+    c:UpdateAllAuras()
+    r3.overlay = c
+end
+
+local function addSounds()
+    local add = api("C_UnitAuras", "AddAuraSound")
+    if not add then say("procs3: C_UnitAuras.AddAuraSound MISSING") return "sound API missing" end
+    local E = rawget(_G, "Enum") and rawget(Enum, "UnitAuraSoundTrigger")
+    local got = {}
+    for i, trig in ipairs({ "Added", "ApplicationsIncreased" }) do
+        local ok, id = pcall(add, E and E[trig] or (i - 1), { unitToken = "player", spellID = PROC_AURAS[1],
+            soundFileID = POWER_AURA_FILE })
+        say(("procs3: AddAuraSound %s -> %s"):format(trig, ok and Show(id) or ("ERROR " .. tostring(id))))
+        if ok and id ~= nil then r3.sounds[#r3.sounds + 1] = id end
+        got[#got + 1] = trig .. " " .. (ok and Show(id) or "ERROR")
+    end
+    return "sounds: " .. table.concat(got, ", ")
+end
+
+local r3frame = CreateFrame("Frame")
+r3frame:SetScript("OnEvent", function(_, event)
+    if event ~= "PLAYER_TARGET_CHANGED" or not r3.on then return end
+    r3.targets = r3.targets + 1
+    C_Timer.After(0, function()
+        if not r3.on or r3.off then return end
+        local n = 0
+        for _, st in pairs(r3.side) do
+            if st.key.target then
+                local ok = pcall(st.target.UpdateAllAuras, st.target)
+                if ok then n = n + 1 else r3.refreshErrors = r3.refreshErrors + 1 end
+            end
+        end
+        say(("procs3: target changed (%s): %d target glows refreshed"):format(where(), n))
+    end)
+end)
+
+local function r3teardown()
+    if r3.ticker then r3.ticker:Cancel() end
+    if r3.blinker then r3.blinker:Cancel() end
+    for _, st in pairs(r3.side) do
+        for _, unit in ipairs(UNITS) do
+            pcall(st[unit].SetEnabled, st[unit], false)
+            st[unit]:Hide()
+        end
+    end
+    if r3.overlay then
+        pcall(r3.overlay.SetEnabled, r3.overlay, false)
+        r3.overlay:Hide()
+    end
+    local remove = api("C_UnitAuras", "RemoveAuraSound")
+    for _, id in ipairs(r3.sounds) do if remove then pcall(remove, id) end end
+    if r3.mock then r3.mock:Hide() end
+    r3frame:UnregisterAllEvents()
+    local s = ("writes %s, unchanged skipped %d, drifts %d, Update calls %d, target changes %d (refresh errors %d), "
+        .. "blinks %d, errors %d"):format(tallies(r3.writes), r3.skipped, r3.drifts, r3.updates, r3.targets,
+        r3.refreshErrors, r3.blinks, r3.errors)
+    r3 = r3fresh()
+    return s
+end
+
+local function r3summary()
+    return ("writes %s, skipped %d, drifts %d, Update calls %d, target changes %d, blinks %d, errors %d"):format(
+        tallies(r3.writes), r3.skipped, r3.drifts, r3.updates, r3.targets, r3.blinks, r3.errors)
+end
+
+-- Everything, out of combat: the engine, a glow per stock button, the
+-- overlay, the sound, the watcher (round 1's) and the drift poll.
+local function r3build()
+    if InCombatLockdown() then return false, "out of combat only" end
+    if saoLoaded() then return false, "SpellActivationOverlay is loaded: turn it off in the AddOns list and /reload" end
+    if r3.on then return "already built" end
+    local isLoaded, load = api("C_AddOns", "IsAddOnLoaded"), api("C_AddOns", "LoadAddOn")
+    local okB, before = pcall(isLoaded or error, "Blizzard_AuraContainer")
+    local okL, loaded, why = pcall(load or error, "Blizzard_AuraContainer")
+    local okA, after = pcall(isLoaded or error, "Blizzard_AuraContainer")
+    local engine = ("engine: loaded before %s, LoadAddOn %s %s, after %s"):format(okB and Show(before) or "error",
+        okL and Show(loaded) or "ERROR", Show(why), okA and Show(after) or "error")
+    say("procs3: " .. engine)
+    if not (okA and after) then return false, engine end
+    local clock = rawget(_G, "debugprofilestop")
+    local t0 = clock and clock()
+    local n, lit = 0, 0
+    for _, b in ipairs(stockButtons()) do
+        local ok, k = pcall(buttonGlow, b)
+        if ok then
+            n = n + 1
+            if k then lit = lit + 1 end
+        else
+            r3.errors = r3.errors + 1
+            say("procs3: " .. b:GetName() .. " glow ERROR " .. tostring(k))
+        end
+    end
+    local okO, errO = pcall(buildOverlay)
+    if not okO then say("procs3: overlay ERROR " .. tostring(errO)) end
+    local sounds = addSounds()
+    r3.on = true
+    Probe:RegisterEvents(r3frame, { "PLAYER_TARGET_CHANGED" })
+    r3.ticker = C_Timer.NewTicker(0.2, driftPoll)
+    if not pw.on then procStart() end
+    local ms = t0 and ("%.0f ms"):format(clock() - t0) or "time unread"
+    say(("procs3: built %d buttons (%d with a glowing spell), overlay %s, %s, %s"):format(n, lit,
+        okO and "built" or "ERROR", sounds, ms))
+    return n > 0 and okO, engine, ("%d buttons, %d glowing now"):format(n, lit), okO and "overlay built" or "overlay ERROR",
+        sounds, ms
+end
+
+-- Off, then on again, with no reload: the plan's two paths.
+local function eachContainer(fn)
+    for _, st in pairs(r3.side) do
+        for _, unit in ipairs(UNITS) do fn(st[unit]) end
+    end
+    if r3.overlay then fn(r3.overlay) end
+end
+local function r3off()
+    if not r3.on then return false, "not built" end
+    local n = 0
+    eachContainer(function(c) c:SetEnabled(false); c:Hide(); n = n + 1 end)
+    r3.off = true
+    return "off: " .. n .. " containers disabled and hidden"
+end
+local function r3on()
+    if not r3.on then return false, "not built" end
+    local n, bad = 0, 0
+    eachContainer(function(c)
+        c:Show()
+        c:SetEnabled(true)
+        n = n + 1
+        local okS, shown = pcall(c.IsShown, c)
+        if okS and not secret(shown) and shown ~= true then bad = bad + 1 end
+    end)
+    r3.off = false
+    for b in pairs(r3.side) do retarget(b, "on again") end
+    return "on: " .. n .. " containers shown and enabled", bad > 0 and (bad .. " read back hidden") or "none read back hidden"
+end
+
+-- A real OnHide mid-fight: every lit button's glow containers hidden, shown
+-- 0.3 s later, every BLINK_EVERY seconds while in combat.
+local function blink()
+    if not r3.on or r3.off or not InCombatLockdown() then return end
+    r3.blinks = r3.blinks + 1
+    local hidden = {}
+    for _, st in pairs(r3.side) do
+        for _, unit in ipairs(UNITS) do
+            if st.key[unit] then st[unit]:Hide(); hidden[#hidden + 1] = st[unit] end
+        end
+    end
+    C_Timer.After(0.3, function()
+        if not r3.on or r3.off then return end
+        for _, c in ipairs(hidden) do c:Show() end
+    end)
+end
+local function blinkFight()
+    if not r3.blinker then r3.blinker = C_Timer.NewTicker(BLINK_EVERY, blink) end
+    local over, a, b, c, d, e, f = fightOver()
+    if over then
+        r3.blinker:Cancel()
+        r3.blinker = nil
+        return true, "blinks " .. r3.blinks, a, b, c, d, e, f
+    end
+    return over, a
+end
+local function r3fight()
+    local over, a, b, c, d, e, f = fightOver()
+    if over then return true, r3summary(), a, b, c, d, e, f end
+    return over, a
+end
+
+-- Heating Up at 3 stacks: its three layers (or the top one alone) drawn as
+-- plain textures; no aura involved.
+local function heatingMock(top)
+    if not r3.mock then
+        local m = CreateFrame("Frame", nil, UIParent)
+        m:SetSize(256, 256)
+        m:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        m:EnableMouse(false)
+        m.tex = {}
+        for i, L in ipairs(HEATING) do
+            for side = 1, 2 do
+                local t = m:CreateTexture(nil, "ARTWORK", nil, i)
+                t:SetTexture(HOT_STREAK)
+                t:SetSize(SHORT * L[1], LONG * L[1])
+                if side == 1 then
+                    t:SetPoint("RIGHT", m, "LEFT", 0, 0)
+                else
+                    t:SetPoint("LEFT", m, "RIGHT", 0, 0)
+                    t:SetTexCoord(1, 0, 0, 1)
+                end
+                t:SetVertexColor(L[2] / 255, L[2] / 255, L[2] / 255, 1)
+                m.tex[#m.tex + 1] = { t = t, layer = i }
+            end
+        end
+        r3.mock = m
+    end
+    for _, e in ipairs(r3.mock.tex) do e.t:SetShown(not top or e.layer == #HEATING) end
+    r3.mock:Show()
+    return top and "the top layer alone" or "all three layers"
+end
+local function mockOff()
+    if r3.mock then r3.mock:Hide() end
+    return "hidden"
+end
+
+local function r3ready()
+    if InCombatLockdown() then return false, "waiting for combat to end" end
+    if saoLoaded() then return false, "SpellActivationOverlay is still loaded: turn it off in the AddOns list and /reload" end
+    -- Polled each second: the bars read quietly until they're set, then once aloud.
+    local ice, _, paging = r3scan(true)
+    if #ice < 2 or not paging then
+        return false, ("Ice Lance on %d visible buttons%s: needs two, one on Action Bar 1"):format(#ice,
+            paging and "" or ", none on Action Bar 1")
+    end
+    startClean()
+    r3teardown()
+    procSetup()
+    local macros
+    ice, macros = r3scan()
+    return true, "Ice Lance on " .. table.concat(ice, ", "), "macros: " .. (#macros > 0 and table.concat(macros, ", ") or "none")
+end
+
+-- Stop leaves nothing behind: round 3's containers, sounds, poll and mock,
+-- and round 1's watcher.
+local function leave3(outcome)
+    if outcome == "stopped" then
+        r3teardown()
+        procTeardown()
+    end
+end
+local function r3end()
+    local s = r3teardown()
+    local blocked, cov = procTeardown()
+    return blocked, s, cov
+end
+
+Probe:Steps("procs3", (function(def)
+    for _, step in ipairs(def) do step.leave = leave3 end
+    return def
+end)({
+    rev = 1,
+    title = "Proc alerts, the plan's design (#115, round 3)",
+    { text = "Getting ready. SpellActivationOverlay must be OFF (Esc > AddOns, untick it, /reload). Out of combat, put "
+        .. "Ice Lance on Action Bar 1 and a second Ice Lance on another bar. Also make a macro with the two lines "
+        .. "\"#showtooltip\" and \"/cast [mod:alt] Frostbolt; Ice Lance\" and put it on a bar. This step goes on by itself "
+        .. "when all is set; Retry after a change.", wait = r3ready, timeout = 900 },
+    { text = "Building the glow on every action button, the Fingers of Frost overlay and its sound.", auto = true,
+      run = r3build, check = function() return r3.on == true, "built" end },
+    { text = "No proc is up: does nothing glow, and is there no overlay in the middle of the screen?", ask = true,
+      screenshot = "round 3 built, no proc" },
+    { text = "Click a few buttons (Ice Lance on a target, the macro, others). Do they all work as usual?", ask = true },
+    { text = "Fight a target dummy (or open-world mobs) with Frostbolt until Fingers of Frost procs at least 3 times. "
+        .. "While a proc is up: page Action Bar 1 away (Shift + mouse wheel) and back, and hold Alt for a moment to switch "
+        .. "the macro to Frostbolt. Watch both Ice Lance buttons, the macro and the middle of the screen, and listen. "
+        .. "Spend the charges with Ice Lance. Then let combat end: this step ends itself.", wait = r3fight, timeout = 1200 },
+    { text = "Did both Ice Lance buttons glow on each proc?", ask = true },
+    { text = "When you paged Action Bar 1 away, did the glow leave that slot (nothing glowing there), and come back when "
+        .. "you paged back?", ask = true },
+    { text = "Did the macro glow while it showed Ice Lance, and go out while Alt made it Frostbolt?", ask = true },
+    { text = "Did the left overlay show with 1 charge, and the right one join it at 2 charges?", ask = true },
+    { text = "Did you hear a sound when Fingers of Frost procced (and again when it reached 2 charges)?", ask = true },
+    { text = "On the second and later procs, did the glow animate as on the first (not frozen, not missing)?", ask = true },
+    { text = "Did every glow and overlay go out once the charges were spent?", ask = true },
+    { text = "Turning the proc alerts off, as the option would.", auto = true, run = r3off,
+      check = function() return r3.off == true, "off" end },
+    { text = "And on again, without a reload.", auto = true, run = r3on,
+      check = function() return r3.on == true and r3.off == false, "on again" end },
+    { text = "Fight again until Fingers of Frost procs at least twice. The probe now hides and shows the glows every "
+        .. BLINK_EVERY .. " seconds in combat, as a hidden bar would. Watch Ice Lance. Then let combat end.",
+      wait = blinkFight, timeout = 1200 },
+    { text = "After the off and on, did the overlay, the glow and the sound still come with a proc?", ask = true },
+    { text = "After each blink during a proc, did the glow come back animated?", ask = true },
+    { text = "Frozen targets: with Fingers of Frost NOT up, Frost Nova an enemy (or target one that's frozen): Ice Lance "
+        .. "should glow. Then target an enemy that isn't frozen, then clear your target (Esc). Let combat end.",
+      wait = r3fight, timeout = 1200 },
+    { text = "Did Ice Lance glow while your target was frozen?", ask = true },
+    { text = "Did it go out on the unfrozen target, and with no target?", ask = true },
+    { text = "A mock of Heating Up at 3 stacks (the fire mage's overlay): its three layers drawn on top of each other.",
+      auto = true, run = function() return heatingMock(false) end, screenshot = "heating up, three layers" },
+    { text = "Does it look clean (no muddy or doubled edges)?", ask = true },
+    { text = "Now the top layer alone.", auto = true, run = function() return heatingMock(true) end,
+      screenshot = "heating up, top layer" },
+    { text = "Was the three-layer one better than this single layer?", ask = true },
+    { text = "Removing everything.", auto = true, run = function() mockOff(); return r3end() end, check = nothingBlocked },
+    { text = "Press Reload now (or type /reload) to save the results.", reload = true },
+}))
+
+-- At a boss before the pull: the Encounter restriction is on out of combat.
+local function atBoss()
+    if InCombatLockdown() then return false, "waiting for combat to end" end
+    if aurasSecret() == "true" then return true, "ShouldAurasBeSecret true out of combat" end
+    return false, "waiting for the Encounter restriction (ShouldAurasBeSecret " .. aurasSecret() .. ")"
+end
+local function bossBuild()
+    r3teardown()
+    procTeardown()
+    local ok, a, b, c, d, e = r3build()   -- starts the watcher, listener included
+    return ok, "listener " .. (pw.coverage.blocked and "on" or "OFF"), a, b, c, d, e
+end
+
+Probe:Steps("procboss", (function(def)
+    for _, step in ipairs(def) do step.leave = leave3 end
+    return def
+end)({
+    rev = 1,
+    title = "Proc alerts built at a boss, before the pull (#115, round 3)",
+    { text = "SpellActivationOverlay OFF, Ice Lance on a visible bar. Go to a dungeon boss and wait near it, out of "
+        .. "combat, before the pull. This step goes on by itself once the boss's restriction is on.",
+      wait = atBoss, timeout = 3600 },
+    { text = "Building the proc alerts now, under the restriction, with the blocked-action listener on.", auto = true,
+      run = bossBuild, check = function() return r3.on == true, "built" end },
+    { text = "Pull the boss and fight it. Use Ice Lance on Fingers of Frost procs as usual. Let combat end.",
+      wait = r3fight, timeout = 3600 },
+    { text = "Did the glow, the overlay and the sound come with the procs in the boss fight?", ask = true },
+    { text = "Removing everything.", auto = true, run = r3end, check = nothingBlocked },
+    { text = "Press Reload now (or type /reload) to save the results.", reload = true },
+}))
+
+-- Passive (#115 round 3, Codex on PR #116): Blizzard's own proc events on
+-- every class, counted per class and spell while the probe is installed.
+local nativeFrame = CreateFrame("Frame")
+nativeFrame:SetScript("OnEvent", function(_, event, id)
+    local _, class = UnitClass("player")
+    local key = event:gsub("^SPELL_ACTIVATION_OVERLAY_", "") .. " " .. (secret(id) and "<secret>" or tostring(id))
+    local db = GABProbeDB and GABProbeDB.native
+    if db then
+        db[class or "?"] = db[class or "?"] or {}
+        db[class or "?"][key] = (db[class or "?"][key] or 0) + 1
+    end
+    say(("native: %s %s %s"):format(Show(class), key, Show(not secret(id) and spellName(id))))
+end)
+
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
 boot:SetScript("OnEvent", function(_, event, name)
@@ -1878,6 +2446,9 @@ boot:SetScript("OnEvent", function(_, event, name)
     if type(GABProbeDB.log) ~= "table" then GABProbeDB.log = {} end
     Probe:UseLog(GABProbeDB.log, MAX_LOG)
     GABProbeDB.loads = (GABProbeDB.loads or 0) + 1
+    if type(GABProbeDB.native) ~= "table" then GABProbeDB.native = {} end
+    Probe:RegisterEvents(nativeFrame, { "SPELL_ACTIVATION_OVERLAY_SHOW", "SPELL_ACTIVATION_OVERLAY_HIDE",
+        "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" })
     say("loaded (" .. GABProbeDB.loads .. " loads). /fp steps gab campfire, or /fp gab for the commands")
 end)
 
@@ -1888,4 +2459,7 @@ NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCa
     flipKeyDown = flipKeyDown, readRanks = readRanks, since = since,
     procSetup = procSetup, procStart = procStart, auraState = auraState, fightOver = fightOver, showGlow = showGlow,
     hideGlow = hideGlow, glowInCombat = glowInCombat, procTeardown = procTeardown, procState = function() return pw end,
-    containerGlow = containerGlow, outOfCombat = outOfCombat, nothingBlocked = nothingBlocked, procFrame = procFrame }
+    containerGlow = containerGlow, outOfCombat = outOfCombat, nothingBlocked = nothingBlocked, procFrame = procFrame,
+    r3ready = r3ready, r3build = r3build, r3off = r3off, r3on = r3on, r3end = r3end, r3teardown = r3teardown,
+    retarget = retarget, driftPoll = driftPoll, blink = blink, blinkFight = blinkFight, heatingMock = heatingMock,
+    atBoss = atBoss, bossBuild = bossBuild, r3state = function() return r3 end, nativeFrame = nativeFrame }
