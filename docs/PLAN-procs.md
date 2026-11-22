@@ -348,10 +348,13 @@ waits for the Encounter.
      outside the event's dispatch), not only `ShouldAurasBeSecret()`;
    - changes the alerts **already built**, in place, the paths an option change takes: containers
      disabled and hidden then shown and enabled, the sounds removed and registered again, a filter
-     written.
+     written;
+   - then builds everything **afresh** under the restriction, the path a login or `/reload` at the
+     boss takes: new containers and slots, new sound registrations.
 
-   Today's `procboss` doesn't do that: it tears everything down and builds afresh. It's reworked
-   before that run. If it passes, the wait can go.
+   Today's `procboss` does only the fresh build. It gains the in-place steps before that run. Each
+   path that passes stops waiting on its own: the in-place steps release option changes, the fresh
+   build releases the login build. A path that fails, or isn't run, keeps its wait.
 6. **A clean launch with SAO disabled.** SAO turned off in the AddOns list and a `/reload`, then
    the probe's containers alone: the engine's load result logged, and a proc seen to appear and
    clear on both an overlay and a ring. Rounds 1 and 2 ran with SAO loaded, which may have loaded
