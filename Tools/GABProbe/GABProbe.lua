@@ -1906,7 +1906,7 @@ local UNITS = { "player", "target" }
 
 local function r3fresh()
     return { side = {}, writes = {}, skipped = 0, drifts = 0, updates = 0, targets = 0, refreshErrors = 0,
-             blinks = 0, sounds = {}, errors = 0 }
+             blinks = 0, sounds = {}, removedSounds = {}, errors = 0, all = {}, failures = {} }
 end
 local r3 = r3fresh()
 local r3hooked = {}   -- buttons whose Update is hooked (a hook can't be taken back: it checks r3.on)
@@ -1935,27 +1935,43 @@ local function stockButtons()
     return list
 end
 
--- Every visible Ice Lance button and every macro on the bars.
+-- The layout round 3 needs, on visible buttons: Ice Lance as a spell on
+-- Action Bar 1 (it pages) and on another bar (it stays), and a macro that
+-- shows Ice Lance with an Alt condition in its text (a probe's check only:
+-- the addon never reads macro text).
 local function r3scan(quiet)
-    local ice, macros, paging = {}, {}, false
-    local info = rawget(_G, "GetActionInfo")
+    local s = { ice = {}, macros = {}, paging = false, other = false, macro = false }
+    local info, body = rawget(_G, "GetActionInfo"), rawget(_G, "GetMacroBody")
     for _, b in ipairs(stockButtons()) do
         local spell, why = spellOf(b)
-        local okI, kind = pcall(info or error, b.action or 0)
-        if okI and kind == "macro" then
-            macros[#macros + 1] = b:GetName()
-            if not quiet then say(("procs3: macro on %s (slot %s) shows %s"):format(b:GetName(), Show(b.action), Show(spell or why))) end
-        end
-        if glowKey(spell) == "ice" and b:IsVisible() then
-            ice[#ice + 1] = b:GetName()
-            if b:GetName():match("^ActionButton%d") then paging = true end
+        local okI, kind, id = pcall(info or error, b.action or 0)
+        local isMacro = okI and kind == "macro"
+        if isMacro then
+            local okB, text = pcall(body or error, id)
+            local cond = okB and type(text) == "string" and not secret(text) and text:find("[mod:alt]", 1, true) ~= nil
+            s.macros[#s.macros + 1] = b:GetName()
+            if cond and glowKey(spell) == "ice" and b:IsVisible() then s.macro = true end
+            if not quiet then
+                say(("procs3: macro on %s (slot %s) shows %s, Alt condition %s"):format(b:GetName(), Show(b.action),
+                    Show(spell or why), Show(cond)))
+            end
+        elseif glowKey(spell) == "ice" and b:IsVisible() then
+            s.ice[#s.ice + 1] = b:GetName()
+            if b:GetName():match("^ActionButton%d") then s.paging = true else s.other = true end
         end
     end
     if not quiet then
-        say("procs3: Ice Lance on " .. (#ice > 0 and table.concat(ice, ", ") or "no visible button")
-            .. "; macros: " .. (#macros > 0 and table.concat(macros, ", ") or "none"))
+        say("procs3: Ice Lance on " .. (#s.ice > 0 and table.concat(s.ice, ", ") or "no visible button")
+            .. "; macros: " .. (#s.macros > 0 and table.concat(s.macros, ", ") or "none"))
     end
-    return ice, macros, paging
+    return s
+end
+local function layoutMissing(s)
+    local missing = {}
+    if not s.paging then missing[#missing + 1] = "Ice Lance on Action Bar 1" end
+    if not s.other then missing[#missing + 1] = "a second Ice Lance on another bar" end
+    if not s.macro then missing[#missing + 1] = "the Alt macro showing Ice Lance" end
+    return missing
 end
 
 local function saoLoaded()
@@ -1982,8 +1998,11 @@ end
 
 -- The plan's setup, in its order: the engine loaded (by the caller), the
 -- container made, its unit, enabled; then its slots and UpdateAllAuras.
+-- Each one is tracked the moment it exists, so a setup that throws halfway
+-- leaves nothing the teardown can't reach.
 local function newContainer(parent, unit)
     local c = CreateFrame("AuraContainer", nil, parent, "CustomAuraContainerTemplate")
+    r3.all[#r3.all + 1] = c
     c:EnableMouse(false)
     c:SetUnit(unit)
     c:SetEnabled(true)
@@ -2097,6 +2116,7 @@ local function overlaySide(c, f, point, rel, flip, gate)
 end
 local function buildOverlay()
     local c = newContainer(UIParent, "player")
+    r3.overlay = c
     c:SetSize(256, 256)
     c:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     c:AddAuraSlot("fof1", "HELPFUL", sortOpts({ candidateFilters = { includeSpellIDs = idSet(PROC_AURAS) },
@@ -2104,7 +2124,6 @@ local function buildOverlay()
     c:AddAuraSlot("fof2", "HELPFUL", sortOpts({ candidateFilters = { includeSpellIDs = idSet(PROC_AURAS) },
         initializeFrame = function(f) overlaySide(c, f, "LEFT", "RIGHT", true, 2) end }))
     c:UpdateAllAuras()
-    r3.overlay = c
 end
 
 local function addSounds()
@@ -2120,6 +2139,17 @@ local function addSounds()
         got[#got + 1] = trig .. " " .. (ok and Show(id) or "ERROR")
     end
     return "sounds: " .. table.concat(got, ", ")
+end
+local function removeSounds()
+    local remove = api("C_UnitAuras", "RemoveAuraSound")
+    local gone = {}
+    for _, id in ipairs(r3.sounds) do
+        local ok = remove and pcall(remove, id)
+        r3.removedSounds[#r3.removedSounds + 1] = id
+        gone[#gone + 1] = tostring(id) .. (ok and "" or " ERROR")
+    end
+    r3.sounds = {}
+    return "sounds removed: " .. (#gone > 0 and table.concat(gone, ", ") or "none")
 end
 
 local r3frame = CreateFrame("Frame")
@@ -2142,18 +2172,11 @@ end)
 local function r3teardown()
     if r3.ticker then r3.ticker:Cancel() end
     if r3.blinker then r3.blinker:Cancel() end
-    for _, st in pairs(r3.side) do
-        for _, unit in ipairs(UNITS) do
-            pcall(st[unit].SetEnabled, st[unit], false)
-            st[unit]:Hide()
-        end
+    for _, c in ipairs(r3.all) do
+        pcall(c.SetEnabled, c, false)
+        pcall(c.Hide, c)
     end
-    if r3.overlay then
-        pcall(r3.overlay.SetEnabled, r3.overlay, false)
-        r3.overlay:Hide()
-    end
-    local remove = api("C_UnitAuras", "RemoveAuraSound")
-    for _, id in ipairs(r3.sounds) do if remove then pcall(remove, id) end end
+    removeSounds()
     if r3.mock then r3.mock:Hide() end
     r3frame:UnregisterAllEvents()
     local s = ("writes %s, unchanged skipped %d, drifts %d, Update calls %d, target changes %d (refresh errors %d), "
@@ -2174,6 +2197,8 @@ local function r3build()
     if InCombatLockdown() then return false, "out of combat only" end
     if saoLoaded() then return false, "SpellActivationOverlay is loaded: turn it off in the AddOns list and /reload" end
     if r3.on then return "already built" end
+    -- The watcher first: a blocked action from the build itself is counted.
+    if not pw.on then procStart() end
     local isLoaded, load = api("C_AddOns", "IsAddOnLoaded"), api("C_AddOns", "LoadAddOn")
     local okB, before = pcall(isLoaded or error, "Blizzard_AuraContainer")
     local okL, loaded, why = pcall(load or error, "Blizzard_AuraContainer")
@@ -2184,44 +2209,45 @@ local function r3build()
     if not (okA and after) then return false, engine end
     local clock = rawget(_G, "debugprofilestop")
     local t0 = clock and clock()
-    local n, lit = 0, 0
+    local n, lit, failed = 0, 0, {}
     for _, b in ipairs(stockButtons()) do
         local ok, k = pcall(buttonGlow, b)
         if ok then
             n = n + 1
             if k then lit = lit + 1 end
         else
-            r3.errors = r3.errors + 1
-            say("procs3: " .. b:GetName() .. " glow ERROR " .. tostring(k))
+            failed[#failed + 1] = b:GetName() .. ": " .. tostring(k)
         end
     end
     local okO, errO = pcall(buildOverlay)
-    if not okO then say("procs3: overlay ERROR " .. tostring(errO)) end
+    if not okO then failed[#failed + 1] = "overlay: " .. tostring(errO) end
+    -- Every glow and the overlay, or nothing: a partial build is torn down
+    -- (the watcher stays) and the step fails with what broke.
+    if #failed > 0 or n == 0 then
+        for _, f in ipairs(failed) do say("procs3: build ERROR " .. f) end
+        r3teardown()
+        return false, engine, #failed .. " failed: " .. (failed[1] or "no stock button")
+    end
     local sounds = addSounds()
     r3.on = true
     Probe:RegisterEvents(r3frame, { "PLAYER_TARGET_CHANGED" })
     r3.ticker = C_Timer.NewTicker(0.2, driftPoll)
-    if not pw.on then procStart() end
     local ms = t0 and ("%.0f ms"):format(clock() - t0) or "time unread"
-    say(("procs3: built %d buttons (%d with a glowing spell), overlay %s, %s, %s"):format(n, lit,
-        okO and "built" or "ERROR", sounds, ms))
-    return n > 0 and okO, engine, ("%d buttons, %d glowing now"):format(n, lit), okO and "overlay built" or "overlay ERROR",
-        sounds, ms
+    say(("procs3: built %d buttons (%d with a glowing spell), overlay built, %s, %s"):format(n, lit, sounds, ms))
+    return true, engine, ("%d buttons, %d glowing now"):format(n, lit), "overlay built", sounds, ms
 end
 
 -- Off, then on again, with no reload: the plan's two paths.
 local function eachContainer(fn)
-    for _, st in pairs(r3.side) do
-        for _, unit in ipairs(UNITS) do fn(st[unit]) end
-    end
-    if r3.overlay then fn(r3.overlay) end
+    for _, c in ipairs(r3.all) do fn(c) end
 end
 local function r3off()
     if not r3.on then return false, "not built" end
     local n = 0
     eachContainer(function(c) c:SetEnabled(false); c:Hide(); n = n + 1 end)
     r3.off = true
-    return "off: " .. n .. " containers disabled and hidden"
+    -- The sound is the engine's own registration, apart from the containers.
+    return "off: " .. n .. " containers disabled and hidden", removeSounds()
 end
 local function r3on()
     if not r3.on then return false, "not built" end
@@ -2235,7 +2261,8 @@ local function r3on()
     end)
     r3.off = false
     for b in pairs(r3.side) do retarget(b, "on again") end
-    return "on: " .. n .. " containers shown and enabled", bad > 0 and (bad .. " read back hidden") or "none read back hidden"
+    return "on: " .. n .. " containers shown and enabled", bad > 0 and (bad .. " read back hidden") or "none read back hidden",
+        addSounds()
 end
 
 -- A real OnHide mid-fight: every lit button's glow containers hidden, shown
@@ -2309,17 +2336,13 @@ local function r3ready()
     if InCombatLockdown() then return false, "waiting for combat to end" end
     if saoLoaded() then return false, "SpellActivationOverlay is still loaded: turn it off in the AddOns list and /reload" end
     -- Polled each second: the bars read quietly until they're set, then once aloud.
-    local ice, _, paging = r3scan(true)
-    if #ice < 2 or not paging then
-        return false, ("Ice Lance on %d visible buttons%s: needs two, one on Action Bar 1"):format(#ice,
-            paging and "" or ", none on Action Bar 1")
-    end
+    local missing = layoutMissing(r3scan(true))
+    if #missing > 0 then return false, "still needed: " .. table.concat(missing, "; ") end
     startClean()
     r3teardown()
     procSetup()
-    local macros
-    ice, macros = r3scan()
-    return true, "Ice Lance on " .. table.concat(ice, ", "), "macros: " .. (#macros > 0 and table.concat(macros, ", ") or "none")
+    local s = r3scan()
+    return true, "Ice Lance on " .. table.concat(s.ice, ", "), "macros: " .. table.concat(s.macros, ", ")
 end
 
 -- Stop leaves nothing behind: round 3's containers, sounds, poll and mock,
@@ -2340,12 +2363,12 @@ Probe:Steps("procs3", (function(def)
     for _, step in ipairs(def) do step.leave = leave3 end
     return def
 end)({
-    rev = 1,
+    rev = 2,
     title = "Proc alerts, the plan's design (#115, round 3)",
     { text = "Getting ready. SpellActivationOverlay must be OFF (Esc > AddOns, untick it, /reload). Out of combat, put "
         .. "Ice Lance on Action Bar 1 and a second Ice Lance on another bar. Also make a macro with the two lines "
-        .. "\"#showtooltip\" and \"/cast [mod:alt] Frostbolt; Ice Lance\" and put it on a bar. This step goes on by itself "
-        .. "when all is set; Retry after a change.", wait = r3ready, timeout = 900 },
+        .. "\"#showtooltip\" and \"/cast [mod:alt] Frostbolt; Ice Lance\" and put it on a visible bar. This step goes on "
+        .. "by itself once all three are there (the panel says what's still missing).", wait = r3ready, timeout = 900 },
     { text = "Building the glow on every action button, the Fingers of Frost overlay and its sound.", auto = true,
       run = r3build, check = function() return r3.on == true, "built" end },
     { text = "No proc is up: does nothing glow, and is there no overlay in the middle of the screen?", ask = true,
@@ -2363,10 +2386,10 @@ end)({
     { text = "Did you hear a sound when Fingers of Frost procced (and again when it reached 2 charges)?", ask = true },
     { text = "On the second and later procs, did the glow animate as on the first (not frozen, not missing)?", ask = true },
     { text = "Did every glow and overlay go out once the charges were spent?", ask = true },
-    { text = "Turning the proc alerts off, as the option would.", auto = true, run = r3off,
-      check = function() return r3.off == true, "off" end },
+    { text = "Turning the proc alerts and their sound off, as the options would.", auto = true, run = r3off,
+      check = function() return r3.off == true and #r3.sounds == 0, "off, sounds removed" end },
     { text = "And on again, without a reload.", auto = true, run = r3on,
-      check = function() return r3.on == true and r3.off == false, "on again" end },
+      check = function() return r3.on == true and r3.off == false and #r3.sounds > 0, "on again, sounds registered" end },
     { text = "Fight again until Fingers of Frost procs at least twice. The probe now hides and shows the glows every "
         .. BLINK_EVERY .. " seconds in combat, as a hidden bar would. Watch Ice Lance. Then let combat end.",
       wait = blinkFight, timeout = 1200 },
@@ -2393,18 +2416,22 @@ local function atBoss()
     if aurasSecret() == "true" then return true, "ShouldAurasBeSecret true out of combat" end
     return false, "waiting for the Encounter restriction (ShouldAurasBeSecret " .. aurasSecret() .. ")"
 end
+-- The watcher, blocked-action listener included, is on and confirmed before
+-- anything is built under the restriction.
 local function bossBuild()
     r3teardown()
     procTeardown()
-    local ok, a, b, c, d, e = r3build()   -- starts the watcher, listener included
-    return ok, "listener " .. (pw.coverage.blocked and "on" or "OFF"), a, b, c, d, e
+    procStart()
+    if not pw.coverage.blocked then return false, "the blocked-action listener isn't on: not built" end
+    local ok, a, b, c, d, e = r3build()
+    return ok, "listener on", a, b, c, d, e
 end
 
 Probe:Steps("procboss", (function(def)
     for _, step in ipairs(def) do step.leave = leave3 end
     return def
 end)({
-    rev = 1,
+    rev = 2,
     title = "Proc alerts built at a boss, before the pull (#115, round 3)",
     { text = "SpellActivationOverlay OFF, Ice Lance on a visible bar. Go to a dungeon boss and wait near it, out of "
         .. "combat, before the pull. This step goes on by itself once the boss's restriction is on.",

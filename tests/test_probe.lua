@@ -534,6 +534,7 @@ check(T.nothingBlocked() == true, "  then 'nothing blocked' passes")
 -- order of its setup calls, its slots' filters and enabled states, and its
 -- UpdateAllAuras calls; a slot frame takes an application bar.
 local calls, made = {}, {}
+local failSlot, blockInSetup   -- a slot key whose AddAuraSlot throws once; a blocked action fired from setup
 WoW.templates.CustomAuraButtonTemplate = function(w)
     w:EnableMouse(true)
     rawset(w, "SetApplicationBar", function(self, bar, o) self._bar = { bar = bar, min = o.minApplications } end)
@@ -547,6 +548,8 @@ WoW.templates.CustomAuraContainerTemplate = function(w)
     rawset(w, "SetEnabled", function(self, on) self._enabled = on; note("enabled") end)
     rawset(w, "AddAuraSlot", function(self, key, filter, opts)
         note("slot")
+        if failSlot == key then failSlot = nil; error("slot refused") end
+        if blockInSetup then blockInSetup = nil; WoW.fire("ADDON_ACTION_BLOCKED", "GABProbe", "AddAuraSlot") end
         local f = CreateFrame("AuraButton", nil, self, "CustomAuraButtonTemplate")
         self._slots[key] = { filter = filter, ids = opts.candidateFilters.includeSpellIDs, enabled = true, frame = f }
         if opts.initializeFrame then opts.initializeFrame(f) end
@@ -572,8 +575,11 @@ C_UnitAuras.AddAuraSound = function(trigger, info) sounds[#sounds + 1] = { trigg
 C_UnitAuras.RemoveAuraSound = function(id) removed[#removed + 1] = id end
 Enum.UnitAuraSoundTrigger = { Added = 0, ApplicationsIncreased = 1, Removed = 2 }
 local macroSlot = 9
+local macroText = "#showtooltip\n/cast Ice Lance"
 rawset(_G, "GetActionInfo", function(slot) if slot == macroSlot then return "macro", 1 end end)
+rawset(_G, "GetMacroBody", function(id) return id == 1 and macroText or nil end)
 slots[5] = nil
+slots[macroSlot] = 400640
 
 local ready, why = T.r3ready()
 check(ready == false and why:find("SpellActivationOverlay"), "procs3: waits while SAO is loaded")
@@ -581,21 +587,52 @@ check(T.r3build() == false and #made == 0, "  and builds nothing")
 addons.SpellActivationOverlay = nil
 slots[3] = nil
 ready, why = T.r3ready()
-check(ready == false and why:find("needs two"), "  waits for two Ice Lance buttons")
+check(ready == false and why:find("Ice Lance on Action Bar 1") and why:find("another bar"), "  waits for Ice Lance on two bars")
 slots[3] = 400640
+local others = {}
+for _, p in ipairs({ "MultiBarBottomLeftButton", "MultiBarBottomRightButton", "MultiBarRightButton", "MultiBarLeftButton",
+    "MultiBar5Button", "MultiBar6Button", "MultiBar7Button" }) do others[#others + 1] = _G[p .. "3"] end
+for _, b in ipairs(others) do b:Hide() end
+ready, why = T.r3ready()
+check(ready == false and why:find("another bar") and not why:find("Action Bar 1"), "  two copies on Action Bar 1 alone aren't enough")
+for _, b in ipairs(others) do b:Show() end
+ready, why = T.r3ready()
+check(ready == false and why:find("Alt macro"), "  waits for the Alt condition in the macro")
+macroText = "#showtooltip\n/cast [mod:alt] Frostbolt; Ice Lance"
 WoW.combat = true
 check(T.r3ready() == false, "  waits for combat to end")
 WoW.combat = false
-check(T.r3ready() == true and logHas("macro on ActionButton9"), "  ready: Ice Lance on two bars, the macro read")
+check(T.r3ready() == true and logHas("macro on ActionButton9 %(slot 9%) shows 400640, Alt condition true"),
+    "  ready: Ice Lance on two bars, the macro read")
 
+-- A partial build: torn down, and the step fails.
+failSlot = "fof2"
+local made0 = #made
+local okP, _, whyP = T.r3build()
+check(okP == false and whyP:find("overlay: .*slot refused"), "partial build: fails with what broke")
+local leftOn = 0
+for i = made0 + 1, #made do if made[i]:IsShown() or made[i]._enabled ~= false then leftOn = leftOn + 1 end end
+eq(leftOn, 0, "  every container made so far disabled and hidden")
+check(T.r3state().on == nil and next(T.r3state().side) == nil, "  nothing kept as built")
+failSlot = "glow"
+made0 = #made
+check(T.r3build() == false, "  a button's slot failing fails it too")
+leftOn = 0
+for i = made0 + 1, #made do if made[i]:IsShown() or made[i]._enabled ~= false then leftOn = leftOn + 1 end end
+eq(leftOn, 0, "  its half-made container too")
+T.procTeardown()
+addons.Blizzard_AuraContainer = nil   -- the full build below loads it again, logged
+
+blockInSetup = true
 local ok3, engine, nButtons, overlay, snd = T.r3build()
 check(ok3 == true, "procs3: built")
+eq(T.procState().blocked, 1, "  the watcher starts first: a blocked action from the build is counted")
 eq(engine, "engine: loaded before false, LoadAddOn true nil, after true", "  the engine loaded first, logged")
 local R = T.r3state()
 local nStock = 0
 for b in pairs(R.side) do nStock = nStock + 1 end
 eq(nStock, 96, "  a glow on every stock button of bars 1-8")
-eq(nButtons, "96 buttons, 8 glowing now", "  Ice Lance's slot on each bar lights")
+eq(nButtons, "96 buttons, 16 glowing now", "  Ice Lance's slots on each bar light (the macro's too)")
 local s3 = R.side[ActionButton3]
 check(s3.player._order[1] == "unit" and s3.player._order[2] == "enabled" and s3.player._order[3] == "slot",
     "  the plan's order: unit, enabled, then the slot")
@@ -656,13 +693,17 @@ eq(s3.target._refreshes, r0 + 1, "  then refreshed")
 eq(R.side[ActionButton1].target._refreshes, r1, "  only where a target glow is on")
 
 -- Off, then on again with no reload.
-T.r3off()
+local _, offSound = T.r3off()
 check(not s3.player:IsShown() and s3.player._enabled == false and not ov:IsShown(), "off: disabled and hidden")
+eq(offSound, "sounds removed: 101, 102", "  the sound removed")
+check(#R.sounds == 0 and removed[1] == 101 and removed[2] == 102, "  both registrations")
 slots[3] = 116
 n0 = #calls
 ActionButton3:Update()
 eq(#calls, n0, "  nothing written while off")
-local onMsg = T.r3on()
+local onMsg, _, onSound = T.r3on()
+eq(onSound, "sounds: Added 103, ApplicationsIncreased 104", "  the sound registered again")
+check(#R.sounds == 2 and R.sounds[1] == 103, "  its new ids kept")
 check(s3.player:IsShown() and s3.player._enabled == true and ov:IsShown() and ov._enabled == true, "on: shown and enabled")
 eq(onMsg, "on: 193 containers shown and enabled", "  every container")
 check(ps.enabled == false, "  and the page change made while off is caught up")
@@ -694,7 +735,7 @@ eq(shown, 2, "  the top layer alone")
 -- Teardown: nothing left.
 T.r3end()
 check(not s3.player:IsShown() and s3.player._enabled == false and not ov:IsShown() and not R.mock:IsShown(), "teardown: all off")
-check(#removed == 2 and removed[1] == 101 and removed[2] == 102, "  both sounds removed")
+check(#removed == 4 and removed[3] == 103 and removed[4] == 104, "  the live sounds removed")
 check(T.r3state().on == nil and T.procState().on == nil, "  round 3 and the watcher reset")
 slots[3] = 116
 n0 = #calls
@@ -720,9 +761,16 @@ check(T.atBoss() == false, "procboss: waits for the restriction")
 local secretOut = true
 C_Secrets.ShouldAurasBeSecret = function() return secretOut end
 check(T.atBoss() == true, "  on at the boss, out of combat")
+rawset(T.Probe, "OnBlocked", function() return false end)
+local okN, whyN = T.bossBuild()
+check(okN == false and whyN:find("listener") and T.r3state().on == nil, "  no listener: not built")
+rawset(T.Probe, "OnBlocked", nil)
+blockInSetup = true
 local okB, listener = T.bossBuild()
 check(okB == true and listener == "listener on" and T.r3state().on == true, "  built with the listener on")
+eq(T.procState().blocked, 1, "  a blocked action during the build is counted")
 T.r3end()
+check(T.nothingBlocked() == false, "  and fails the run")
 C_Secrets.ShouldAurasBeSecret = function() return WoW.combat == true end
 
 -- Native proc events, counted per class while the probe is installed.
