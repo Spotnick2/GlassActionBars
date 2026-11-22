@@ -86,8 +86,9 @@ Review: Codex (gpt-6.2-astra, high).
 - **Button state lives in our side table.** The glow container is an addon-owned child frame of a
   Blizzard button, as LibGlass's body already is, keyed by button in a weak side table. No field is
   written onto a Blizzard frame, and no Blizzard method is replaced.
-- **Containers and slots are built out of combat.** A login in combat waits for the fight to end,
-  as the skin does.
+- **Containers and slots are built out of combat, and not at a boss.** A login in combat waits
+  for the fight to end, as the skin does. A build or option change while a boss's Encounter
+  restriction is on waits for it to lift too (Settings, below).
 - **No aura read decides anything.** Overlays and aura glows are the engine's.
 - **IDs, never names.** Glows match spell IDs, every rank listed in the data. Never match names (SAO
   matches by name).
@@ -196,8 +197,9 @@ unit test checks that an off -> on toggle leaves every container shown and enabl
 - **One registration per aura id** of an enabled effect, made when the overlays or glows are built
   and removed with `RemoveAuraSound` when they're turned off or the effect is unticked.
 - **Setting:** `sound`, on by default (SAO's default), off with SAO loaded like the other two.
-- **If the engine refuses** (a nil id, or a throw at an Encounter restriction), it's recorded
-  through `API.Fail` and the alerts go on silently.
+- **If the engine refuses** (a nil id, or a throw), it's recorded through `API.Fail` and the
+  alerts go on silently. `AddAuraSound` is a restricted function (`HasRestrictions`), so its
+  registrations and removals wait out the Encounter restriction with the containers.
 
 ### Button glow: one retargetable slot per button and unit
 
@@ -289,6 +291,32 @@ Once SAO is gone, the defaults apply.
 
 A change rebuilds out of combat. In combat the rebuild is queued to `PLAYER_REGEN_ENABLED`.
 
+**At a boss, changes wait (the owner, 2026-11-22).** `ShouldAurasBeSecret()` turns true before the
+pull at a boss (session 10), and building there isn't measured. So everything that builds or
+changes the alerts waits while
+`C_RestrictedActions.IsAddOnRestrictionActive(Enum.AddOnRestrictionType.Encounter)` is true:
+- a login or `/reload` at the boss;
+- an option change: the two checkboxes, the sound, the look, an effect's checkbox;
+- the sound registrations.
+
+It's queued like a change in combat. Until it's applied, the alerts already built keep working,
+and the options page says the change waits for the encounter to end. The rule costs little: it
+only matters to someone changing options at a boss. A button's retarget on a page change isn't an
+option change: it follows Phase 0 item 1, measured in combat.
+
+**Releasing the queue.** `IsAddOnRestrictionActive` always returns false while
+`ADDON_RESTRICTION_STATE_CHANGED` is being dispatched (`RestrictedActionsDocumentation.lua:58`),
+so that event's handler never asks it. It reads its own payload instead:
+- Only `type == Enum.AddOnRestrictionType.Encounter` with `state == Enum.AddOnRestrictionState.Inactive`
+  wakes the queue. Any other type (Chat flips at a boss too, session 10) and `Activating` /
+  `Active` leave it queued.
+- Waking it isn't applying it: the drain still waits for combat to end (`InCombatLockdown()`).
+- `PLAYER_REGEN_ENABLED` drains only if `IsAddOnRestrictionActive(Encounter)` is false. It's read
+  there, outside that event's dispatch, so the answer holds.
+
+So an Encounter end mid-fight waits for the fight, and a fight's end with the Encounter still on
+waits for the Encounter.
+
 ## Phase 0: measure before code (GABProbe round 3)
 
 1. **A page change in combat, during one proc.** Ice Lance on a bar that pages, with a second copy
@@ -313,7 +341,20 @@ A change rebuilds out of combat. In combat the rebuild is queued to `PLAYER_REGE
    with the flip. Heating Up's three layers as a static mock (plain textures at SAO's scales and
    greys, no aura: the owner plays frost), to choose between the composite and the simplification.
 5. **At a boss before the pull** (the Encounter restriction, out of combat): a settings change that
-   rebuilds the containers, with the blocked-action listener confirmed on.
+   rebuilds the containers, with the blocked-action listener confirmed on. **Not needed for v1**
+   (the owner, 2026-11-22): changes wait out the restriction instead (Settings, above). The wait
+   stays until a probe, at the owner's next boss, before the pull and with the listener on:
+   - confirms the Encounter restriction itself is on (`IsAddOnRestrictionActive(Encounter)`, read
+     outside the event's dispatch), not only `ShouldAurasBeSecret()`;
+   - changes the alerts **already built**, in place, the paths an option change takes: containers
+     disabled and hidden then shown and enabled, the sounds removed and registered again, a filter
+     written;
+   - then builds everything **afresh** under the restriction, the path a login or `/reload` at the
+     boss takes: new containers and slots, new sound registrations.
+
+   Today's `procboss` does only the fresh build. It gains the in-place steps before that run. Each
+   path that passes stops waiting on its own: the in-place steps release option changes, the fresh
+   build releases the login build. A path that fails, or isn't run, keeps its wait.
 6. **A clean launch with SAO disabled.** SAO turned off in the AddOns list and a `/reload`, then
    the probe's containers alone: the engine's load result logged, and a proc seen to appear and
    clear on both an overlay and a ring. Rounds 1 and 2 ran with SAO loaded, which may have loaded
@@ -335,7 +376,7 @@ counted per class from load while the probe is installed (`GABProbeDB.native`).
 flip, Heating Up's mock), 6 (clean launch, off and on) and 8 (the sound) passed. Items 1, 2, 3 and
 the ring half of 6 went unmeasured: the bars held Ice Lance rank 2, which the probe didn't know.
 Item 7 so far: mage and warrior, `HIDE` with no spell only. Round 3b re-runs `procs3` with every
-rank; item 5 is still to run.
+rank; item 5 waits for the owner's next boss and no longer gates the slice.
 
 Counters are measured in PR 3's own probe round, not here. A readable cooldown table alone doesn't
 make a working counter. That round tests, for each supported spell:
@@ -366,6 +407,13 @@ The probe is removed from the client when the findings are written (owner, 2026-
     to the live probe.
 - **What the tests cover:**
   - containers built out of combat only, and queued from combat;
+  - a build, an option change and the sound registrations queued while the Encounter restriction
+    is on. The queue's release, each case its own test:
+    - another type's event (Chat) and the Encounter's `Activating` / `Active` leave it queued;
+    - Encounter `Inactive` out of combat applies it;
+    - Encounter `Inactive` in combat, then `PLAYER_REGEN_ENABLED`: applied at the second;
+    - `PLAYER_REGEN_ENABLED` with the Encounter still on, then Encounter `Inactive`: applied at
+      the second;
   - each button's filter follows its spell through paging, and an unchanged filter isn't written
     again;
   - the target refresh;
