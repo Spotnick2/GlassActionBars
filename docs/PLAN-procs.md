@@ -299,11 +299,23 @@ changes the alerts waits while
 - an option change: the two checkboxes, the sound, the look, an effect's checkbox;
 - the sound registrations.
 
-It's queued like a change in combat and applied at the `ADDON_RESTRICTION_STATE_CHANGED` that ends
-the Encounter restriction, or at `PLAYER_REGEN_ENABLED` once neither is on. Until then, the
-alerts already built keep working. The options page says the change waits for the encounter to
-end. The rule costs little: it only matters to someone changing options at a boss. A button's
-retarget on a page change isn't an option change: it follows Phase 0 item 1, measured in combat.
+It's queued like a change in combat. Until it's applied, the alerts already built keep working,
+and the options page says the change waits for the encounter to end. The rule costs little: it
+only matters to someone changing options at a boss. A button's retarget on a page change isn't an
+option change: it follows Phase 0 item 1, measured in combat.
+
+**Releasing the queue.** `IsAddOnRestrictionActive` always returns false while
+`ADDON_RESTRICTION_STATE_CHANGED` is being dispatched (`RestrictedActionsDocumentation.lua:58`),
+so that event's handler never asks it. It reads its own payload instead:
+- Only `type == Enum.AddOnRestrictionType.Encounter` with `state == Enum.AddOnRestrictionState.Inactive`
+  wakes the queue. Any other type (Chat flips at a boss too, session 10) and `Activating` /
+  `Active` leave it queued.
+- Waking it isn't applying it: the drain still waits for combat to end (`InCombatLockdown()`).
+- `PLAYER_REGEN_ENABLED` drains only if `IsAddOnRestrictionActive(Encounter)` is false. It's read
+  there, outside that event's dispatch, so the answer holds.
+
+So an Encounter end mid-fight waits for the fight, and a fight's end with the Encounter still on
+waits for the Encounter.
 
 ## Phase 0: measure before code (GABProbe round 3)
 
@@ -330,8 +342,16 @@ retarget on a page change isn't an option change: it follows Phase 0 item 1, mea
    greys, no aura: the owner plays frost), to choose between the composite and the simplification.
 5. **At a boss before the pull** (the Encounter restriction, out of combat): a settings change that
    rebuilds the containers, with the blocked-action listener confirmed on. **Not needed for v1**
-   (the owner, 2026-11-22): changes wait out the restriction instead (Settings, above). `procboss`
-   runs whenever the owner is next at a boss; if it passes, the wait can go.
+   (the owner, 2026-11-22): changes wait out the restriction instead (Settings, above). The wait
+   stays until a probe, at the owner's next boss, before the pull and with the listener on:
+   - confirms the Encounter restriction itself is on (`IsAddOnRestrictionActive(Encounter)`, read
+     outside the event's dispatch), not only `ShouldAurasBeSecret()`;
+   - changes the alerts **already built**, in place, the paths an option change takes: containers
+     disabled and hidden then shown and enabled, the sounds removed and registered again, a filter
+     written.
+
+   Today's `procboss` doesn't do that: it tears everything down and builds afresh. It's reworked
+   before that run. If it passes, the wait can go.
 6. **A clean launch with SAO disabled.** SAO turned off in the AddOns list and a `/reload`, then
    the probe's containers alone: the engine's load result logged, and a proc seen to appear and
    clear on both an overlay and a ring. Rounds 1 and 2 ran with SAO loaded, which may have loaded
@@ -385,7 +405,12 @@ The probe is removed from the client when the findings are written (owner, 2026-
 - **What the tests cover:**
   - containers built out of combat only, and queued from combat;
   - a build, an option change and the sound registrations queued while the Encounter restriction
-    is on, and applied when it ends (and not before combat ends too);
+    is on. The queue's release, each case its own test:
+    - another type's event (Chat) and the Encounter's `Activating` / `Active` leave it queued;
+    - Encounter `Inactive` out of combat applies it;
+    - Encounter `Inactive` in combat, then `PLAYER_REGEN_ENABLED`: applied at the second;
+    - `PLAYER_REGEN_ENABLED` with the Encounter still on, then Encounter `Inactive`: applied at
+      the second;
   - each button's filter follows its spell through paging, and an unchanged filter isn't written
     again;
   - the target refresh;
