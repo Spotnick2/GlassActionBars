@@ -60,7 +60,9 @@ Review: Codex (gpt-6.2-astra, high).
   - `SPELL_ACTIVATION_OVERLAY_SHOW` / `GLOW_*` never fired, and `IsSpellOverlayed` stayed false.
   - Only `SPELL_ACTIVATION_OVERLAY_HIDE` fired, with no spell.
   - Other spells and classes weren't measured, so this stays open (Phase 0).
-- **Ids:** Ice Lance 400640, Deep Freeze 428739. `C_ActionBar.GetSpell(slot)` reads plain in combat.
+- **Ids:** Ice Lance 400640 (rank 1) and **1240044 (rank 2, seen on the bars at level 34, run
+  #591)**; `SkillLineAbility` lists 400640, 1240044-1240047 and 1312002. Deep Freeze 428739.
+  `C_ActionBar.GetSpell(slot)` reads plain in combat.
 - **The glow over the glass:** an addon-made `ActionButtonSpellAlertTemplate` frame at the button's
   level + 1 (the glass's level) and at + 5 both drew over the glass. We use + 5.
 
@@ -108,7 +110,8 @@ game. One entry per effect:
   auras = { 400670 },
   overlays = { { stacks = 1, texture = 449489, position = "LEFT" },
                { stacks = 2, texture = 449489, position = "RIGHT", hflip = true } },
-  glow = { 400640, 428739 } }            -- Ice Lance, Deep Freeze: every rank id
+  glow = { 400640, 1240044, 1240045, 1240046, 1240047, 1312002,   -- Ice Lance: every rank id
+           428739 } }                                               -- Deep Freeze
 ```
 
 - **`glow` is new data.** SAO has none for aura effects on Forever. Each glow pair is confirmed in
@@ -120,7 +123,10 @@ game. One entry per effect:
   - Display and label ids, if any.
 - **Rank candidates** come from the build's DB2 rows (`SkillLineAbility` / `SpellName` through the
   `wago-tools` skill). Each is confirmed by the id the action slot actually returns. Names are never
-  used at runtime.
+  used at runtime. Not optional: run #591 had Ice Lance rank 2 on its bars, which SAO's table
+  lacks, and nothing glowed. Round 3b logs `C_Spell.GetBaseSpell` and
+  `C_SpellBook.FindBaseSpellByID` for each rank. If one maps every rank to rank 1 on this client,
+  the data can hold the first rank and the button's spell is mapped once per retarget.
 - **Textures:** a fileDataID, or a file GAB ships. Eclipse's `eclipse_moon.blp` (SAO's, MIT) is
   converted once to `Media/Eclipse_Moon.tga` (Pillow reads BLP), with a `Tools/` script like
   `make_lock.py`. `Tools/deploy.ps1` and the package check select `Media/*.tga` only, so a `.tga`
@@ -169,7 +175,9 @@ unit test checks that an off -> on toggle leaves every container shown and enabl
   - **Effects that swap textures don't.** Heating Up 1/2/3 changes scale and tint, and Maelstrom
     1-5 changes texture. Their lower layers show through transparent pixels, so each is either
     shown as an accepted composite (checked in game at reduced opacity) or simplified to one
-    overlay at its top stack.
+    overlay at its top stack. Heating Up's mock (run #591) was clean as a composite, and the owner
+    couldn't tell it from the top layer alone, so it keeps the composite: stacks 1 and 2 still
+    show.
   - **Eclipse** puts later stacks on the opposite side, so it's simplified, not composited.
   - The plan's data states which of the two each stacked effect gets.
 - **Pulse:** SAO's scale loop (1.08 ↔ 0.926, 0.5 s each way) on the texture, per the effect's
@@ -322,6 +330,12 @@ A change rebuilds out of combat. In combat the rebuild is queued to `PLAYER_REGE
 
 GABProbe's `procs3` runs items 1-4, 6 and 8 in one procedure; `procboss` is item 5, and item 7 is
 counted per class from load while the probe is installed (`GABProbeDB.native`).
+
+**Status after run #591** (docs/FOREVER-PROBE.md session 10, round 3): items 4 (stack gating, the
+flip, Heating Up's mock), 6 (clean launch, off and on) and 8 (the sound) passed. Items 1, 2, 3 and
+the ring half of 6 went unmeasured: the bars held Ice Lance rank 2, which the probe didn't know.
+Item 7 so far: mage and warrior, `HIDE` with no spell only. Round 3b re-runs `procs3` with every
+rank; item 5 is still to run.
 
 Counters are measured in PR 3's own probe round, not here. A readable cooldown table alone doesn't
 make a working counter. That round tests, for each supported spell:

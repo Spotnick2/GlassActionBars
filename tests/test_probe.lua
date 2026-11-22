@@ -384,7 +384,14 @@ end
 WoW.spellNames = WoW.spellNames or {}
 WoW.spellNames[400640], WoW.spellNames[400670] = "Ice Lance", "Fingers of Frost"
 WoW.auras[400670] = nil
+C_Spell.GetBaseSpell = function(id) return id == 1240044 and 400640 or id end
+local spellBook = rawget(_G, "C_SpellBook")
+if not spellBook then spellBook = {}; rawset(_G, "C_SpellBook", spellBook) end
+spellBook.FindBaseSpellByID = function() error("not in the book") end
 local class, ice, deep = T.procSetup()
+check(logHas("spell 1240044 nil, GetBaseSpell 400640, FindBaseSpellByID ERROR"), "  each rank's base spell, by both APIs")
+check(T.glowKey(1240044) == "ice" and T.glowKey(1312002) == "ice" and T.glowKey(400640) == "ice",
+    "  every Ice Lance rank glows (round 3's first run had rank 2)")
 eq(ice, "Ice Lance 400640 in slot 3 on ActionButton3", "procs: Ice Lance found by id, on its stock button")
 eq(deep, "Deep Freeze not on a visible bar", "  Deep Freeze absent: said so")
 check(logHas("slot 5 spell <secret>"), "  a secret slot logged as such")
@@ -419,6 +426,9 @@ WoW.fire("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", 400640)
 WoW.flushTimers(0)
 check(logHas("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW 400640"), "  a native glow event logged")
 check(logHas("ActionButton3 alert none, shown nil"), "  and Blizzard's alert on that button read")
+local linesH = #GABProbeDB.log
+WoW.fire("SPELL_ACTIVATION_OVERLAY_HIDE")
+eq(#GABProbeDB.log, linesH, "  a spell-less HIDE counted, not logged (nor by the native counter)")
 WoW.combat = false
 WoW.auras[400670] = nil
 WoW.fire("PLAYER_REGEN_ENABLED")
@@ -427,6 +437,25 @@ eq(over, true, "  the fight step ends with the fight")
 eq(cov0, "coverage: events all, UNIT_AURA registered, blocked listener on", "  every listener on")
 check(uaIn == "UNIT_AURA payload in combat: secret 2" and uaOut == "out: accessible 1", "  the payload tallied by combat")
 check(events:find("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW 1", 1, true), "  the events counted")
+check(events:find("SPELL_ACTIVATION_OVERLAY_HIDE 1", 1, true), "  the spell-less HIDE too")
+
+-- No Ice Lance on the bars: the fight step's poll scans once, not every second.
+T.procTeardown()
+local savedIce = {}
+for k, v in pairs(slots) do if v == 400640 then savedIce[k] = v; slots[k] = 116 end end
+local function scans()
+    local n = 0
+    for _, line in ipairs(GABProbeDB.log) do if line:find("procs: %d+ spell slots") then n = n + 1 end end
+    return n
+end
+local scans0 = scans()
+T.fightOver()
+T.fightOver()
+T.fightOver()
+eq(scans() - scans0, 1, "  no Ice Lance found: the fight step scans the bars once")
+T.procTeardown()
+for k, v in pairs(savedIce) do slots[k] = v end
+T.procSetup()
 
 local level = ActionButton3:GetFrameLevel()
 local g1, _, glass = T.showGlow(1)
@@ -820,6 +849,7 @@ WoW.fire("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", 400640)
 local nat = GABProbeDB.native
 local _, cls = UnitClass("player")
 check(nat and nat[cls] and nat[cls]["GLOW_SHOW 400640"] >= 1, "native: counted per class and spell")
+check(nat[cls]["HIDE nil"] >= 1, "  a spell-less HIDE counted too")
 check(logHas("native: .- GLOW_SHOW 400640"), "  logged")
 check(#WoW.chat == chatBefore, "  nothing in chat")
 
