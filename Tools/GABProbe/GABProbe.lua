@@ -13,8 +13,8 @@
 --   - whether camp features share one cooldown: every carried camping item's
 --     cooldown, read before and after placing one.
 -- Also barmove (#30), look (#34), pearl (#44), icons (#46), dock (#53), micro (#57), feedpet (#65),
--- lock (#34) and utilitydrag (#86): /fp steps gab <name>.
--- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, pet, lock, drag, ranks, clear.
+-- lock (#34), utilitydrag (#86), procs and procglow (#115): /fp steps gab <name>.
+-- Commands: /fp gab aura, camping, bars, dock, bagsbar, micro, microfn, pet, lock, drag, ranks, procs, clear.
 
 local ADDON, NS = ...
 local MAX_LOG = 3000
@@ -1406,6 +1406,464 @@ Probe:Steps("utilitydrag", {
     { text = "Press Reload now (or type /reload) to save the results.", reload = true },
 })
 
+-- ------------------------------------------------------------------
+-- procs (#115): what GAB's own proc alerts can rely on, measured on a frost
+-- mage's Fingers of Frost and Ice Lance (SAO 3.0.0 shows its overlay, no glow):
+--   - C_Secrets.GetSpellAuraSecrecy for the buff, and whether
+--     GetPlayerAuraBySpellID reads it IN combat (SAO's Forever path);
+--   - whether Blizzard's SPELL_ACTIVATION_OVERLAY_(GLOW_)SHOW/HIDE ever fire,
+--     IsSpellOverlayed(Ice Lance), and Blizzard's own alert frame's level
+--     against the glass when one does;
+--   - UNIT_AURA's payload: accessible or secret, in and out of combat;
+--   - an addon-owned ActionButtonSpellAlertTemplate glow on the Ice Lance
+--     button at the glass's level (+1) and at +5, and shown in combat.
+-- Every read is a transition line, not a line a poll; the fight's tallies
+-- are its step's result.
+-- ------------------------------------------------------------------
+
+-- Fingers of Frost: SAO's Forever id (mage.lua:567), then Wrath's and Cata's.
+local PROC_AURAS = { 400670, 44544, 74396 }
+-- Ice Lance and Deep Freeze: SAO's ids (mage.lua:167-170), Forever's first.
+local ICE_LANCE = { 400640, 30455, 42913, 42914 }
+local DEEP_FREEZE = { 428739, 44572 }
+local BUTTON_PREFIXES = { "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton",
+    "MultiBarRightButton", "MultiBarLeftButton", "MultiBar5Button", "MultiBar6Button", "MultiBar7Button" }
+local PROC_EVENTS = { "SPELL_ACTIVATION_OVERLAY_SHOW", "SPELL_ACTIVATION_OVERLAY_HIDE",
+    "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE",
+    "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ADDON_RESTRICTION_STATE_CHANGED" }
+
+-- A client function by namespace, read through rawget (absent = nil).
+local function api(ns, name)
+    local t = rawget(_G, ns)
+    return type(t) == "table" and t[name] or nil
+end
+local function spellName(id)
+    local ok, n = pcall(api("C_Spell", "GetSpellName") or error, id)
+    return ok and n or nil
+end
+local function inList(list, v)
+    for _, x in ipairs(list) do if x == v then return true end end
+    return false
+end
+local function fresh()
+    return { counts = {}, uaInfo = { inCombat = {}, out = {} }, reads = { inCombat = {}, out = {} },
+             last = {}, fightsEnded = 0, blocked = 0, coverage = {} }
+end
+local pw = fresh()   -- the procs watcher's state; nothing of it is saved
+local lastBlocked    -- blocked actions seen by the last watcher, read by the teardown's check
+local lastListening  -- whether that watcher's blocked-action listener was on
+
+local function tally(t, k) t[k] = (t[k] or 0) + 1 end
+local function where() return InCombatLockdown() and "inCombat" or "out" end
+local function tallies(t)
+    local keys = {}
+    for k in pairs(t) do keys[#keys + 1] = k end
+    table.sort(keys)
+    local out = {}
+    for _, k in ipairs(keys) do out[#out + 1] = k .. " " .. t[k] end
+    return #out > 0 and table.concat(out, ", ") or "none"
+end
+
+-- A player aura's state, secret first: "present xN", "absent", "secret",
+-- "error", with "<secret>" stacks when only the count is hidden.
+local function auraState(id)
+    local fn = api("C_UnitAuras", "GetPlayerAuraBySpellID")
+    if not fn then return "missing" end
+    local ok, a = pcall(fn, id)
+    if not ok then return "error" end
+    if secret(a) then return "secret" end
+    if a == nil then return "absent" end
+    local n = a.applications
+    if secret(n) then return "present x<secret>" end
+    return "present x" .. tostring(n)
+end
+
+local function secrecy(id)
+    local fn = api("C_Secrets", "GetSpellAuraSecrecy")
+    if not fn then return "missing" end
+    local ok, v = pcall(fn, id)
+    return ok and Show(v) or ("error " .. tostring(v))
+end
+local function aurasSecret()
+    local fn = api("C_Secrets", "ShouldAurasBeSecret")
+    if not fn then return "missing" end
+    local ok, v = pcall(fn)
+    return ok and Show(v) or "error"
+end
+
+-- Every action slot holding a spell: one line each (id, name); the first
+-- slot of each id in `wanted`, shown on a visible stock button. Returns the
+-- Ice Lance slot, its id, its button.
+local function buttonFor(slot)
+    for _, p in ipairs(BUTTON_PREFIXES) do
+        for i = 1, 12 do
+            local b = rawget(_G, p .. i)
+            if b and b.action == slot and b:IsVisible() then return b end
+        end
+    end
+end
+local function scanBars()
+    local get = api("C_ActionBar", "GetSpell")
+    if not get then say("procs: C_ActionBar.GetSpell MISSING") return end
+    local found, n = {}, 0
+    for slot = 1, 180 do
+        local ok, id = pcall(get, slot)
+        if ok and secret(id) then
+            say("procs: slot " .. slot .. " spell <secret>")
+        elseif ok and type(id) == "number" and id ~= 0 then
+            n = n + 1
+            local b = buttonFor(slot)
+            say(("procs: slot %d spell %d %s, button %s"):format(slot, id, Show(spellName(id)),
+                b and b:GetName() or "not shown"))
+            for _, kind in ipairs({ "ice", "deep" }) do
+                local ids = kind == "ice" and ICE_LANCE or DEEP_FREEZE
+                if inList(ids, id) and b and not found[kind] then found[kind] = { slot = slot, id = id, button = b } end
+            end
+        end
+    end
+    say("procs: " .. n .. " spell slots")
+    return found
+end
+
+-- Reads everything once (out of combat): class, secrecy, the bars.
+local function procSetup()
+    local _, class = UnitClass("player")
+    say("procs: class " .. Show(class) .. ", ShouldAurasBeSecret " .. aurasSecret() .. ", build "
+        .. table.concat({ GetBuildInfo() }, " ", 1, 2))
+    for _, id in ipairs(PROC_AURAS) do
+        say(("procs: aura %d %s: secrecy %s, now %s"):format(id, Show(spellName(id)), secrecy(id), auraState(id)))
+    end
+    for _, id in ipairs(ICE_LANCE) do say(("procs: spell %d %s"):format(id, Show(spellName(id)))) end
+    for _, id in ipairs(DEEP_FREEZE) do say(("procs: spell %d %s"):format(id, Show(spellName(id)))) end
+    local found = scanBars() or {}
+    pw.ice, pw.deep = found.ice, found.deep
+    local function desc(f) return f and (f.id .. " in slot " .. f.slot .. " on " .. f.button:GetName()) or "not on a visible bar" end
+    return class, "Ice Lance " .. desc(pw.ice), "Deep Freeze " .. desc(pw.deep)
+end
+
+-- A watched value's change, one line: what, from, to, combat.
+local function changed(key, v)
+    if pw.last[key] == v then return end
+    say(("procs: %s %s -> %s (%s)"):format(key, Show(pw.last[key], true), Show(v, true), where()))
+    pw.last[key] = v
+end
+
+local function poll()
+    local w = where()
+    for _, id in ipairs(PROC_AURAS) do
+        local s = auraState(id)
+        tally(pw.reads[w], id .. " " .. (s:match("^present") and "present" or s))
+        changed("aura " .. id, s)
+    end
+    changed("ShouldAurasBeSecret", aurasSecret())
+    local over = api("C_SpellActivationOverlay", "IsSpellOverlayed")
+    if pw.ice and over then
+        local ok, v = pcall(over, pw.ice.id)
+        changed("IsSpellOverlayed " .. pw.ice.id, ok and (secret(v) and "<secret>" or tostring(v)) or "error")
+    end
+    if pw.ice and w == "inCombat" and not pw.slotInCombat then
+        local ok, id = pcall(api("C_ActionBar", "GetSpell") or error, pw.ice.slot)
+        pw.slotInCombat = true
+        say("procs: Ice Lance's slot in combat reads " .. (ok and Show(id) or "error"))
+    end
+    -- The engine-driven glow (procglow): can addon code read whether it shows?
+    if pw.slot then
+        local ok, s = pcall(pw.slot.IsShown, pw.slot)
+        local okV, v = pcall(pw.slot.IsVisible, pw.slot)
+        changed("glow slot shown/visible", (ok and (secret(s) and "<secret>" or tostring(s)) or "error") .. "/"
+            .. (okV and (secret(v) and "<secret>" or tostring(v)) or "error"))
+    end
+end
+
+-- Blizzard's own alert on every button showing `id`: shown, its level, the
+-- button's and the glass's.
+local function alertLevels(id)
+    local get, gab = api("C_ActionBar", "GetSpell"), rawget(_G, "GlassActionBars")
+    for _, p in ipairs(BUTTON_PREFIXES) do
+        for i = 1, 12 do
+            local b = rawget(_G, p .. i)
+            local ok, sid = pcall(get or error, b and b.action or 0)
+            if b and ok and not secret(sid) and sid == id then
+                local alert = b.SpellActivationAlert
+                local st = gab and gab.Buttons and gab.Buttons.State(b)
+                say(("procs: %s alert %s, shown %s, level %s, button %s, glass %s"):format(b:GetName(),
+                    alert and "made" or "none", Show(alert and alert:IsShown()), Show(alert and alert:GetFrameLevel()),
+                    Show(b:GetFrameLevel()), Show(st and st.g and st.g.top and st.g.top:GetFrameLevel())))
+            end
+        end
+    end
+end
+
+local procFrame = CreateFrame("Frame")
+procFrame:SetScript("OnEvent", function(_, event, ...)
+    tally(pw.counts, event)
+    if event == "UNIT_AURA" then
+        local can = rawget(_G, "canaccessvalue")
+        local info = select(2, ...)
+        tally(pw.uaInfo[where()], can and (can(info) and "accessible" or "secret") or "canaccessvalue missing")
+        poll()
+        return
+    end
+    if event == "PLAYER_REGEN_ENABLED" then
+        pw.fightsEnded = pw.fightsEnded + 1
+        say("procs: fight over; every helpful aura now:")
+        listAuras()
+        poll()
+        return
+    end
+    if event == "PLAYER_REGEN_DISABLED" then say("procs: fight starts") return end
+    local args = {}
+    for i = 1, select("#", ...) do args[#args + 1] = Show((select(i, ...))) end
+    say("procs: " .. event .. " " .. table.concat(args, ", "))
+    if event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
+        local id = ...
+        if not secret(id) then C_Timer.After(0, function() alertLevels(id) end) end
+    end
+end)
+
+local function procStart()
+    if pw.on then return "already watching" end
+    pw.on = true
+    -- What the evidence covers: an event refused (RegisterUnitEvent returns
+    -- false without throwing) or no blocked-action listener leaves an empty
+    -- tally that would read as a measured "none".
+    local cov = pw.coverage
+    cov.events = Probe:RegisterEvents(procFrame, PROC_EVENTS) == true
+    local ok, registered = pcall(procFrame.RegisterUnitEvent, procFrame, "UNIT_AURA", "player")
+    cov.unitAura = ok and registered ~= false
+    if not cov.unitAura then say("procs: UNIT_AURA not registered: " .. (ok and "refused" or ("ERROR " .. tostring(registered)))) end
+    pw.ticker = C_Timer.NewTicker(0.2, poll)
+    cov.blocked = Probe:OnBlocked(function(event, addon, func)
+        pw.blocked = pw.blocked + 1
+        say("procs: blocked " .. Show(event) .. " " .. Show(addon) .. " " .. Show(func))
+    end) == true
+    if not cov.blocked then say("procs: the blocked-action listener isn't on: 'nothing blocked' is unmeasured") end
+    poll()
+    return cov.events and "watching" or "watching, some events refused (see the log)", cov.unitAura, cov.blocked
+end
+
+local function coverage()
+    local c = pw.coverage
+    return ("coverage: events %s, UNIT_AURA %s, blocked listener %s"):format(c.events and "all" or "NOT ALL",
+        c.unitAura and "registered" or "NOT REGISTERED", c.blocked and "on" or "OFF")
+end
+local function summary()
+    return coverage(), "events: " .. tallies(pw.counts), "UNIT_AURA payload in combat: " .. tallies(pw.uaInfo.inCombat),
+        "out: " .. tallies(pw.uaInfo.out), "aura reads in combat: " .. tallies(pw.reads.inCombat),
+        "out: " .. tallies(pw.reads.out)
+end
+
+-- The fight step: done once a fight has ended since it began.
+local function fightOver()
+    if not pw.on then procStart() end
+    if not pw.ice then procSetup() end
+    if pw.fightMark == nil then pw.fightMark = pw.fightsEnded end
+    if pw.fightsEnded > pw.fightMark then
+        pw.fightMark = nil
+        return true, summary()
+    end
+    return false, InCombatLockdown() and "in a fight" or "waiting for a fight"
+end
+
+-- Our own Blizzard-looking glow on the Ice Lance button: an addon-owned
+-- ActionButtonSpellAlertTemplate frame, made out of combat, at the button's
+-- level + `up`; its loop played (the start flipbook would be mid-way in a shot).
+local function showGlow(up)
+    if not pw.ice and not InCombatLockdown() then procSetup() end
+    local b = pw.ice and pw.ice.button
+    if not b then return false, "no Ice Lance on a visible bar" end
+    if not pw.glow then
+        if InCombatLockdown() then return false, "made out of combat only" end
+        local ok, f = pcall(CreateFrame, "Frame", nil, b, "ActionButtonSpellAlertTemplate")
+        if not ok then return false, "template: " .. tostring(f) end
+        local w, h = b:GetSize()
+        f:SetSize(w * 1.4, h * 1.4)
+        f:SetPoint("CENTER", b, "CENTER", 0, 0)
+        pw.glow = f
+    end
+    local f = pw.glow
+    if up then f:SetFrameLevel(b:GetFrameLevel() + up) end
+    f:Show()
+    if f.ProcLoop then f.ProcLoop:Play() end
+    local gab = rawget(_G, "GlassActionBars")
+    local st = gab and gab.Buttons and gab.Buttons.State(b)
+    return "glow level " .. Show(f:GetFrameLevel()), "button " .. Show(b:GetFrameLevel()),
+        "glass " .. Show(st and st.g and st.g.top and st.g.top:GetFrameLevel()), "in combat " .. Show(InCombatLockdown())
+end
+local function hideGlow()
+    if pw.glow then
+        if pw.glow.ProcLoop then pw.glow.ProcLoop:Stop() end
+        pw.glow:Hide()
+    end
+    return "hidden"
+end
+
+-- Waits for a fight, then shows the glow in it (a plain frame: allowed).
+local function glowInCombat()
+    if not InCombatLockdown() then return false, "waiting for a fight" end
+    local before = pw.blocked
+    local ok, a, b, c, d = pcall(showGlow, 5)
+    if not ok then return true, "ERROR " .. tostring(a) end
+    return true, a, b, c, d, "blocked " .. (pw.blocked - before)
+end
+
+-- procglow (#115, round 2): round 1 measured Fingers of Frost (400670,
+-- ContextuallySecret) as quietly absent from GetPlayerAuraBySpellID in every
+-- combat read while SAO's overlay showed, and no SPELL_ACTIVATION_OVERLAY_SHOW
+-- or GLOW_* event: addon code can't see the proc in combat. SAO's overlays for
+-- such auras are Blizzard's AuraContainer (the engine fills and shows them).
+-- So the glow goes in one too: a CustomAuraContainerTemplate container over
+-- the Ice Lance button, one slot for the buff whose frame holds an
+-- ActionButtonSpellAlertTemplate glow; the engine shows the slot while the
+-- buff is up. Does it light up with the proc and go out when it's spent, in
+-- combat, without addon code reading anything? Does the button still click?
+local function containerGlow()
+    if InCombatLockdown() then return false, "out of combat only" end
+    if pw.container then return "already built" end
+    if not pw.ice then procSetup() end
+    local b = pw.ice and pw.ice.button
+    if not b then return false, "no Ice Lance on a visible bar" end
+    local load = api("C_AddOns", "LoadAddOn")
+    if load then
+        local ok, loaded, why = pcall(load, "Blizzard_AuraContainer")
+        say("procs: LoadAddOn Blizzard_AuraContainer " .. Show(ok) .. " " .. Show(loaded) .. " " .. Show(why))
+    end
+    local ok, c = pcall(CreateFrame, "AuraContainer", nil, b, "CustomAuraContainerTemplate")
+    if not ok then return false, "container: " .. tostring(c) end
+    local w, h = b:GetSize()
+    local built, err = pcall(function()
+        c:SetAllPoints(b)
+        c:SetFrameLevel(b:GetFrameLevel() + 5)
+        c:EnableMouse(false)
+        c:SetUnit("player")
+        c:SetEnabled(true)
+        pw.slot = c:AddAuraSlot("fof", "HELPFUL", {
+            initializeFrame = function(f)
+                f:EnableMouse(false)
+                f:ClearAllPoints()
+                f:SetAllPoints(c)
+                if f.GetIcon and f:GetIcon() then f:GetIcon():Hide() end
+                local g = CreateFrame("Frame", nil, f, "ActionButtonSpellAlertTemplate")
+                g:SetSize(w * 1.4, h * 1.4)
+                g:SetPoint("CENTER", f, "CENTER", 0, 0)
+                g.animationPlaying = true   -- the mixin's OnShow replays the loop (ActionButtonSpellAlerts.lua:155)
+                g:Show()
+                if g.ProcLoop then g.ProcLoop:Play() end
+                pw.slotGlow = g
+            end,
+            sortMethod = rawget(_G, "AuraContainerSortMethod") and AuraContainerSortMethod.ExpirationOnly or nil,
+            sortDirection = rawget(_G, "AuraContainerSortDirection") and AuraContainerSortDirection.Reverse or nil,
+            candidateFilters = { includeSpellIDs = { [PROC_AURAS[1]] = true } },
+        })
+    end)
+    pw.container = c
+    if not built then return false, "slot: " .. tostring(err) end
+    return "built", "slot " .. Show(pw.slot and pw.slot:GetObjectType()), "glow " .. Show(pw.slotGlow ~= nil),
+        "container level " .. Show(c:GetFrameLevel()), "button " .. Show(b:GetFrameLevel())
+end
+
+local function procTeardown()
+    hideGlow()
+    if pw.container then
+        pcall(pw.container.SetEnabled, pw.container, false)
+        pw.container:Hide()
+    end
+    if pw.ticker then pw.ticker:Cancel() end
+    procFrame:UnregisterAllEvents()
+    Probe:OnBlocked(nil)
+    lastBlocked, lastListening = pw.blocked, pw.coverage.blocked == true
+    local s = { summary() }
+    pw = fresh()
+    return "blocked " .. lastBlocked, unpack(s)
+end
+local function nothingBlocked()
+    if not lastListening then return false, "unmeasured: the blocked-action listener wasn't on" end
+    return lastBlocked == 0, "nothing blocked while watching"
+end
+
+-- A run starts from nothing: whatever an earlier run left (a /reload drops it
+-- all anyway) is torn down first.
+local function startClean()
+    if pw.on or pw.glow or pw.container then procTeardown() end
+end
+
+-- Stop, or another procedure started, leaves the step "stopped": nothing of
+-- a proc run may outlive it (the glow on the button, the container, the
+-- ticker, the events, the blocked-action listener), and a new run starts clean.
+local function leaveProcs(outcome)
+    if outcome == "stopped" then procTeardown() end
+end
+local function withLeave(def)
+    for _, step in ipairs(def) do step.leave = leaveProcs end
+    return def
+end
+
+Probe:Command("procs", function() procSetup() end, "Fingers of Frost's secrecy, Ice Lance's slot, every spell on the bars")
+
+Probe:Steps("procs", withLeave({
+    rev = 2,
+    title = "Proc alerts: Fingers of Frost and Ice Lance (#115)",
+    { text = "Reading your class, the Fingers of Frost buff and your action bars (out of combat). "
+        .. "Ice Lance must be on a visible bar.", auto = true, run = function() startClean(); return procSetup() end,
+      check = function() return pw.ice ~= nil, "Ice Lance on a visible bar (else put it there and press Retry)" end },
+    { text = "Starting the watcher: Blizzard's proc events and the buff, read 5 times a second. Keep "
+        .. "SpellActivationOverlay on: its overlay tells you when it procs.", auto = true, run = procStart },
+    { text = "Fight (a target dummy is fine) with Frostbolt until Fingers of Frost procs 2 or 3 times, and spend "
+        .. "a charge on Ice Lance at least once. Then stop and let combat end: this step ends itself.",
+      wait = fightOver, timeout = 900 },
+    { text = "Did SpellActivationOverlay's Fingers of Frost overlay show in that fight?", ask = true },
+    { text = "Did the Ice Lance button glow on its own at any time in that fight?", ask = true },
+    { text = "A test glow on your Ice Lance button, at the level Blizzard's own glow gets (the glass's level).",
+      auto = true, run = function() return showGlow(1) end, screenshot = "test glow at the glass's level" },
+    { text = "Is that glow clear and bright, over the glass?", ask = true },
+    { text = "The same glow five levels up, where SpellActivationOverlay's sits.", auto = true,
+      run = function() return showGlow(5) end, screenshot = "test glow above the glass" },
+    { text = "Is this one clearer than the last (the glass no longer over it)?", ask = true },
+    { text = "Hiding it.", auto = true, run = hideGlow },
+    { text = "Start a fight: the glow comes back by itself once you're in combat.", wait = glowInCombat,
+      timeout = 600, screenshot = "test glow in combat" },
+    { text = "Did the glow show in the fight?", ask = true },
+    { text = "Stopping the watcher and removing the test glow.", auto = true, run = procTeardown,
+      check = nothingBlocked },
+    { text = "Press Reload now (or type /reload) to save the results.", reload = true },
+}))
+
+local function outOfCombat()
+    if InCombatLockdown() then return false, "waiting for combat to end" end
+    startClean()
+    local class, ice, deep = procSetup()
+    procStart()
+    return true, class, ice, deep
+end
+
+Probe:Steps("procglow", withLeave({
+    rev = 2,
+    title = "Proc glow driven by Blizzard's aura engine (#115, round 2)",
+    { text = "Out of combat, with Ice Lance on a visible bar: reading the bars and starting the watcher.",
+      wait = outOfCombat, timeout = 600,
+      check = function() return pw.ice ~= nil, "Ice Lance on a visible bar (else put it there, Back, and again)" end },
+    { text = "A test glow on Ice Lance at the glass's level (where Blizzard's own would be).", auto = true,
+      run = function() return showGlow(1) end, screenshot = "test glow at the glass's level" },
+    { text = "Is that glow clear and bright, over the glass?", ask = true },
+    { text = "The same glow five levels up.", auto = true, run = function() return showGlow(5) end,
+      screenshot = "test glow above the glass" },
+    { text = "Is this one clearer than the last?", ask = true },
+    { text = "Hiding it, and building the engine-driven glow on Ice Lance (out of combat).", auto = true,
+      run = function() hideGlow(); return containerGlow() end,
+      check = function() return pw.slot ~= nil, "the slot was made" end },
+    { text = "Without Fingers of Frost up, Ice Lance should NOT glow now. Is it unlit?", ask = true,
+      screenshot = "no proc: no glow" },
+    { text = "Hover Ice Lance and click it on a target (or press its key): tooltip and cast as usual?", ask = true },
+    { text = "Fight (a dummy or open-world mobs is best: outside a dungeon boss) until Fingers of Frost procs "
+        .. "2 or 3 times. Each time, look at Ice Lance and press Shot while it glows; spend the charges with "
+        .. "Ice Lance. Then let combat end: this step ends itself.", wait = fightOver, timeout = 900 },
+    { text = "Did Ice Lance glow while Fingers of Frost was up?", ask = true },
+    { text = "Did the glow go out when the charges were spent (and never light without the proc)?", ask = true },
+    { text = "Stopping the watcher and removing both glows.", auto = true, run = procTeardown,
+      check = nothingBlocked },
+    { text = "Press Reload now (or type /reload) to save the results.", reload = true },
+}))
+
 local boot = CreateFrame("Frame")
 Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_REGEN_ENABLED" })
 boot:SetScript("OnEvent", function(_, event, name)
@@ -1427,4 +1885,7 @@ NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCa
     takeBaseline = takeBaseline, cooldownVerdict = cooldownVerdict, readPet = readPet, fed = fed, afterFeed = afterFeed,
     readLock = readLock, startLock = startLock, lockChanged = lockChanged, writeInCombat = writeInCombat, restoreLock = restoreLock,
     drag = drag, dragButtons = dragButtons, gesture = gesture, dragSetup = dragSetup, dragTeardown = dragTeardown,
-    flipKeyDown = flipKeyDown, readRanks = readRanks, since = since }
+    flipKeyDown = flipKeyDown, readRanks = readRanks, since = since,
+    procSetup = procSetup, procStart = procStart, auraState = auraState, fightOver = fightOver, showGlow = showGlow,
+    hideGlow = hideGlow, glowInCombat = glowInCombat, procTeardown = procTeardown, procState = function() return pw end,
+    containerGlow = containerGlow, outOfCombat = outOfCombat, nothingBlocked = nothingBlocked, procFrame = procFrame }

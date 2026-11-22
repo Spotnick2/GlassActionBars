@@ -6,6 +6,57 @@ probe (`/gabprobe help`, in git history before #32); from session 3 it is a Fore
 decides a detail of the skin. Facts that hold for every addon go to
 `C:\Projects\WoW\References\Docs\PORTING-TBC-TO-FOREVER.md` instead.
 
+## Session 10: what a proc alert can see (#115), 2026-11-21, build 71037
+
+`/fp steps gab procs`, run #551, on the owner's level 32 frost mage in Razorfen Kraul (a group,
+boss fights), with SpellActivationOverlay 3.0.0 on. Three fights.
+- **Spell ids:** Ice Lance is **400640** and Deep Freeze **428739** on Forever (SAO's "SoD" ids);
+  30455 / 42913 / 42914 / 44572 don't exist (`GetSpellName` nil). Fingers of Frost is 400670.
+- **Fingers of Frost can't be read in combat.** `C_Secrets.GetSpellAuraSecrecy(400670)` is **2**
+  (`ContextuallySecret`, `SecretWrapperConstantsDocumentation.lua`); 44544 and 74396 too.
+  `GetPlayerAuraBySpellID(400670)` returned **nil, quietly** (no throw, no secret) in all 276 reads
+  in combat, though the owner saw SAO's Fingers of Frost overlay in the first fight. So "absent"
+  can't be told from "hidden"; SAO draws this overlay through Blizzard's AuraContainer instead.
+- **`ShouldAurasBeSecret()`** went true with each fight and false after it, and also **out of
+  combat** at a boss: `ADDON_RESTRICTION_STATE_CHANGED` 1 (Encounter) and 5 (Chat) went active
+  before the pull.
+- **Blizzard's own proc system stayed silent in these fights** (Fingers of Frost on one mage):
+  no `SPELL_ACTIVATION_OVERLAY_SHOW`, no `..._GLOW_SHOW` / `_HIDE`, and
+  `C_SpellActivationOverlay.IsSpellOverlayed(400640)` stayed false. Only
+  `SPELL_ACTIVATION_OVERLAY_HIDE` fired, with no spell, 41 times (in and out of combat). Ice Lance
+  never glowed on its own. **Still open:** whether other spells or classes get native events; the
+  plan has to check before it assumes none do.
+- **`UNIT_AURA`'s payload** passed `canaccessvalue` every time, in combat too (19 of 19). Its
+  fields weren't read.
+- **`C_ActionBar.GetSpell(slot)`** reads plain in combat (400640).
+- **Not measured in round 1:** the test glows. The owner was in combat through those steps, so
+  nothing was made out of combat.
+
+**Round 2, `/fp steps gab procglow`, run #554** (same mage, out of the dungeon, an open-world
+fight):
+- **A glow Blizzard's aura engine drives works, in combat.** A container
+  `CreateFrame("AuraContainer", nil, IceLanceButton, "CustomAuraContainerTemplate")` (after
+  `C_AddOns.LoadAddOn("Blizzard_AuraContainer")`), `SetUnit("player")`, `SetEnabled(true)`,
+  `EnableMouse(false)`, at the button's level + 5, and one `AddAuraSlot("fof", "HELPFUL",
+  { initializeFrame, candidateFilters = { includeSpellIDs = { [400670] = true } } })`. Its
+  `initializeFrame` disables the mouse, hides the slot's icon, and puts an addon-made
+  `ActionButtonSpellAlertTemplate` frame inside the slot, its loop playing. The owner saw Ice Lance
+  **unlit without the proc, glowing while Fingers of Frost was up, and dark again once the charges
+  were spent**. Nothing was blocked, and no addon code read the aura.
+- **The button still works under it:** tooltip on hover and the cast on click or key, as usual.
+- **Addon code can't read the engine's decision:** the slot's `IsShown()` / `IsVisible()` return
+  secrets out of combat and **throw** in combat. So GAB can't use the glow to learn about the proc.
+- **The glow over the glass:** the addon-made `ActionButtonSpellAlertTemplate` at the button's level
+  + 1 (the glass's level, 53) and at + 5 looked the same in the screenshots: the bright gold
+  ring over the rim. Made after the glass, it drew over it at the same level. Level + 5 stays the
+  safe choice.
+- `GetPlayerAuraBySpellID(400670)` was again absent in all 317 reads in combat. Blizzard's proc
+  events were again silent for Fingers of Frost, apart from `SPELL_ACTIVATION_OVERLAY_HIDE` with no
+  spell.
+- **Coverage:** neither run recorded whether its event subscriptions and the blocked-action
+  listener were on. Its "nothing blocked" and "no events" rest on `Probe:RegisterEvents` logging
+  no refusal and no `UNIT_AURA` error. The probe now records both (Codex, PR #116).
+
 ## Session 9: drops, clicks and pick-up drags on Utility-like buttons (#86), 2026-11-14, build 70938
 
 `/fp steps gab utilitydrag`, run #314, on a level-20-ish hunter. Two probe buttons: S secure
