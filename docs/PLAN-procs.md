@@ -33,6 +33,10 @@ Review: Codex (gpt-6.2-astra, high).
 - **Round 3:** one should-fix. The replay test still allowed the fade, which only sets alpha; it now
   needs a real `OnHide`.
 - **Round 4:** no new defects; consensus.
+- **PR #117's review (commit 8838e94):** two P2s, folded in:
+  - every container's setup is spelled out (the engine's load, the unit, `SetEnabled(true)`), and
+    Phase 0 adds a clean run with SAO disabled;
+  - Eclipse's texture ships as a `.tga`, so deployment and the package check carry it.
 
 ## What was measured (docs/FOREVER-PROBE.md session 10, build 71037)
 
@@ -115,11 +119,28 @@ game. One entry per effect:
 - **Rank candidates** come from the build's DB2 rows (`SkillLineAbility` / `SpellName` through the
   `wago-tools` skill). Each is confirmed by the id the action slot actually returns. Names are never
   used at runtime.
-- **Textures:** a fileDataID, or a file GAB ships. Eclipse's `Eclipse_Moon.blp` (SAO's, MIT) goes
-  in `Media/`. Druid's Omen of Clarity keeps one texture in v1; SAO's per-form art needs a stance
+- **Textures:** a fileDataID, or a file GAB ships. Eclipse's `eclipse_moon.blp` (SAO's, MIT) is
+  converted once to `Media/Eclipse_Moon.tga` (Pillow reads BLP), with a `Tools/` script like
+  `make_lock.py`. `Tools/deploy.ps1` and the package check select `Media/*.tga` only, so a `.tga`
+  is deployed and expected in the zip with no change to either. PR 2 checks the packaged zip lists
+  it. Druid's Omen of Clarity keeps one texture in v1; SAO's per-form art needs a stance
   read, which is deferred.
 - **Out of the data:** counter effects (PR 3) and Exorcism's creature-type check. Each effect is
   its own setting key, `procs.off[key] = true`.
+
+### Every container: the probe's setup
+
+Each container, overlay or glow, is set up as the probe's `containerGlow` was:
+1. `C_AddOns.LoadAddOn("Blizzard_AuraContainer")` once, before the first `CreateFrame`. With SAO
+   gone, nothing else may have loaded it; a refusal is recorded through `API.Fail` and the feature
+   stays off.
+2. `CreateFrame("AuraContainer", nil, parent, "CustomAuraContainerTemplate")`.
+3. `SetUnit(unit)`, then `SetEnabled(true)`. A container starts disabled, and it registers its
+   dynamic `UNIT_AURA` events only while enabled and visible
+   (`Blizzard_AuraContainer.lua:157`), so a missing `SetEnabled` leaves it frozen.
+4. Its slots, then `UpdateAllAuras()`.
+
+Turning a feature off is `SetEnabled(false)` and `Hide()`, as the probe's teardown did.
 
 ### Overlays: one screen container
 
@@ -264,7 +285,11 @@ A change rebuilds out of combat. In combat the rebuild is queued to `PLAYER_REGE
    the simplification.
 5. **At a boss before the pull** (the Encounter restriction, out of combat): a settings change that
    rebuilds the containers, with the blocked-action listener confirmed on.
-6. **Native events on other classes (passive).** A logger of `SPELL_ACTIVATION_OVERLAY_*` and
+6. **A clean launch with SAO disabled.** SAO turned off in the AddOns list and a `/reload`, then
+   the probe's containers alone: the engine's load result logged, and a proc seen to appear and
+   clear on both an overlay and a ring. Rounds 1 and 2 ran with SAO loaded, which may have loaded
+   the engine for us.
+7. **Native events on other classes (passive).** A logger of `SPELL_ACTIVATION_OVERLAY_*` and
    `IsSpellOverlayed` across the owner's normal play on several classes (Codex on PR #116). If
    some spells do fire, Blizzard's own alert shows on those buttons. GAB then makes sure the glass
    doesn't cover it, and doesn't double it. Each class's result gates only that class's release; the
