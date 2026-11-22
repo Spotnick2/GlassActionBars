@@ -1942,18 +1942,27 @@ end
 local function r3scan(quiet)
     local s = { ice = {}, macros = {}, paging = false, other = false, macro = false }
     local info, body = rawget(_G, "GetActionInfo"), rawget(_G, "GetMacroBody")
+    local byName = rawget(_G, "GetMacroIndexByName")
+    local actionText = api("C_ActionBar", "GetActionText") or rawget(_G, "GetActionText")
     for _, b in ipairs(stockButtons()) do
         local spell, why = spellOf(b)
-        local okI, kind, id = pcall(info or error, b.action or 0)
+        local okI, kind = pcall(info or error, b.action or 0)
         local isMacro = okI and kind == "macro"
         if isMacro then
-            local okB, text = pcall(body or error, id)
+            -- GetActionInfo's id for a macro is the spell it shows, not the
+            -- macro: the macro is found by the name the button carries.
+            local okN, name = pcall(actionText or error, b.action)
+            local okX, index = false, nil
+            if okN and type(name) == "string" and not secret(name) then okX, index = pcall(byName or error, name) end
+            local okB, text = false, nil
+            if okX and type(index) == "number" and index > 0 then okB, text = pcall(body or error, index) end
             local cond = okB and type(text) == "string" and not secret(text) and text:find("[mod:alt]", 1, true) ~= nil
             s.macros[#s.macros + 1] = b:GetName()
             if cond and glowKey(spell) == "ice" and b:IsVisible() then s.macro = true end
             if not quiet then
-                say(("procs3: macro on %s (slot %s) shows %s, Alt condition %s"):format(b:GetName(), Show(b.action),
-                    Show(spell or why), Show(cond)))
+                say(("procs3: macro on %s (slot %s) shows %s, Alt condition %s (name %s, macro %s)"):format(b:GetName(),
+                    Show(b.action), Show(spell or why), Show(cond), okN and Show(name) or "ERROR",
+                    okX and Show(index) or "unread"))
             end
         elseif glowKey(spell) == "ice" and b:IsVisible() then
             s.ice[#s.ice + 1] = b:GetName()
@@ -2143,12 +2152,14 @@ end
 local function removeSounds()
     local remove = api("C_UnitAuras", "RemoveAuraSound")
     local gone = {}
+    -- A removal that fails stays in r3.sounds, for the teardown to retry.
+    local kept = {}
     for _, id in ipairs(r3.sounds) do
         local ok = remove and pcall(remove, id)
-        r3.removedSounds[#r3.removedSounds + 1] = id
+        if ok then r3.removedSounds[#r3.removedSounds + 1] = id else kept[#kept + 1] = id end
         gone[#gone + 1] = tostring(id) .. (ok and "" or " ERROR")
     end
-    r3.sounds = {}
+    r3.sounds = kept
     return "sounds removed: " .. (#gone > 0 and table.concat(gone, ", ") or "none")
 end
 
@@ -2263,6 +2274,14 @@ local function r3on()
     for b in pairs(r3.side) do retarget(b, "on again") end
     return "on: " .. n .. " containers shown and enabled", bad > 0 and (bad .. " read back hidden") or "none read back hidden",
         addSounds()
+end
+
+-- The off/on steps' checks: both sound registrations gone, then both back.
+local function r3offCheck()
+    return r3.off == true and #r3.sounds == 0, "off, " .. #r3.sounds .. " sound(s) left registered"
+end
+local function r3onCheck()
+    return r3.on == true and r3.off == false and #r3.sounds == 2, "on again, " .. #r3.sounds .. " of 2 sounds registered"
 end
 
 -- A real OnHide mid-fight: every lit button's glow containers hidden, shown
@@ -2387,9 +2406,9 @@ end)({
     { text = "On the second and later procs, did the glow animate as on the first (not frozen, not missing)?", ask = true },
     { text = "Did every glow and overlay go out once the charges were spent?", ask = true },
     { text = "Turning the proc alerts and their sound off, as the options would.", auto = true, run = r3off,
-      check = function() return r3.off == true and #r3.sounds == 0, "off, sounds removed" end },
+      check = function() return r3offCheck() end },
     { text = "And on again, without a reload.", auto = true, run = r3on,
-      check = function() return r3.on == true and r3.off == false and #r3.sounds > 0, "on again, sounds registered" end },
+      check = function() return r3onCheck() end },
     { text = "Fight again until Fingers of Frost procs at least twice. The probe now hides and shows the glows every "
         .. BLINK_EVERY .. " seconds in combat, as a hidden bar would. Watch Ice Lance. Then let combat end.",
       wait = blinkFight, timeout = 1200 },
@@ -2488,5 +2507,6 @@ NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCa
     hideGlow = hideGlow, glowInCombat = glowInCombat, procTeardown = procTeardown, procState = function() return pw end,
     containerGlow = containerGlow, outOfCombat = outOfCombat, nothingBlocked = nothingBlocked, procFrame = procFrame,
     r3ready = r3ready, r3build = r3build, r3off = r3off, r3on = r3on, r3end = r3end, r3teardown = r3teardown,
+    r3offCheck = r3offCheck, r3onCheck = r3onCheck,
     retarget = retarget, driftPoll = driftPoll, blink = blink, blinkFight = blinkFight, heatingMock = heatingMock,
     atBoss = atBoss, bossBuild = bossBuild, r3state = function() return r3 end, nativeFrame = nativeFrame }

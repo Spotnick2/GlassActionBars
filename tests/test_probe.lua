@@ -571,12 +571,27 @@ local addons = { SpellActivationOverlay = true }
 C_AddOns.IsAddOnLoaded = function(name) return addons[name] == true end
 C_AddOns.LoadAddOn = function(name) addons[name] = true; return true end
 local sounds, removed = {}, {}
-C_UnitAuras.AddAuraSound = function(trigger, info) sounds[#sounds + 1] = { trigger = trigger, info = info }; return 100 + #sounds end
-C_UnitAuras.RemoveAuraSound = function(id) removed[#removed + 1] = id end
+local soundRefused, removeThrows = nil, false
+C_UnitAuras.AddAuraSound = function(trigger, info)
+    if trigger == soundRefused then return nil end
+    sounds[#sounds + 1] = { trigger = trigger, info = info }
+    return 100 + #sounds
+end
+C_UnitAuras.RemoveAuraSound = function(id)
+    if removeThrows then error("refused") end
+    removed[#removed + 1] = id
+end
 Enum.UnitAuraSoundTrigger = { Added = 0, ApplicationsIncreased = 1, Removed = 2 }
 local macroSlot = 9
 local macroText = "#showtooltip\n/cast Ice Lance"
-rawset(_G, "GetActionInfo", function(slot) if slot == macroSlot then return "macro", 1 end end)
+-- The client's answer for a macro showing a spell: the spell's id, not the
+-- macro's (build 71037, AssistedCombatManager.lua:205).
+rawset(_G, "GetActionInfo", function(slot) if slot == macroSlot then return "macro", 400640, "spell" end end)
+local actionBar = rawget(_G, "C_ActionBar")
+if not actionBar then actionBar = {}; rawset(_G, "C_ActionBar", actionBar) end
+actionBar.GetActionText = function(slot) if slot == macroSlot then return "IceAlt" end end
+local macroIndex = 1
+rawset(_G, "GetMacroIndexByName", function(name) return name == "IceAlt" and macroIndex or 0 end)
 rawset(_G, "GetMacroBody", function(id) return id == 1 and macroText or nil end)
 slots[5] = nil
 slots[macroSlot] = 400640
@@ -599,11 +614,15 @@ for _, b in ipairs(others) do b:Show() end
 ready, why = T.r3ready()
 check(ready == false and why:find("Alt macro"), "  waits for the Alt condition in the macro")
 macroText = "#showtooltip\n/cast [mod:alt] Frostbolt; Ice Lance"
+macroIndex = 0
+ready, why = T.r3ready()
+check(ready == false and why:find("Alt macro"), "  a macro its name doesn't find: not ready")
+macroIndex = 1
 WoW.combat = true
 check(T.r3ready() == false, "  waits for combat to end")
 WoW.combat = false
-check(T.r3ready() == true and logHas("macro on ActionButton9 %(slot 9%) shows 400640, Alt condition true"),
-    "  ready: Ice Lance on two bars, the macro read")
+check(T.r3ready() == true and logHas("macro on ActionButton9 %(slot 9%) shows 400640, Alt condition true %(name \"IceAlt\", macro 1%)"),
+    "  ready: Ice Lance on two bars, the macro found by its name and read")
 
 -- A partial build: torn down, and the step fails.
 failSlot = "fof2"
@@ -693,10 +712,15 @@ eq(s3.target._refreshes, r0 + 1, "  then refreshed")
 eq(R.side[ActionButton1].target._refreshes, r1, "  only where a target glow is on")
 
 -- Off, then on again with no reload.
+removeThrows = true
+T.r3off()
+check(not T.r3offCheck() and #R.sounds == 2, "off: a removal that fails fails the step, the ids kept")
+removeThrows = false
 local _, offSound = T.r3off()
 check(not s3.player:IsShown() and s3.player._enabled == false and not ov:IsShown(), "off: disabled and hidden")
 eq(offSound, "sounds removed: 101, 102", "  the sound removed")
 check(#R.sounds == 0 and removed[1] == 101 and removed[2] == 102, "  both registrations")
+check(T.r3offCheck() == true, "  the step passes")
 slots[3] = 116
 n0 = #calls
 ActionButton3:Update()
@@ -704,11 +728,18 @@ eq(#calls, n0, "  nothing written while off")
 local onMsg, _, onSound = T.r3on()
 eq(onSound, "sounds: Added 103, ApplicationsIncreased 104", "  the sound registered again")
 check(#R.sounds == 2 and R.sounds[1] == 103, "  its new ids kept")
+check(T.r3onCheck() == true, "  the step passes")
 check(s3.player:IsShown() and s3.player._enabled == true and ov:IsShown() and ov._enabled == true, "on: shown and enabled")
 eq(onMsg, "on: 193 containers shown and enabled", "  every container")
 check(ps.enabled == false, "  and the page change made while off is caught up")
 slots[3] = 400640
 ActionButton3:Update()
+T.r3off()
+soundRefused = 1
+local _, _, halfSound = T.r3on()
+soundRefused = nil
+eq(halfSound, "sounds: Added 105, ApplicationsIncreased nil", "on with the second sound refused: logged")
+check(not T.r3onCheck() and #R.sounds == 1, "  the step fails")
 
 -- Blink: hidden and shown again, in combat only, no protected change.
 T.blink()
@@ -735,7 +766,7 @@ eq(shown, 2, "  the top layer alone")
 -- Teardown: nothing left.
 T.r3end()
 check(not s3.player:IsShown() and s3.player._enabled == false and not ov:IsShown() and not R.mock:IsShown(), "teardown: all off")
-check(#removed == 4 and removed[3] == 103 and removed[4] == 104, "  the live sounds removed")
+check(#removed == 5 and removed[5] == 105, "  the live sound removed")
 check(T.r3state().on == nil and T.procState().on == nil, "  round 3 and the watcher reset")
 slots[3] = 116
 n0 = #calls
