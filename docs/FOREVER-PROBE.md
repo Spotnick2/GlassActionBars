@@ -57,6 +57,39 @@ fight):
   listener were on. Its "nothing blocked" and "no events" rest on `Probe:RegisterEvents` logging
   no refusal and no `UNIT_AURA` error. The probe now records both (Codex, PR #116).
 
+**Round 3, `/fp steps gab procs3`, run #591** (2026-11-22, the same mage at **level 34**, open
+world in Stranglethorn Vale, grouped, SpellActivationOverlay off and a `/reload`):
+- **Ice Lance has ranks, and this run had rank 2.** The bars held **1240044** (Ice Lance, requires
+  level 34), not 400640 (rank 1, level 28). `SkillLineAbility` 70959 lists 400640, 1240044-1240047
+  and 1312002 under the mage's Frost line (6). SAO's table knows 400640 only. The probe knew rank 1
+  alone, so it built every button's containers but lit none ("96 buttons, 0 glowing now").
+  **Every button question went unmeasured:** both copies, paging, the macro, the replay after a
+  hide, the frozen target. The first step, which waits for the layout, couldn't see Ice Lance
+  either and was passed by hand. Fixed for the re-run (round 3b).
+- **The build, with SAO off:** 193 containers (two per button on 96 buttons, plus the overlay)
+  in 79 ms, out of combat. `Blizzard_AuraContainer` was **already loaded** before the probe's
+  `LoadAddOn` (which returned true): something other than SAO loads it on this client.
+- **No proc:** nothing glowed and no overlay showed (screenshot). Every button clicked as usual.
+- **Stack gating works:** the left Fingers of Frost overlay showed at 1 charge and the right one
+  (flipped) joined it at 2, through the application bar with `minApplications = 2`.
+- **The sound works:** `C_UnitAuras.AddAuraSound` with file 568016 was heard on each proc and again
+  at the second charge, in combat. The two registrations returned ids 1455 and 1456.
+- **Off, then on, no reload:** 193 containers disabled and hidden and both sounds removed; then
+  all shown and enabled (none read back hidden) and two new sounds (1457, 1458). The next proc
+  brought the overlay and the sound back.
+- **Target changes:** 28, each refreshed a frame later, no error. Nothing was blocked, with the
+  listener on throughout. Bugsy has no error from the probe.
+- **Fingers of Frost reads:** absent in all 127 reads in combat, as before.
+- **Heating Up's mock** (three layers at SAO's scales and greys, then the top one alone): clean,
+  no muddy or doubled edges. The owner couldn't say the composite was better, and the two
+  screenshots look nearly the same.
+- **Native events (passive, `GABProbeDB.native`):** across this play, mage **17164** and warrior
+  **3320** `SPELL_ACTIVATION_OVERLAY_HIDE` with no spell, and not one `SHOW` or `GLOW_*` on either
+  class.
+- **The log lost its start:** with no Ice Lance found, the fight steps re-ran the 50-line bar scan
+  every second, and each spell-less `HIDE` was a line. The ring dropped the build's scan and the
+  macro's line. The re-run scans once and only counts those `HIDE`s.
+
 ## Session 9: drops, clicks and pick-up drags on Utility-like buttons (#86), 2026-11-14, build 70938
 
 `/fp steps gab utilitydrag`, run #314, on a level-20-ish hunter. Two probe buttons: S secure

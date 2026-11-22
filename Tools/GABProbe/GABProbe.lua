@@ -1424,7 +1424,11 @@ Probe:Steps("utilitydrag", {
 -- Fingers of Frost: SAO's Forever id (mage.lua:567), then Wrath's and Cata's.
 local PROC_AURAS = { 400670, 44544, 74396 }
 -- Ice Lance and Deep Freeze: SAO's ids (mage.lua:167-170), Forever's first.
-local ICE_LANCE = { 400640, 30455, 42913, 42914 }
+-- Ice Lance has ranks on Forever: 400640 is rank 1 (level 28), 1240044 rank 2
+-- (level 34); SkillLineAbility 70959 lists 400640, 1240044-1240047 and
+-- 1312002 under the mage's Frost line (6). SAO knows 400640 only. Round 3's
+-- first run, at level 34, had rank 2 on its bars and lit nothing.
+local ICE_LANCE = { 400640, 1240044, 1240045, 1240046, 1240047, 1312002, 30455, 42913, 42914 }
 local DEEP_FREEZE = { 428739, 44572 }
 local BUTTON_PREFIXES = { "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton",
     "MultiBarRightButton", "MultiBarLeftButton", "MultiBar5Button", "MultiBar6Button", "MultiBar7Button" }
@@ -1533,10 +1537,18 @@ local function procSetup()
     for _, id in ipairs(PROC_AURAS) do
         say(("procs: aura %d %s: secrecy %s, now %s"):format(id, Show(spellName(id)), secrecy(id), auraState(id)))
     end
-    for _, id in ipairs(ICE_LANCE) do say(("procs: spell %d %s"):format(id, Show(spellName(id)))) end
+    -- Can a rank be mapped to its first rank without a table? Both APIs.
+    local base, book = api("C_Spell", "GetBaseSpell"), api("C_SpellBook", "FindBaseSpellByID")
+    for _, id in ipairs(ICE_LANCE) do
+        local okB, b = pcall(base or error, id)
+        local okF, f = pcall(book or error, id)
+        say(("procs: spell %d %s, GetBaseSpell %s, FindBaseSpellByID %s"):format(id, Show(spellName(id)),
+            okB and Show(b) or "ERROR", okF and Show(f) or "ERROR"))
+    end
     for _, id in ipairs(DEEP_FREEZE) do say(("procs: spell %d %s"):format(id, Show(spellName(id)))) end
     local found = scanBars() or {}
     pw.ice, pw.deep = found.ice, found.deep
+    pw.scanned = true
     local function desc(f) return f and (f.id .. " in slot " .. f.slot .. " on " .. f.button:GetName()) or "not on a visible bar" end
     return class, "Ice Lance " .. desc(pw.ice), "Deep Freeze " .. desc(pw.deep)
 end
@@ -1612,6 +1624,8 @@ procFrame:SetScript("OnEvent", function(_, event, ...)
         return
     end
     if event == "PLAYER_REGEN_DISABLED" then say("procs: fight starts") return end
+    -- A HIDE with no spell fires hundreds of times a session: counted only.
+    if event == "SPELL_ACTIVATION_OVERLAY_HIDE" and not secret((...)) and (...) == nil then return end
     local args = {}
     for i = 1, select("#", ...) do args[#args + 1] = Show((select(i, ...))) end
     say("procs: " .. event .. " " .. table.concat(args, ", "))
@@ -1656,7 +1670,9 @@ end
 -- The fight step: done once a fight has ended since it began.
 local function fightOver()
     if not pw.on then procStart() end
-    if not pw.ice then procSetup() end
+    -- Once: a wait polls every second, and the scan is 50 lines. The glow
+    -- steps, run by hand, scan again each time (Ice Lance may be placed since).
+    if not pw.ice and not pw.scanned then procSetup() end
     if pw.fightMark == nil then pw.fightMark = pw.fightsEnded end
     if pw.fightsEnded > pw.fightMark then
         pw.fightMark = nil
@@ -2399,10 +2415,10 @@ Probe:Steps("procs3", (function(def)
     for _, step in ipairs(def) do step.leave = leave3 end
     return def
 end)({
-    rev = 2,
+    rev = 3,
     title = "Proc alerts, the plan's design (#115, round 3)",
     { text = "Getting ready. SpellActivationOverlay must be OFF (Esc > AddOns, untick it, /reload). Out of combat, put "
-        .. "Ice Lance on Action Bar 1 and a second Ice Lance on another bar. Also make a macro with the two lines "
+        .. "Ice Lance (your highest rank) on Action Bar 1 and a second Ice Lance on another bar. Also make a macro with the two lines "
         .. "\"#showtooltip\" and \"/cast [mod:alt] Frostbolt; Ice Lance\" and put it on a visible bar. This step goes on "
         .. "by itself once all three are there (the panel says what's still missing).", wait = r3ready, timeout = 900 },
     { text = "Building the glow on every action button, the Fingers of Frost overlay and its sound.", auto = true,
@@ -2436,12 +2452,8 @@ end)({
       wait = r3fight, timeout = 1200 },
     { text = "Did Ice Lance glow while your target was frozen?", ask = true },
     { text = "Did it go out on the unfrozen target, and with no target?", ask = true },
-    { text = "A mock of Heating Up at 3 stacks (the fire mage's overlay): its three layers drawn on top of each other.",
-      auto = true, run = function() return heatingMock(false) end, screenshot = "heating up, three layers" },
-    { text = "Does it look clean (no muddy or doubled edges)?", ask = true },
-    { text = "Now the top layer alone.", auto = true, run = function() return heatingMock(true) end,
-      screenshot = "heating up, top layer" },
-    { text = "Was the three-layer one better than this single layer?", ask = true },
+    -- Heating Up's mock (heatingMock) was answered in run #591: clean; three
+    -- layers no clearer than the top one (the owner unsure, the shots alike).
     { text = "Removing everything.", auto = true, run = function() mockOff(); return r3end() end, check = nothingBlocked },
     { text = "Press Reload now (or type /reload) to save the results.", reload = true },
 }))
@@ -2492,7 +2504,7 @@ nativeFrame:SetScript("OnEvent", function(_, event, id)
         db[class or "?"] = db[class or "?"] or {}
         db[class or "?"][key] = (db[class or "?"][key] or 0) + 1
     end
-    say(("native: %s %s %s"):format(Show(class), key, Show(not secret(id) and spellName(id))))
+    if key ~= "HIDE nil" then say(("native: %s %s %s"):format(Show(class), key, Show(not secret(id) and spellName(id)))) end
 end)
 
 local boot = CreateFrame("Frame")
@@ -2525,5 +2537,5 @@ NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCa
     containerGlow = containerGlow, outOfCombat = outOfCombat, nothingBlocked = nothingBlocked, procFrame = procFrame,
     r3ready = r3ready, r3build = r3build, r3off = r3off, r3on = r3on, r3end = r3end, r3teardown = r3teardown,
     r3offCheck = r3offCheck, r3onCheck = r3onCheck,
-    retarget = retarget, driftPoll = driftPoll, blink = blink, blinkFight = blinkFight, heatingMock = heatingMock,
+    glowKey = glowKey, retarget = retarget, driftPoll = driftPoll, blink = blink, blinkFight = blinkFight, heatingMock = heatingMock,
     atBoss = atBoss, bossBuild = bossBuild, r3state = function() return r3 end, nativeFrame = nativeFrame }
