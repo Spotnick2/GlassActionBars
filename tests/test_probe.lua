@@ -740,6 +740,17 @@ local _, _, halfSound = T.r3on()
 soundRefused = nil
 eq(halfSound, "sounds: Added 105, ApplicationsIncreased nil", "on with the second sound refused: logged")
 check(not T.r3onCheck() and #R.sounds == 1, "  the step fails")
+soundRefused = 1
+local _, _, againSound = T.r3on()
+eq(againSound, "sounds: Added 105 kept, ApplicationsIncreased nil", "  run again, still refused: Added not registered twice")
+check(not T.r3onCheck() and #R.sounds == 1, "  and the step still fails")
+soundRefused = nil
+_, _, againSound = T.r3on()
+eq(againSound, "sounds: Added 105 kept, ApplicationsIncreased 106", "  run again, accepted: only the missing one added")
+check(T.r3onCheck() == true and #R.sounds == 2, "  the step passes")
+_, _, againSound = T.r3on()
+eq(againSound, "sounds: Added 105 kept, ApplicationsIncreased 106 kept", "  a pass run again registers nothing")
+check(T.r3onCheck() == true and #R.sounds == 2, "  and still passes")
 
 -- Blink: hidden and shown again, in combat only, no protected change.
 T.blink()
@@ -766,7 +777,7 @@ eq(shown, 2, "  the top layer alone")
 -- Teardown: nothing left.
 T.r3end()
 check(not s3.player:IsShown() and s3.player._enabled == false and not ov:IsShown() and not R.mock:IsShown(), "teardown: all off")
-check(#removed == 5 and removed[5] == 105, "  the live sound removed")
+check(#removed == 6 and removed[5] == 105 and removed[6] == 106, "  the live sounds removed")
 check(T.r3state().on == nil and T.procState().on == nil, "  round 3 and the watcher reset")
 slots[3] = 116
 n0 = #calls

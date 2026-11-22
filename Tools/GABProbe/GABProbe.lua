@@ -1906,7 +1906,7 @@ local UNITS = { "player", "target" }
 
 local function r3fresh()
     return { side = {}, writes = {}, skipped = 0, drifts = 0, updates = 0, targets = 0, refreshErrors = 0,
-             blinks = 0, sounds = {}, removedSounds = {}, errors = 0, all = {}, failures = {} }
+             blinks = 0, sounds = {}, soundBy = {}, removedSounds = {}, errors = 0, all = {}, failures = {} }
 end
 local r3 = r3fresh()
 local r3hooked = {}   -- buttons whose Update is hooked (a hook can't be taken back: it checks r3.on)
@@ -2135,17 +2135,26 @@ local function buildOverlay()
     c:UpdateAllAuras()
 end
 
+local SOUND_TRIGGERS = { "Added", "ApplicationsIncreased" }
 local function addSounds()
     local add = api("C_UnitAuras", "AddAuraSound")
     if not add then say("procs3: C_UnitAuras.AddAuraSound MISSING") return "sound API missing" end
     local E = rawget(_G, "Enum") and rawget(Enum, "UnitAuraSoundTrigger")
     local got = {}
-    for i, trig in ipairs({ "Added", "ApplicationsIncreased" }) do
-        local ok, id = pcall(add, E and E[trig] or (i - 1), { unitToken = "player", spellID = PROC_AURAS[1],
-            soundFileID = POWER_AURA_FILE })
-        say(("procs3: AddAuraSound %s -> %s"):format(trig, ok and Show(id) or ("ERROR " .. tostring(id))))
-        if ok and id ~= nil then r3.sounds[#r3.sounds + 1] = id end
-        got[#got + 1] = trig .. " " .. (ok and Show(id) or "ERROR")
+    -- Per trigger: a step run again registers only the one still missing.
+    for i, trig in ipairs(SOUND_TRIGGERS) do
+        if r3.soundBy[trig] ~= nil then
+            got[#got + 1] = trig .. " " .. Show(r3.soundBy[trig]) .. " kept"
+        else
+            local ok, id = pcall(add, E and E[trig] or (i - 1), { unitToken = "player", spellID = PROC_AURAS[1],
+                soundFileID = POWER_AURA_FILE })
+            say(("procs3: AddAuraSound %s -> %s"):format(trig, ok and Show(id) or ("ERROR " .. tostring(id))))
+            if ok and id ~= nil then
+                r3.sounds[#r3.sounds + 1] = id
+                r3.soundBy[trig] = id
+            end
+            got[#got + 1] = trig .. " " .. (ok and Show(id) or "ERROR")
+        end
     end
     return "sounds: " .. table.concat(got, ", ")
 end
@@ -2156,7 +2165,12 @@ local function removeSounds()
     local kept = {}
     for _, id in ipairs(r3.sounds) do
         local ok = remove and pcall(remove, id)
-        if ok then r3.removedSounds[#r3.removedSounds + 1] = id else kept[#kept + 1] = id end
+        if ok then
+            r3.removedSounds[#r3.removedSounds + 1] = id
+            for trig, had in pairs(r3.soundBy) do if had == id then r3.soundBy[trig] = nil end end
+        else
+            kept[#kept + 1] = id
+        end
         gone[#gone + 1] = tostring(id) .. (ok and "" or " ERROR")
     end
     r3.sounds = kept
@@ -2281,7 +2295,10 @@ local function r3offCheck()
     return r3.off == true and #r3.sounds == 0, "off, " .. #r3.sounds .. " sound(s) left registered"
 end
 local function r3onCheck()
-    return r3.on == true and r3.off == false and #r3.sounds == 2, "on again, " .. #r3.sounds .. " of 2 sounds registered"
+    local n = 0
+    for _, trig in ipairs(SOUND_TRIGGERS) do if r3.soundBy[trig] ~= nil then n = n + 1 end end
+    return r3.on == true and r3.off == false and n == 2,
+        ("on again, %d of 2 triggers, %d registration(s)"):format(n, #r3.sounds)
 end
 
 -- A real OnHide mid-fight: every lit button's glow containers hidden, shown
