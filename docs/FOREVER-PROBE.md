@@ -137,6 +137,40 @@ time.
 - **Nothing blocked**, with the listener on and every event registered. Bugsy has no problem
   since session 262 (the current one is 305).
 
+**Round 3c, `/fp steps gab procs3` rev 4, run #622** (2026-11-23, the same mage, now level 35,
+open world in Stranglethorn's Ruins of Zul'Kunda, grouped, SpellActivationOverlay off, the same
+bars and macro):
+- **The glow comes back after a real hide, mid-proc** (Phase 0 item 2). The owner pressed
+  **Hide the glow** twice in combat: the probe hid the 6 lit containers (3 buttons, player and
+  target) and showed them a second later.
+  - The first press came while Ice Lance **wasn't** glowing (the owner said so), so it doesn't
+    count.
+  - The second came during a proc, and the glow came back animated.
+
+  One replay seen, after #620's two procs in a row: the loop restarts after an `OnHide`, so
+  `AddAuraShownAnimation` isn't needed.
+- **The frozen target lights Ice Lance** (Phase 0 item 3). In a fight that began during the step,
+  the owner Frost Nova'd the target and waited before hitting it:
+  - Ice Lance glowed while the target was frozen;
+  - the target view's left icon (any debuff of the player's, `HARMFUL|PLAYER`) showed the debuffs,
+    Frost Nova's while it was frozen;
+  - its right icon, the glows' own freeze filter alone (`includeSpellIDs`, unit `target`), showed
+    Frost Nova;
+  - the glow and both icons went out on an unfrozen target and with no target.
+
+  So the engine sees Frost Nova on an enemy and the id filter matches it. Fingers of Frost was
+  also up when that fight ended, so the glow alone could have been the proc's; the right icon is
+  what shows the freeze matching. Why #620's freeze stayed dark is unknown. That run gave no
+  wait-before-hitting instruction, so the root may have broken before anything showed.
+- **The view needed `SetIcon`:** the slots drew their icons only once a texture was registered
+  (Codex, PR #121; `Blizzard_CustomAuraButton.lua:243, 634`). Its labels read clearly with no
+  target (screenshot).
+- **The counts:** 88 filter writes (44 in combat), 74 unchanged skipped, 81 `Update` calls, 50
+  target changes (each refreshing the view too), 0 drifts, 0 refresh errors, nothing blocked with
+  the listener on. The passive count is now mage 27022 `HIDE` with no spell, still no `SHOW` or
+  `GLOW_*`. Bugsy has no problem since session 262 (the current one is 307).
+- **The base-spell APIs** again returned each Ice Lance rank's own id.
+
 ## Session 9: drops, clicks and pick-up drags on Utility-like buttons (#86), 2026-11-14, build 70938
 
 `/fp steps gab utilitydrag`, run #314, on a level-20-ish hunter. Two probe buttons: S secure
