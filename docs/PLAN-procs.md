@@ -125,9 +125,9 @@ game. One entry per effect:
 - **Rank candidates** come from the build's DB2 rows (`SkillLineAbility` / `SpellName` through the
   `wago-tools` skill). Each is confirmed by the id the action slot actually returns. Names are never
   used at runtime. Not optional: run #591 had Ice Lance rank 2 on its bars, which SAO's table
-  lacks, and nothing glowed. Round 3b logs `C_Spell.GetBaseSpell` and
-  `C_SpellBook.FindBaseSpellByID` for each rank. If one maps every rank to rank 1 on this client,
-  the data can hold the first rank and the button's spell is mapped once per retarget.
+  lacks, and nothing glowed. Neither `C_Spell.GetBaseSpell` nor `C_SpellBook.FindBaseSpellByID`
+  maps a rank to rank 1 on this client (run #620: each returns the id it's given), so the data
+  lists every rank.
 - **Textures:** a fileDataID, or a file GAB ships. Eclipse's `eclipse_moon.blp` (SAO's, MIT) is
   converted once to `Media/Eclipse_Moon.tga` (Pillow reads BLP), with a `Tools/` script like
   `make_lock.py`. `Tools/deploy.ps1` and the package check select `Media/*.tga` only, so a `.tga`
@@ -377,6 +377,15 @@ flip, Heating Up's mock), 6 (clean launch, off and on) and 8 (the sound) passed.
 the ring half of 6 went unmeasured: the bars held Ice Lance rank 2, which the probe didn't know.
 Item 7 so far: mage and warrior, `HIDE` with no spell only. Round 3b re-runs `procs3` with every
 rank; item 5 waits for the owner's next boss and no longer gates the slice.
+
+**Status after run #620** (round 3b): item 1 passed (both copies, paging in combat, the macro, no
+drift), so every button retargets. Item 2's two procs in a row passed; its hide and show mid-proc
+went unmeasured (the step began mid-fight and ended before the first blink). The ring half of 6
+passed, and 4 and 8 again. Item 3 failed unexplained: a Frost Nova'd target left Ice Lance dark.
+Off and on also ran in combat, open world, with nothing blocked; the plan still queues a change in
+combat, since that's one run. Round 3c (`procs3` rev 4) runs only the blink, in a fight of its
+own, and the frozen target with a view of the engine's target debuffs. If the freeze glow still
+fails, the owner decides whether the mage slice waits for it or ships without it.
 
 Counters are measured in PR 3's own probe round, not here. A readable cooldown table alone doesn't
 make a working counter. That round tests, for each supported spell:

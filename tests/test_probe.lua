@@ -582,7 +582,7 @@ WoW.templates.CustomAuraContainerTemplate = function(w)
         if failSlot == key then failSlot = nil; error("slot refused") end
         if blockInSetup then blockInSetup = nil; WoW.fire("ADDON_ACTION_BLOCKED", "GABProbe", "AddAuraSlot") end
         local f = CreateFrame("AuraButton", nil, self, "CustomAuraButtonTemplate")
-        self._slots[key] = { filter = filter, ids = opts.candidateFilters.includeSpellIDs, enabled = true, frame = f }
+        self._slots[key] = { filter = filter, ids = (opts.candidateFilters or {}).includeSpellIDs, enabled = true, frame = f }
         if opts.initializeFrame then opts.initializeFrame(f) end
         return f
     end)
@@ -793,7 +793,51 @@ check(not s3.player:IsShown() and R.side[ActionButton1].player:IsShown(), "  in 
 WoW.flushTimers(0.3)
 check(s3.player:IsShown() and R.blinks == 1, "  shown again")
 eq(#WoW.violations, v3, "  no change on a protected frame")
+check(logHas("procs3: blink 1, %d+ containers hidden"), "  logged")
 WoW.combat = false
+
+-- The blink step (round 3c): a fight already on doesn't count, nor a fight
+-- that ended before the first blink.
+R.blinks = 0
+local bw = T.freshFight("blink", T.blinkFight)
+WoW.combat = true
+local okW, whyW = bw()
+check(okW == false and whyW:find("let this fight end"), "blink step: a fight already on when it began doesn't count")
+WoW.combat = false
+WoW.fire("PLAYER_REGEN_ENABLED")
+check(bw() == false, "  nor does its end")
+WoW.fire("PLAYER_REGEN_DISABLED")
+WoW.fire("PLAYER_REGEN_ENABLED")
+local okB0, whyB0 = bw()
+check(okB0 == false and whyB0:find("before the first blink"), "  a fight with no blink: fight again")
+WoW.fire("PLAYER_REGEN_DISABLED")
+WoW.combat = true
+check(bw() == false, "  in the next fight: waiting")
+T.blink()
+WoW.flushTimers(0.3)
+WoW.combat = false
+WoW.fire("PLAYER_REGEN_ENABLED")
+local okB1, nBlinks = bw()
+check(okB1 == true and nBlinks == "blinks 1", "  a fight with a blink ends it")
+check(R.blinker == nil, "  the blinker stopped")
+
+-- The target view (round 3c): any debuff of the player's, and the freeze filter.
+WoW.combat = true
+check(T.buildView() == false and R.view == nil, "target view: out of combat only")
+WoW.combat = false
+check(T.buildView() == true, "  built")
+local view = R.view
+eq(view._unit, "target", "  on the target")
+check(view._slots.any.filter == "HARMFUL|PLAYER" and view._slots.any.ids == nil, "  left: any debuff of yours, no id filter")
+check(view._slots.freeze.filter == "HARMFUL" and view._slots.freeze.ids[865] and view._slots.freeze.ids[5276] == nil,
+    "  right: the glows' freeze aliases")
+check(view._slots.any.frame:IsMouseEnabled() == false and view:IsMouseEnabled() == false, "  clicks through")
+eq(T.buildView(), "already built", "  once")
+local vr = view._refreshes
+WoW.fire("PLAYER_TARGET_CHANGED")
+WoW.flushTimers(0)
+eq(view._refreshes, vr + 1, "  refreshed on a target change")
+check(logHas("target glows refreshed, the view too"), "  logged")
 
 -- Heating Up's mock: three layers, or the top one alone.
 eq(T.heatingMock(false), "all three layers", "heating mock")
@@ -808,6 +852,7 @@ eq(shown, 2, "  the top layer alone")
 -- Teardown: nothing left.
 T.r3end()
 check(not s3.player:IsShown() and s3.player._enabled == false and not ov:IsShown() and not R.mock:IsShown(), "teardown: all off")
+check(not view:IsShown() and view._enabled == false, "  the target view too")
 check(#removed == 6 and removed[5] == 105 and removed[6] == 106, "  the live sounds removed")
 check(T.r3state().on == nil and T.procState().on == nil, "  round 3 and the watcher reset")
 slots[3] = 116

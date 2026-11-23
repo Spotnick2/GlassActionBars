@@ -90,6 +90,50 @@ world in Stranglethorn Vale, grouped, SpellActivationOverlay off and a `/reload`
   every second, and each spell-less `HIDE` was a line. The ring dropped the build's scan and the
   macro's line. The re-run scans once and only counts those `HIDE`s.
 
+**Round 3b, `/fp steps gab procs3` rev 3, run #620** (2026-11-23, the same mage, level 34, open
+world in Stranglethorn's Vile Reef, grouped, SpellActivationOverlay off). The log is whole this
+time.
+- **The layout:** Ice Lance rank 2 (1240044) on `ActionButton1` and `MultiBarBottomRightButton4`;
+  the Alt macro (`"IL"`, macro 122) on `MultiBarBottomLeftButton3`, showing 1240044. The build:
+  96 buttons (3 lit), the overlay and two sounds (441, 442) in 76 ms. `Blizzard_AuraContainer` was
+  again already loaded.
+- **The base-spell APIs don't map ranks.** `C_Spell.GetBaseSpell` and
+  `C_SpellBook.FindBaseSpellByID` each returned the id they were given, for every Ice Lance rank
+  (400640, 1240044-1240047, 1312002). For the ids that don't exist on Forever (30455, 42913, 42914),
+  `GetBaseSpell` echoed the id and `FindBaseSpellByID` returned nil. So the data lists every rank.
+- **The button glows work** (Phase 0 item 1, the owner's answers):
+  - both Ice Lance buttons lit on each proc;
+  - paging Action Bar 1 away in combat left that slot dark and paging back lit it again
+    (`ActionButton1`'s `Update` retargeted to spell 0 and back to 1240044 1.2 s later, in combat);
+  - the macro lit while it showed Ice Lance and went out while Alt made it Frostbolt (its `Update`
+    retargets, in and out of combat);
+  - on later procs the ring animated as on the first, and everything went out once the charges
+    were spent. No proc: nothing lit (screenshot).
+  - The counts: 100 filter writes (6 in combat, 94 out), 318 unchanged ones skipped, 113 `Update`
+    calls, 43 target changes refreshed, **0 drifts** (the 0.2 s poll never saw a button's spell
+    part from its filter), no error.
+- **The overlays and the sound** behaved as in #591: left at 1 charge, right joining at 2, the
+  sound on each proc and at the second charge.
+- **Off and on ran in combat this time** (the steps came up mid-fight, and the probe doesn't refuse
+  them): 193 containers disabled and hidden, both sounds removed (`RemoveAuraSound`), then all
+  shown and enabled again and two new sounds (869, 870), with nothing blocked and no error, open
+  world. The owner answered "still works after" 0.4 s after that fight, before any proc on record,
+  so that answer is weak; the later fights' procs lit (step 17's fights).
+- **Not measured: the blink.** Its step started mid-fight, and that fight ended 3 s later, before
+  the 4 s ticker's first hide: **0 blinks**. The "came back animated" answer isn't about a blink.
+- **The frozen target didn't light** (Phase 0 item 3). With Fingers of Frost down, the owner Frost
+  Nova'd the target: Ice Lance stayed dark, and so never went out either. The filter held the
+  owner's rank, 865 (`SpellEffect` 70862: its effect 1 applies the root aura on 865 itself), and
+  the 3 target containers were refreshed at each target change without error. Blizzard's filter
+  allows spell ids on a harmful aura of an enemy (`AuraContainerUtil.lua:52-111`). Why it stayed
+  dark is unknown: the probe didn't see the target's debuffs. Round 3c shows them.
+- **Reads and events:** Fingers of Frost absent in all 788 reads in combat, present in 210 out of
+  it. `ADDON_RESTRICTION_STATE_CHANGED` 28 times, all type 0 (Combat), two per fight across 14
+  fights. 307 `SPELL_ACTIVATION_OVERLAY_HIDE` with no spell; the passive totals are now mage 25663
+  and warrior 3799, still no `SHOW` or `GLOW_*`.
+- **Nothing blocked**, with the listener on and every event registered. Bugsy has no problem
+  since session 262 (the current one is 305).
+
 ## Session 9: drops, clicks and pick-up drags on Utility-like buttons (#86), 2026-11-14, build 70938
 
 `/fp steps gab utilitydrag`, run #314, on a level-20-ish hunter. Two probe buttons: S secure
