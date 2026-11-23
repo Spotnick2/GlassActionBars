@@ -387,17 +387,24 @@ combat, since that's one run. Round 3c (`procs3` rev 4) runs only the hide, pres
 while the glow is up, and the frozen target in a fight of its own, with a view of the engine's
 target debuffs.
 
-**Status after run #622** (round 3c): **Phase 0 is done for the mage slice.**
+**Status after run #622** (round 3c): Phase 0 is done for the mage slice except one check on
+item 3.
 - Item 2 passed: the glow came back animated after a real hide during a proc, so the template's
   own `OnHide` handlers restart the loop and `AddAuraShownAnimation` isn't needed.
-- Item 3 passed: a frozen target lit Ice Lance, the `target` container's freeze filter matched
-  Frost Nova, and the cue cleared on an unfrozen target and with no target. #620's dark freeze
-  stays unexplained (probably the root broken by damage before it showed).
+- Item 3, half done:
+  - **Confirmed:** the engine sees Frost Nova on an enemy, and the freeze filter on a `target`
+    container matches it (the target view's filter-only icon).
+  - **Pending:** the button ring drawn by the `target` container, appearing on a frozen target and
+    clearing on an unfrozen one and with no target. Fingers of Frost was up in that fight, and the
+    player container draws the same ring, so the answers don't isolate it (Codex, PR #122). It's
+    checked with the player-side glow slot disabled, before PR 1 ships the freeze glow. Until then
+    the freeze glow is unverified.
+  - #620's dark freeze stays unexplained (probably the root broken by damage before it showed).
 - Items 1, 4, 6 and 8 passed earlier.
 - Item 5 (`procboss`, reworked first) waits for the owner's next boss and doesn't gate the slice.
 - Item 7 is mage and warrior so far.
 
-PR 1, the mage slice, can start. GABProbe comes off the client now that these findings are
+PR 1, the mage slice, can start, with that check tracked. GABProbe comes off the client now that these findings are
 written. `procboss` and the passive count on other classes need it deployed again
 (`Tools\deploy.ps1 -Probe`).
 

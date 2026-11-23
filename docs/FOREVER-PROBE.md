@@ -149,7 +149,8 @@ bars and macro):
 
   One replay seen, after #620's two procs in a row: the loop restarts after an `OnHide`, so
   `AddAuraShownAnimation` isn't needed.
-- **The frozen target lights Ice Lance** (Phase 0 item 3). In a fight that began during the step,
+- **The freeze filter matches Frost Nova; the button's freeze glow isn't isolated yet** (Phase 0
+  item 3). In a fight that began during the step,
   the owner Frost Nova'd the target and waited before hitting it:
   - Ice Lance glowed while the target was frozen;
   - the target view's left icon (any debuff of the player's, `HARMFUL|PLAYER`) showed the debuffs,
@@ -158,10 +159,13 @@ bars and macro):
     Frost Nova;
   - the glow and both icons went out on an unfrozen target and with no target.
 
-  So the engine sees Frost Nova on an enemy and the id filter matches it. Fingers of Frost was
-  also up when that fight ended, so the glow alone could have been the proc's; the right icon is
-  what shows the freeze matching. Why #620's freeze stayed dark is unknown. That run gave no
-  wait-before-hitting instruction, so the root may have broken before anything showed.
+  So the engine sees Frost Nova on an enemy and the id filter matches it (the right icon).
+  **Which container lit the button isn't known:** the player and target containers draw the same
+  ring, and Fingers of Frost was up when that fight ended (it read present right after), so the
+  ring and its going out may have been the proc's. The button glow from the target container
+  stays to be checked with the player-side slot off (Codex, PR #122). Why #620's freeze stayed
+  dark is unknown. That run gave no wait-before-hitting instruction, so the root may have broken
+  before anything showed.
 - **The view needed `SetIcon`:** the slots drew their icons only once a texture was registered
   (Codex, PR #121; `Blizzard_CustomAuraButton.lua:243, 634`). Its labels read clearly with no
   target (screenshot).
