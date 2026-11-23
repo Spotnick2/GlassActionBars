@@ -380,11 +380,12 @@ rank; item 5 waits for the owner's next boss and no longer gates the slice.
 
 **Status after run #620** (round 3b): item 1 passed (both copies, paging in combat, the macro, no
 drift), so every button retargets. Item 2's two procs in a row passed; its hide and show mid-proc
-went unmeasured (the step began mid-fight and ended before the first blink). The ring half of 6
+went unmeasured (the step began mid-fight and ended before the first hide). The ring half of 6
 passed, and 4 and 8 again. Item 3 failed unexplained: a Frost Nova'd target left Ice Lance dark.
 Off and on also ran in combat, open world, with nothing blocked; the plan still queues a change in
-combat, since that's one run. Round 3c (`procs3` rev 4) runs only the blink, in a fight of its
-own, and the frozen target with a view of the engine's target debuffs. If the freeze glow still
+combat, since that's one run. Round 3c (`procs3` rev 4) runs only the hide, pressed by the owner
+while the glow is up, and the frozen target in a fight of its own, with a view of the engine's
+target debuffs. If the freeze glow still
 fails, the owner decides whether the mage slice waits for it or ships without it.
 
 Counters are measured in PR 3's own probe round, not here. A readable cooldown table alone doesn't

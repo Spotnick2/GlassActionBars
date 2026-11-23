@@ -569,6 +569,10 @@ local failSlot, blockInSetup   -- a slot key whose AddAuraSlot throws once; a bl
 WoW.templates.CustomAuraButtonTemplate = function(w)
     w:EnableMouse(true)
     rawset(w, "SetApplicationBar", function(self, bar, o) self._bar = { bar = bar, min = o.minApplications } end)
+    rawset(w, "SetIcon", function(self, t)
+        assert(t and t.GetObjectType and t:GetObjectType() == "Texture", "SetIcon takes a texture")
+        self._icon = t
+    end)
 end
 WoW.templates.CustomAuraContainerTemplate = function(w)
     w:EnableMouse(true)
@@ -783,43 +787,33 @@ _, _, againSound = T.r3on()
 eq(againSound, "sounds: Added 105 kept, ApplicationsIncreased 106 kept", "  a pass run again registers nothing")
 check(T.r3onCheck() == true and #R.sounds == 2, "  and still passes")
 
--- Blink: hidden and shown again, in combat only, no protected change.
-T.blink()
-eq(R.blinks, 0, "blink: not out of combat")
+-- The owner's press: the lit glows hidden, shown again a second later, in or
+-- out of combat, no protected change.
 local v3 = #WoW.violations
 WoW.combat = true
-T.blink()
-check(not s3.player:IsShown() and R.side[ActionButton1].player:IsShown(), "  in combat: the lit buttons' glows hidden")
-WoW.flushTimers(0.3)
-check(s3.player:IsShown() and R.blinks == 1, "  shown again")
+local okH, hideMsg = T.hideGlows()
+check(okH == true and not s3.player:IsShown() and R.side[ActionButton1].player:IsShown(), "hide: the lit buttons' glows hidden")
+WoW.flushTimers(0.5)
+check(not s3.player:IsShown(), "  still hidden half a second on")
+WoW.flushTimers(1)
+check(s3.player:IsShown() and R.hides == 1, "  shown again after a second")
 eq(#WoW.violations, v3, "  no change on a protected frame")
-check(logHas("procs3: blink 1, %d+ containers hidden"), "  logged")
+check(hideMsg:find("^hide 1: %d+ containers hidden %(inCombat%)") and logHas("procs3: hide 1: "), "  logged, with where")
 WoW.combat = false
+check(T.hideGlows() == true and R.hides == 2, "  out of combat too")
+WoW.flushTimers(1)
 
--- The blink step (round 3c): a fight already on doesn't count, nor a fight
--- that ended before the first blink.
-R.blinks = 0
-local bw = T.freshFight("blink", T.blinkFight)
+-- A fight step (round 3c): a fight already on when it began doesn't count.
+local fw = T.freshFight("frozen", function() return T.fightOver() end)
 WoW.combat = true
-local okW, whyW = bw()
-check(okW == false and whyW:find("let this fight end"), "blink step: a fight already on when it began doesn't count")
+local okW, whyW = fw()
+check(okW == false and whyW:find("let this fight end"), "fight step: a fight already on when it began doesn't count")
 WoW.combat = false
 WoW.fire("PLAYER_REGEN_ENABLED")
-check(bw() == false, "  nor does its end")
+check(fw() == false, "  nor does its end")
 WoW.fire("PLAYER_REGEN_DISABLED")
 WoW.fire("PLAYER_REGEN_ENABLED")
-local okB0, whyB0 = bw()
-check(okB0 == false and whyB0:find("before the first blink"), "  a fight with no blink: fight again")
-WoW.fire("PLAYER_REGEN_DISABLED")
-WoW.combat = true
-check(bw() == false, "  in the next fight: waiting")
-T.blink()
-WoW.flushTimers(0.3)
-WoW.combat = false
-WoW.fire("PLAYER_REGEN_ENABLED")
-local okB1, nBlinks = bw()
-check(okB1 == true and nBlinks == "blinks 1", "  a fight with a blink ends it")
-check(R.blinker == nil, "  the blinker stopped")
+check(fw() == true, "  the next fight's end does")
 
 -- The target view (round 3c): any debuff of the player's, and the freeze filter.
 WoW.combat = true
@@ -832,6 +826,8 @@ check(view._slots.any.filter == "HARMFUL|PLAYER" and view._slots.any.ids == nil,
 check(view._slots.freeze.filter == "HARMFUL" and view._slots.freeze.ids[865] and view._slots.freeze.ids[5276] == nil,
     "  right: the glows' freeze aliases")
 check(view._slots.any.frame:IsMouseEnabled() == false and view:IsMouseEnabled() == false, "  clicks through")
+check(view._slots.any.frame._icon and view._slots.freeze.frame._icon and view._slots.any.frame._icon:GetParent() == view._slots.any.frame,
+    "  each slot has an icon texture registered")
 eq(T.buildView(), "already built", "  once")
 local vr = view._refreshes
 WoW.fire("PLAYER_TARGET_CHANGED")

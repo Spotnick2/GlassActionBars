@@ -119,8 +119,11 @@ time.
   shown and enabled again and two new sounds (869, 870), with nothing blocked and no error, open
   world. The owner answered "still works after" 0.4 s after that fight, before any proc on record,
   so that answer is weak; the later fights' procs lit (step 17's fights).
-- **Not measured: the blink.** Its step started mid-fight, and that fight ended 3 s later, before
-  the 4 s ticker's first hide: **0 blinks**. The "came back animated" answer isn't about a blink.
+- **Not measured: the glow hidden and shown mid-proc.** Its step started mid-fight, and that fight
+  ended 3 s later, before the 4 s ticker's first hide: **0 hides**. The step called them "blinks",
+  and the owner, a mage, read that as the Blink spell: the "came back animated" answer is about
+  casting Blink during a proc (the glow kept animating), not a hidden glow. Round 3c names it
+  plainly and lets the owner press for the hide while the glow is up (Codex, PR #121).
 - **The frozen target didn't light** (Phase 0 item 3). With Fingers of Frost down, the owner Frost
   Nova'd the target: Ice Lance stayed dark, and so never went out either. The filter held the
   owner's rank, 865 (`SpellEffect` 70862: its effect 1 applies the root aura on 865 itself), and
