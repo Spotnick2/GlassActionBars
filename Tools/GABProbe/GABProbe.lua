@@ -1894,6 +1894,9 @@ Probe:Steps("procglow", withLeave({
 -- * Off -> on without a reload (Show, then SetEnabled(true)), the glow
 --   containers hidden and shown mid-fight (a real OnHide), the target-freeze
 --   glow across target changes, a static mock of Heating Up's layers.
+-- * Round 3c (rev 4, after run #620): only the glow hidden and shown during a
+--   proc, on the owner's press, and the frozen target, with a view of what
+--   the engine sees on the target.
 -- ------------------------------------------------------------------
 
 -- SAO's frozen aliases (mage.lua:161-173), never its display stand-in 5276.
@@ -1905,7 +1908,7 @@ local FROZEN_FINGERS, HOT_STREAK = 449489, 449490   -- SAO's textures/texname.lu
 local LONG, SHORT = 256 * 0.8, 128 * 0.8            -- SAO's overlay geometry
 -- Heating Up (SAO's heating_up_forever): each stack's scale and grey.
 local HEATING = { { 0.5, 200 }, { 0.7, 222 }, { 0.9, 255 } }
-local BLINK_EVERY = 4
+local HIDE_HOLD = 1   -- long enough to see the glow go and come back
 
 local function idSet(list)
     local t = {}
@@ -1922,7 +1925,7 @@ local UNITS = { "player", "target" }
 
 local function r3fresh()
     return { side = {}, writes = {}, skipped = 0, drifts = 0, updates = 0, targets = 0, refreshErrors = 0,
-             blinks = 0, sounds = {}, soundBy = {}, removedSounds = {}, errors = 0, all = {}, failures = {} }
+             hides = 0, sounds = {}, soundBy = {}, removedSounds = {}, errors = 0, all = {}, failures = {} }
 end
 local r3 = r3fresh()
 local r3hooked = {}   -- buttons whose Update is hooked (a hook can't be taken back: it checks r3.on)
@@ -2206,13 +2209,19 @@ r3frame:SetScript("OnEvent", function(_, event)
                 if ok then n = n + 1 else r3.refreshErrors = r3.refreshErrors + 1 end
             end
         end
-        say(("procs3: target changed (%s): %d target glows refreshed"):format(where(), n))
+        -- Round 3c's view of the target, refreshed like the glows.
+        local view = ""
+        if r3.view then
+            local ok = pcall(r3.view.UpdateAllAuras, r3.view)
+            if not ok then r3.refreshErrors = r3.refreshErrors + 1 end
+            view = ok and ", the view too" or ", the view ERROR"
+        end
+        say(("procs3: target changed (%s): %d target glows refreshed%s"):format(where(), n, view))
     end)
 end)
 
 local function r3teardown()
     if r3.ticker then r3.ticker:Cancel() end
-    if r3.blinker then r3.blinker:Cancel() end
     for _, c in ipairs(r3.all) do
         pcall(c.SetEnabled, c, false)
         pcall(c.Hide, c)
@@ -2221,15 +2230,15 @@ local function r3teardown()
     if r3.mock then r3.mock:Hide() end
     r3frame:UnregisterAllEvents()
     local s = ("writes %s, unchanged skipped %d, drifts %d, Update calls %d, target changes %d (refresh errors %d), "
-        .. "blinks %d, errors %d"):format(tallies(r3.writes), r3.skipped, r3.drifts, r3.updates, r3.targets,
-        r3.refreshErrors, r3.blinks, r3.errors)
+        .. "hides %d, errors %d"):format(tallies(r3.writes), r3.skipped, r3.drifts, r3.updates, r3.targets,
+        r3.refreshErrors, r3.hides, r3.errors)
     r3 = r3fresh()
     return s
 end
 
 local function r3summary()
-    return ("writes %s, skipped %d, drifts %d, Update calls %d, target changes %d, blinks %d, errors %d"):format(
-        tallies(r3.writes), r3.skipped, r3.drifts, r3.updates, r3.targets, r3.blinks, r3.errors)
+    return ("writes %s, skipped %d, drifts %d, Update calls %d, target changes %d, hides %d, errors %d"):format(
+        tallies(r3.writes), r3.skipped, r3.drifts, r3.updates, r3.targets, r3.hides, r3.errors)
 end
 
 -- Everything, out of combat: the engine, a glow per stock button, the
@@ -2317,36 +2326,98 @@ local function r3onCheck()
         ("on again, %d of 2 triggers, %d registration(s)"):format(n, #r3.sounds)
 end
 
--- A real OnHide mid-fight: every lit button's glow containers hidden, shown
--- 0.3 s later, every BLINK_EVERY seconds while in combat.
-local function blink()
-    if not r3.on or r3.off or not InCombatLockdown() then return end
-    r3.blinks = r3.blinks + 1
+-- A real OnHide during a proc, on the owner's press (Codex, PR #121): every
+-- lit button's glow containers hidden, shown again HIDE_HOLD seconds later.
+-- Whether the glow was up when pressed is the owner's to say: addon code
+-- can't read the engine's decision (round 2).
+local function hideGlows()
+    if not r3.on or r3.off then return false, "not built" end
+    r3.hides = r3.hides + 1
     local hidden = {}
     for _, st in pairs(r3.side) do
         for _, unit in ipairs(UNITS) do
             if st.key[unit] then st[unit]:Hide(); hidden[#hidden + 1] = st[unit] end
         end
     end
-    C_Timer.After(0.3, function()
+    local msg = ("hide %d: %d containers hidden (%s), shown again in %.1f s"):format(r3.hides, #hidden, where(), HIDE_HOLD)
+    say("procs3: " .. msg)
+    C_Timer.After(HIDE_HOLD, function()
         if not r3.on or r3.off then return end
         for _, c in ipairs(hidden) do c:Show() end
     end)
-end
-local function blinkFight()
-    if not r3.blinker then r3.blinker = C_Timer.NewTicker(BLINK_EVERY, blink) end
-    local over, a, b, c, d, e, f = fightOver()
-    if over then
-        r3.blinker:Cancel()
-        r3.blinker = nil
-        return true, "blinks " .. r3.blinks, a, b, c, d, e, f
-    end
-    return over, a
+    return true, msg
 end
 local function r3fight()
     local over, a, b, c, d, e, f = fightOver()
     if over then return true, r3summary(), a, b, c, d, e, f end
     return over, a
+end
+
+-- A fight already on when the step began doesn't count: the step waits for
+-- it to end, then for a fight of its own (run #620's hide step began mid-fight
+-- and ended 3 s later).
+-- Round 3c's helpers share one local: the chunk is near Lua 5.1's 200.
+local r3c = {}
+function r3c.freshFight(name, wait)
+    return function()
+        if r3.fresh ~= name then
+            if InCombatLockdown() then return false, "let this fight end, then start a new one" end
+            r3.fresh = name
+        end
+        return wait()
+    end
+end
+
+-- Round 3c (#115): what the engine sees on the target, after run #620's
+-- frozen target lit nothing. Two icons above the screen's middle: left, any
+-- debuff of the player's ("HARMFUL|PLAYER", no candidate filter); right, the
+-- freeze filter the Ice Lance glows use.
+r3c.ICON = 40
+function r3c.viewSlot(c, x)
+    return function(f)
+        f:EnableMouse(false)
+        f:ClearAllPoints()
+        f:SetPoint("CENTER", c, "CENTER", x, 0)
+        f:SetSize(r3c.ICON, r3c.ICON)
+        -- The template has no icon region: the engine paints the aura's icon
+        -- only into a texture registered with SetIcon (Codex, PR #121;
+        -- Blizzard_CustomAuraButton.lua:243, 634).
+        local t = f:CreateTexture(nil, "ARTWORK")
+        t:SetAllPoints(f)
+        f:SetIcon(t)
+    end
+end
+function r3c.buildView()
+    if InCombatLockdown() then return false, "out of combat only" end
+    if not r3.on then return false, "not built" end
+    if r3.view then return "already built" end
+    local c
+    local ok, err = pcall(function()
+        c = newContainer(UIParent, "target")
+        c:SetSize(4 * r3c.ICON, 2 * r3c.ICON)
+        c:SetPoint("CENTER", UIParent, "CENTER", 0, 180)
+        c:AddAuraSlot("any", "HARMFUL|PLAYER", sortOpts({ initializeFrame = r3c.viewSlot(c, -r3c.ICON) }))
+        c:AddAuraSlot("freeze", "HARMFUL", sortOpts({ candidateFilters = { includeSpellIDs = FILTERS.target.ice },
+            initializeFrame = r3c.viewSlot(c, r3c.ICON) }))
+        for _, l in ipairs({ { "any debuff of yours", -r3c.ICON }, { "a freeze", r3c.ICON } }) do
+            local t = c:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            t:SetPoint("BOTTOM", c, "CENTER", l[2], r3c.ICON / 2 + 4)
+            t:SetText(l[1])
+        end
+        c:UpdateAllAuras()
+    end)
+    if not ok then
+        -- A half-made view goes off now; the teardown reaches it anyway.
+        if c then
+            pcall(c.SetEnabled, c, false)
+            pcall(c.Hide, c)
+        end
+        say("procs3: view ERROR " .. tostring(err))
+        return false, "view: " .. tostring(err)
+    end
+    r3.view = c
+    say("procs3: target view built (any debuff of yours, a freeze)")
+    return true, "target view built"
 end
 
 -- Heating Up at 3 stacks: its three layers (or the top one alone) drawn as
@@ -2415,43 +2486,36 @@ Probe:Steps("procs3", (function(def)
     for _, step in ipairs(def) do step.leave = leave3 end
     return def
 end)({
-    rev = 3,
-    title = "Proc alerts, the plan's design (#115, round 3)",
+    rev = 4,
+    title = "Proc alerts: the glow hidden mid-proc, and the frozen target (#115, round 3c)",
     { text = "Getting ready. SpellActivationOverlay must be OFF (Esc > AddOns, untick it, /reload). Out of combat, put "
         .. "Ice Lance (your highest rank) on Action Bar 1 and a second Ice Lance on another bar. Also make a macro with the two lines "
         .. "\"#showtooltip\" and \"/cast [mod:alt] Frostbolt; Ice Lance\" and put it on a visible bar. This step goes on "
         .. "by itself once all three are there (the panel says what's still missing).", wait = r3ready, timeout = 900 },
     { text = "Building the glow on every action button, the Fingers of Frost overlay and its sound.", auto = true,
       run = r3build, check = function() return r3.on == true, "built" end },
-    { text = "No proc is up: does nothing glow, and is there no overlay in the middle of the screen?", ask = true,
-      screenshot = "round 3 built, no proc" },
-    { text = "Click a few buttons (Ice Lance on a target, the macro, others). Do they all work as usual?", ask = true },
-    { text = "Fight a target dummy (or open-world mobs) with Frostbolt until Fingers of Frost procs at least 3 times. "
-        .. "While a proc is up: page Action Bar 1 away (Shift + mouse wheel) and back, and hold Alt for a moment to switch "
-        .. "the macro to Frostbolt. Watch both Ice Lance buttons, the macro and the middle of the screen, and listen. "
-        .. "Spend the charges with Ice Lance. Then let combat end: this step ends itself.", wait = r3fight, timeout = 1200 },
-    { text = "Did both Ice Lance buttons glow on each proc?", ask = true },
-    { text = "When you paged Action Bar 1 away, did the glow leave that slot (nothing glowing there), and come back when "
-        .. "you paged back?", ask = true },
-    { text = "Did the macro glow while it showed Ice Lance, and go out while Alt made it Frostbolt?", ask = true },
-    { text = "Did the left overlay show with 1 charge, and the right one join it at 2 charges?", ask = true },
-    { text = "Did you hear a sound when Fingers of Frost procced (and again when it reached 2 charges)?", ask = true },
-    { text = "On the second and later procs, did the glow animate as on the first (not frozen, not missing)?", ask = true },
-    { text = "Did every glow and overlay go out once the charges were spent?", ask = true },
-    { text = "Turning the proc alerts and their sound off, as the options would.", auto = true, run = r3off,
-      check = function() return r3offCheck() end },
-    { text = "And on again, without a reload.", auto = true, run = r3on,
-      check = function() return r3onCheck() end },
-    { text = "Fight again until Fingers of Frost procs at least twice. The probe now hides and shows the glows every "
-        .. BLINK_EVERY .. " seconds in combat, as a hidden bar would. Watch Ice Lance. Then let combat end.",
-      wait = blinkFight, timeout = 1200 },
-    { text = "After the off and on, did the overlay, the glow and the sound still come with a proc?", ask = true },
-    { text = "After each blink during a proc, did the glow come back animated?", ask = true },
-    { text = "Frozen targets: with Fingers of Frost NOT up, Frost Nova an enemy (or target one that's frozen): Ice Lance "
-        .. "should glow. Then target an enemy that isn't frozen, then clear your target (Esc). Let combat end.",
-      wait = r3fight, timeout = 1200 },
+    -- Run #620 answered the rest of round 3: both copies, paging, the macro,
+    -- the overlays, the sound, two procs in a row, off and on (r3off / r3on).
+    { text = "Adding a view of your target above the middle of the screen: two icons, any debuff of yours on your "
+        .. "target (left) and a freeze (right).", auto = true, run = r3c.buildView,
+      check = function() return r3.view ~= nil, "view built" end, screenshot = "target view, no target" },
+    { text = "Hiding the glow during a proc (not the Blink spell: the probe hides the glow itself, as a hidden bar "
+        .. "would). Fight until Fingers of Frost procs. While Ice Lance glows, press Hide the glow: the glow goes for a "
+        .. "second and comes back. If it wasn't glowing when you pressed, press Back and try again.",
+      run = hideGlows, button = "Hide the glow" },
+    { text = "Was Ice Lance glowing when you pressed Hide the glow?", ask = true },
+    { text = "Did the glow come back after a second, animated (not frozen, not gone)?", ask = true },
+    { text = "Once more, the same way, on another proc: while Ice Lance glows, press Hide the glow.",
+      run = hideGlows, button = "Hide the glow" },
+    { text = "Did it come back animated this time too?", ask = true },
+    { text = "Frozen targets: wait until Fingers of Frost is NOT up. Target an enemy, Frost Nova it, and don't hit it for "
+        .. "2-3 seconds (damage breaks the freeze). While it's frozen, press Shot on this panel, and watch Ice Lance and "
+        .. "the two icons. Then target an enemy that isn't frozen, then clear your target (Esc). Let combat end.",
+      wait = r3c.freshFight("frozen", r3fight), timeout = 1200 },
     { text = "Did Ice Lance glow while your target was frozen?", ask = true },
-    { text = "Did it go out on the unfrozen target, and with no target?", ask = true },
+    { text = "Did the left icon show your debuffs on the target (Frost Nova's while it was frozen)?", ask = true },
+    { text = "Did the right icon show Frost Nova while the target was frozen?", ask = true },
+    { text = "Did the glow and both icons go out on the unfrozen target, and with no target?", ask = true },
     -- Heating Up's mock (heatingMock) was answered in run #591: clean; three
     -- layers no clearer than the top one (the owner unsure, the shots alike).
     { text = "Removing everything.", auto = true, run = function() mockOff(); return r3end() end, check = nothingBlocked },
@@ -2536,6 +2600,6 @@ NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCa
     hideGlow = hideGlow, glowInCombat = glowInCombat, procTeardown = procTeardown, procState = function() return pw end,
     containerGlow = containerGlow, outOfCombat = outOfCombat, nothingBlocked = nothingBlocked, procFrame = procFrame,
     r3ready = r3ready, r3build = r3build, r3off = r3off, r3on = r3on, r3end = r3end, r3teardown = r3teardown,
-    r3offCheck = r3offCheck, r3onCheck = r3onCheck,
-    glowKey = glowKey, retarget = retarget, driftPoll = driftPoll, blink = blink, blinkFight = blinkFight, heatingMock = heatingMock,
+    r3offCheck = r3offCheck, r3onCheck = r3onCheck, buildView = r3c.buildView, freshFight = r3c.freshFight,
+    glowKey = glowKey, retarget = retarget, driftPoll = driftPoll, hideGlows = hideGlows, heatingMock = heatingMock,
     atBoss = atBoss, bossBuild = bossBuild, r3state = function() return r3 end, nativeFrame = nativeFrame }
