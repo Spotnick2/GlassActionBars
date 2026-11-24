@@ -18,6 +18,7 @@ local function fresh(opts)
     WoW.playerClass = opts.class or "MAGE"
     if opts.sao then WoW.loaded.SpellActivationOverlay = true end
     WoW.refuseLoad = opts.refuseLoad
+    WoW.slotThrows = opts.slotThrows
     WoW.actionSpells[3] = ICE_LANCE
     WoW.actionSpells[7] = FROSTBOLT
     GAB = loadAddon({ db = opts.db })
@@ -271,6 +272,36 @@ eq(lines, 13, "  all 13 slots")
 
 -- Nothing written on a Blizzard frame, no protected change.
 eq(#WoW.violations, 0, "no protected change in the whole run")
+
+-- A slot the engine refuses (as an OnShow hook made it, in play): recorded,
+-- its half-made frame hidden, the other slots built, and no retry at the
+-- next change (each retry left another frame shown).
+P = fresh({ slotThrows = { ["missile_barrage:1"] = 1 } })
+check(GAB.failures["procs:slot:missile_barrage:1"] and GAB.failures["procs:slot:missile_barrage:1"]:find("refused"),
+    "a refused slot: recorded")
+local orphan = WoW.slotFrames[1]
+check(orphan.key == "missile_barrage:1" and not orphan.frame:IsShown(), "  its frame hidden")
+OP = P._test.st.overlay.player
+check(count(OP._slots) == 11 and OP._slots["missile_barrage:2"] and P._test.st.overlay.target, "  the other slots built")
+for _, o in ipairs(P._test.st.frames) do check(o.key ~= "missile_barrage:1", "  and forgotten") end
+local made = #WoW.slotFrames
+GAB.Settings.SetProcLook("opacity", 0.5)
+GAB.Settings.SetProc("overlays", false)
+GAB.Settings.SetProc("overlays", true)
+eq(#WoW.slotFrames, made, "  no rebuild at later changes")
+
+-- A glow slot refused on one button: that button's containers off, the others built.
+P = fresh({ slotThrows = { glow = 1 } })
+local gk
+for k in pairs(GAB.failures) do if k:find("^procs:glow:") then gk = k end end
+check(gk == "procs:glow:ActionButton1", "a refused glow: recorded for its button (" .. tostring(gk) .. ")")
+eq(count(P._test.side), 95, "  the 95 other buttons built")
+local leftOn = 0
+for _, c in ipairs(WoW.containers) do
+    if c:GetParent() == ActionButton1 and (c:IsShown() or c._enabled) then leftOn = leftOn + 1 end
+end
+eq(leftOn, 0, "  its containers disabled and hidden")
+check(P._test.side[ActionButton3].player._slots.glow.enabled, "  Ice Lance still glows elsewhere")
 
 -- Saved: nil, true and false kept apart; junk pruned.
 local db = { procs = { overlays = true, glow = false, sound = "x", opacity = 1, scale = 1.25, offset = 7,

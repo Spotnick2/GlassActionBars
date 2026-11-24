@@ -370,11 +370,26 @@ WoW.templates.CustomAuraContainerTemplate = function(w)
     WoW.containers[#WoW.containers + 1] = w
     rawset(w, "SetUnit", function(self, u) self._unit = u end)
     rawset(w, "SetEnabled", function(self, on) self._enabled = on end)
+    -- As the engine does: the frame made, initializeFrame called, then its
+    -- access restrictions applied, which refuse a frame an addon put a script
+    -- on (UntrustedScriptExecution; in play on 1.60.1.71037, an OnShow hook
+    -- left the slot unregistered and its frame shown). The new frame starts
+    -- hidden only past that point (UpdateAuraDisplay). WoW.slotThrows[key] = n
+    -- makes that key's next n slots throw there too.
     rawset(w, "AddAuraSlot", function(self, key, filter, opts)
         assert(type(key) == "string" and self._slots[key] == nil, "a new slot key")
         local f = CreateFrame("AuraButton", nil, self, "CustomAuraButtonTemplate")
-        self._slots[key] = { filter = filter, ids = (opts.candidateFilters or {}).includeSpellIDs, enabled = true, frame = f }
+        WoW.slotFrames = WoW.slotFrames or {}
+        WoW.slotFrames[#WoW.slotFrames + 1] = { key = key, frame = f }
         if opts.initializeFrame then opts.initializeFrame(f) end
+        if next(f._scripts) ~= nil then error("bad object (UntrustedScriptExecution): an addon script on " .. key) end
+        local n = WoW.slotThrows and WoW.slotThrows[key]
+        if n and n > 0 then
+            WoW.slotThrows[key] = n - 1
+            error("refused " .. key)
+        end
+        f:Hide()
+        self._slots[key] = { filter = filter, ids = (opts.candidateFilters or {}).includeSpellIDs, enabled = true, frame = f }
         return f
     end)
     rawset(w, "SetAuraSlotCandidateFilters", function(self, key, cf)

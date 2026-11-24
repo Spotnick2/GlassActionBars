@@ -229,6 +229,17 @@ end
 -- ------------------------------------------------------------------
 -- Overlays.
 
+-- A slot the engine refused: its frame, set up by overlaySlot but never
+-- managed, hidden and forgotten. Recorded, and the other slots go on.
+local function dropSlot(key, err)
+    API.Fail("procs:slot:" .. key, err)
+    local kept = {}
+    for _, o in ipairs(st.frames) do
+        if o.key == key then pcall(o.frame.Hide, o.frame) else kept[#kept + 1] = o end
+    end
+    st.frames = kept
+end
+
 -- SAO's placement (components/auracontainer.lua, setButtonGeometry), with
 -- the player's scale; the container grows by the offset (SAO's too).
 local function placeOverlay(o)
@@ -291,10 +302,11 @@ local function overlaySlot(c, spec, level, key)
         local col = spec.color
         if col then t:SetVertexColor(col[1] / 255, col[2] / 255, col[3] / 255, 1) end
         local o = { frame = f, spec = spec, container = c, key = key }
-        if spec.pulse then
-            o.pulse = pulse(t)
-            f:HookScript("OnShow", function() o.pulse:Play() end)
-        end
+        -- Played once here, as SAO does: no script on the slot frame. The
+        -- engine forbids untrusted scripts on it right after this function,
+        -- and an OnShow hook made that throw (in play, 2026-11-23: the slot
+        -- never registered, its frame left shown).
+        if spec.pulse then o.pulse = pulse(t) end
         st.frames[#st.frames + 1] = o
         placeOverlay(o)
     end
@@ -320,17 +332,23 @@ local function buildOverlays()
         st.slots[e.key] = {}
         for i, spec in ipairs(e.overlays) do
             local key = e.key .. ":" .. i
-            c:AddAuraSlot(key, e.filter, sortOpts({ candidateFilters = { includeSpellIDs = idSet(e.auras) },
-                initializeFrame = overlaySlot(c, spec, i, key) }))
-            st.slots[e.key][#st.slots[e.key] + 1] = { c, key }
+            local ok, err = pcall(c.AddAuraSlot, c, key, e.filter, sortOpts({
+                candidateFilters = { includeSpellIDs = idSet(e.auras) }, initializeFrame = overlaySlot(c, spec, i, key) }))
+            if ok then
+                st.slots[e.key][#st.slots[e.key] + 1] = { c, key }
+            else
+                dropSlot(key, err)
+            end
         end
     end
     for _, c in pairs(st.overlay) do c:UpdateAllAuras() end
-    st.built.overlays = true
 end
 
 local function applyOverlays(on)
-    if on and not st.built.overlays then buildOverlays() end
+    if on and not st.built.overlays then
+        st.built.overlays = true   -- once: a failure isn't retried (and duplicated) at each Apply
+        buildOverlays()
+    end
     if not st.built.overlays then return end
     for key, list in pairs(st.slots) do
         local eOn = Procs.EffectOn(key)
@@ -420,23 +438,34 @@ local function buildGlow()
     for _, b in ipairs(stockButtons()) do
         local w, h = b:GetSize()
         local s = { key = {} }
-        for unit in pairs(st.glowUnits) do
-            local c = newContainer(b, unit)
-            c:SetAllPoints(b)
-            c:SetFrameLevel(b:GetFrameLevel() + Procs.LEVEL_UP)
-            -- Made with a real filter (an empty set's meaning isn't ours to
-            -- guess), then off until retarget says otherwise.
-            local any
-            for _, e in ipairs(Procs.Effects()) do
-                if e.glow and e.unit == unit then any = idSet(e.auras); break end
+        -- One button's failure is recorded and its containers put away; the
+        -- other buttons still get theirs.
+        local made = {}
+        local ok, err = pcall(function()
+            for unit in pairs(st.glowUnits) do
+                local c = newContainer(b, unit)
+                made[#made + 1] = c
+                c:SetAllPoints(b)
+                c:SetFrameLevel(b:GetFrameLevel() + Procs.LEVEL_UP)
+                -- Made with a real filter (an empty set's meaning isn't ours to
+                -- guess), then off until retarget says otherwise.
+                local any
+                for _, e in ipairs(Procs.Effects()) do
+                    if e.glow and e.unit == unit then any = idSet(e.auras); break end
+                end
+                c:AddAuraSlot("glow", filters[unit], sortOpts({ initializeFrame = ringSlot(c, w, h),
+                    candidateFilters = { includeSpellIDs = any } }))
+                c:SetAuraSlotEnabled("glow", false)
+                c:UpdateAllAuras()
+                s[unit] = c
             end
-            c:AddAuraSlot("glow", filters[unit], sortOpts({ initializeFrame = ringSlot(c, w, h),
-                candidateFilters = { includeSpellIDs = any } }))
-            c:SetAuraSlotEnabled("glow", false)
-            c:UpdateAllAuras()
-            s[unit] = c
+        end)
+        if not ok then
+            API.Fail("procs:glow:" .. tostring(b:GetName()), err)
+            for _, c in ipairs(made) do pcall(setOn, c, false) end
+        else
+            side[b] = s
         end
-        side[b] = s
         if not st.hooked[b] then
             st.hooked[b] = true
             hooksecurefunc(b, "Update", retarget)
