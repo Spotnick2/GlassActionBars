@@ -385,8 +385,28 @@ passed, and 4 and 8 again. Item 3 failed unexplained: a Frost Nova'd target left
 Off and on also ran in combat, open world, with nothing blocked; the plan still queues a change in
 combat, since that's one run. Round 3c (`procs3` rev 4) runs only the hide, pressed by the owner
 while the glow is up, and the frozen target in a fight of its own, with a view of the engine's
-target debuffs. If the freeze glow still
-fails, the owner decides whether the mage slice waits for it or ships without it.
+target debuffs.
+
+**Status after run #622** (round 3c): Phase 0 is done for the mage slice except one check on
+item 3.
+- Item 2 passed: the glow came back animated after a real hide during a proc, so the template's
+  own `OnHide` handlers restart the loop and `AddAuraShownAnimation` isn't needed.
+- Item 3, half done:
+  - **Confirmed:** the engine sees Frost Nova on an enemy, and the freeze filter on a `target`
+    container matches it (the target view's filter-only icon).
+  - **Pending:** the button ring drawn by the `target` container, appearing on a frozen target and
+    clearing on an unfrozen one and with no target. Fingers of Frost was up in that fight, and the
+    player container draws the same ring, so the answers don't isolate it (Codex, PR #122). It's
+    checked with the player-side glow slot disabled, before PR 1 ships the freeze glow. Until then
+    the freeze glow is unverified.
+  - #620's dark freeze stays unexplained (probably the root broken by damage before it showed).
+- Items 1, 4, 6 and 8 passed earlier.
+- Item 5 (`procboss`, reworked first) waits for the owner's next boss and doesn't gate the slice.
+- Item 7 is mage and warrior so far.
+
+PR 1, the mage slice, can start, with that check tracked. GABProbe comes off the client now that these findings are
+written. `procboss` and the passive count on other classes need it deployed again
+(`Tools\deploy.ps1 -Probe`).
 
 Counters are measured in PR 3's own probe round, not here. A readable cooldown table alone doesn't
 make a working counter. That round tests, for each supported spell:
