@@ -189,8 +189,9 @@ two spells and the Alt macro), so only the `target` container could draw the rin
   froze both enemies in range, so the one tabbed to was likely frozen too. No target and back on
   the frozen one: unsure. The Fingers of Frost control (dark with the proc up): unsure.
 - **The counts:** 28 filter writes (2 in combat), 56 unchanged skipped, 42 `Update` calls (the Alt
-  macro flipping to Frostbolt and back), 15 target changes refreshed without error, 0 drifts,
-  nothing blocked with the listener on. Mage's passive count is 33469 `HIDE` with no spell, still no
+  macro flipping to Frostbolt and back), 15 target changes refreshed without error, nothing
+  blocked with the listener on. No drift count: the poll compares the player slot only, off on
+  every button here, so it couldn't see a stale target filter (Codex, PR #123). Mage's passive count is 33469 `HIDE` with no spell, still no
   `SHOW` or `GLOW_*`. Bugsy has no problem since session 262 (the current one is 315).
 - **No more probe rounds for item 3** (the owner, 2026-11-23): the clearing is checked by playing
   with PR 1's freeze glow.
