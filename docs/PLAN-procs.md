@@ -405,7 +405,14 @@ item 3.
 - Item 5 (`procboss`, reworked first) waits for the owner's next boss and doesn't gate the slice.
 - Item 7 is mage and warrior so far.
 
-PR 1, the mage slice, can start, with that check tracked. GABProbe comes off the client now that these findings are
+**Status after run #630** (round 3d, `procfreeze`): item 3's ring passed. With every player-side
+slot off, a Frost Nova'd target lit all three Ice Lance buttons, so the `target` container draws
+it. The clearing on an unfrozen target and with no target went unmeasured (Frost Nova froze the
+enemy tabbed to as well). The owner chose to check it by playing with PR 1 rather than another
+probe round (2026-11-23): PR 1 ships the freeze glow, and its in-game checklist covers frozen ->
+unfrozen enemy -> no target.
+
+PR 1, the mage slice, can start. GABProbe comes off the client now that these findings are
 written. `procboss` and the passive count on other classes need it deployed again
 (`Tools\deploy.ps1 -Probe`).
 
