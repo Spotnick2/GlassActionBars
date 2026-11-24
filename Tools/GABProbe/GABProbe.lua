@@ -1941,7 +1941,10 @@ local function spellOf(b)
     if secret(id) then return nil, "<secret>" end
     return id
 end
-local function wantFor(unit, k) return k and FILTERS[unit][k] and k or nil end
+-- r3.only (round 3d's freeze check): the one unit whose slots may light.
+local function wantFor(unit, k)
+    return k and FILTERS[unit][k] and (r3.only == nil or r3.only == unit) and k or nil
+end
 
 local function stockButtons()
     local list = {}
@@ -2420,6 +2423,48 @@ function r3c.buildView()
     return true, "target view built"
 end
 
+-- Round 3d (#115, Codex on PR #122): the freeze alone lighting Ice Lance.
+-- Every button's player-side slot stays off (wantFor), so a ring on the
+-- button can only be the target container's. Fingers of Frost keeps its
+-- overlay and sound, which tell the owner when the proc is up.
+function r3c.freezeReady()
+    if InCombatLockdown() then return false, "waiting for combat to end" end
+    if saoLoaded() then return false, "SpellActivationOverlay is still loaded: turn it off in the AddOns list and /reload" end
+    if #r3scan(true).ice == 0 then return false, "still needed: Ice Lance on a visible bar" end
+    startClean()
+    r3teardown()
+    procSetup()
+    return true, "Ice Lance on " .. table.concat(r3scan().ice, ", ")
+end
+function r3c.freezeCount()
+    local n, playerOn, lit = 0, 0, 0
+    for _, st in pairs(r3.side) do
+        n = n + 1
+        if st.key.player then playerOn = playerOn + 1 end
+        if st.key.target then lit = lit + 1 end
+    end
+    return n, playerOn, lit
+end
+function r3c.freezeBuild()
+    if r3.on then return "already built" end
+    r3.only = "target"
+    local ok, a, b, c, d, e = r3build()
+    if ok ~= true then
+        r3.only = nil
+        return ok, a, b, c, d, e
+    end
+    local okV, v = r3c.buildView()
+    local n, playerOn, lit = r3c.freezeCount()
+    local msg = ("player-side glow off on %d of %d buttons, the freeze glow on %d"):format(n - playerOn, n, lit)
+    say("procs3: freeze only: " .. msg)
+    return okV == true, msg, v, a, b
+end
+function r3c.freezeBuilt()
+    local _, playerOn, lit = r3c.freezeCount()
+    return r3.on == true and r3.only == "target" and r3.view ~= nil and playerOn == 0 and lit > 0,
+        ("freeze only: %d player-side slots on, %d freeze glows"):format(playerOn, lit)
+end
+
 -- Heating Up at 3 stacks: its three layers (or the top one alone) drawn as
 -- plain textures; no aura involved.
 local function heatingMock(top)
@@ -2522,6 +2567,36 @@ end)({
     { text = "Press Reload now (or type /reload) to save the results.", reload = true },
 }))
 
+-- Round 3d (#115): Phase 0 item 3's button ring, with Fingers of Frost's
+-- glow off (Codex, PR #122: run #622's ring may have been the proc's).
+Probe:Steps("procfreeze", (function(def)
+    for _, step in ipairs(def) do step.leave = leave3 end
+    return def
+end)({
+    rev = 1,
+    title = "Proc alerts: a frozen target alone lights Ice Lance (#115, round 3d)",
+    { text = "Getting ready. SpellActivationOverlay must be OFF (Esc > AddOns, untick it, /reload). Out of combat, have "
+        .. "Ice Lance on a visible bar. This step goes on by itself once it's there.", wait = r3c.freezeReady, timeout = 900 },
+    { text = "Building the glow on every action button with the Fingers of Frost glow OFF: only a frozen target can "
+        .. "light Ice Lance now. The Fingers of Frost overlay at the screen's sides and its sound still come. Also the "
+        .. "view of your target above the middle of the screen (right icon: a freeze).", auto = true,
+      run = r3c.freezeBuild, check = r3c.freezeBuilt },
+    { text = "In one fight: 1. Target an enemy, Frost Nova it, and don't hit it for 2-3 seconds (damage breaks the "
+        .. "freeze). While the right icon shows Frost Nova, press Shot on this panel and watch Ice Lance. 2. Target an "
+        .. "enemy that isn't frozen (Tab) and press Shot. 3. If the first one is still frozen, target it again and watch. "
+        .. "4. Clear your target (Esc). Whenever Fingers of Frost procs (the overlay shows) and your target isn't "
+        .. "frozen, watch Ice Lance too. Then let combat end.",
+      wait = r3c.freshFight("freeze", r3fight), timeout = 1200 },
+    { text = "While your target was frozen (the right icon showing Frost Nova), did Ice Lance glow?", ask = true },
+    { text = "Did the glow go out when you targeted an enemy that wasn't frozen?", ask = true },
+    { text = "Did it stay out with no target?", ask = true },
+    { text = "Back on the still-frozen enemy, did the glow come back? (Skip if you didn't get to try.)", ask = true },
+    { text = "With Fingers of Frost up (the overlay showing) and no frozen target, did Ice Lance stay dark? (Skip if "
+        .. "it didn't proc.)", ask = true },
+    { text = "Removing everything.", auto = true, run = r3end, check = nothingBlocked },
+    { text = "Press Reload now (or type /reload) to save the results.", reload = true },
+}))
+
 -- At a boss before the pull: the Encounter restriction is on out of combat.
 local function atBoss()
     if InCombatLockdown() then return false, "waiting for combat to end" end
@@ -2601,5 +2676,6 @@ NS._test = { Probe = Probe, aura = aura, readAll = readAll, readCamping = readCa
     containerGlow = containerGlow, outOfCombat = outOfCombat, nothingBlocked = nothingBlocked, procFrame = procFrame,
     r3ready = r3ready, r3build = r3build, r3off = r3off, r3on = r3on, r3end = r3end, r3teardown = r3teardown,
     r3offCheck = r3offCheck, r3onCheck = r3onCheck, buildView = r3c.buildView, freshFight = r3c.freshFight,
+    freezeReady = r3c.freezeReady, freezeBuild = r3c.freezeBuild, freezeBuilt = r3c.freezeBuilt,
     glowKey = glowKey, retarget = retarget, driftPoll = driftPoll, hideGlows = hideGlows, heatingMock = heatingMock,
     atBoss = atBoss, bossBuild = bossBuild, r3state = function() return r3 end, nativeFrame = nativeFrame }

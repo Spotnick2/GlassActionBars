@@ -398,7 +398,8 @@ item 3.
     clearing on an unfrozen one and with no target. Fingers of Frost was up in that fight, and the
     player container draws the same ring, so the answers don't isolate it (Codex, PR #122). It's
     checked with the player-side glow slot disabled, before PR 1 ships the freeze glow. Until then
-    the freeze glow is unverified.
+    the freeze glow is unverified. Round 3d (`/fp steps gab procfreeze`) is that check: every
+    player-side slot stays off, Fingers of Frost keeps its overlay and sound as a control.
   - #620's dark freeze stays unexplained (probably the root broken by damage before it showed).
 - Items 1, 4, 6 and 8 passed earlier.
 - Item 5 (`procboss`, reworked first) waits for the owner's next boss and doesn't gate the slice.
