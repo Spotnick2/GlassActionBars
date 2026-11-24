@@ -428,7 +428,13 @@ The probe is removed from the client when the findings are written (owner, 2026-
 
 - **PR 1, the mage slice:** `Procs.lua` (both containers, the glow, settings, the SAO default),
   `ProcData.lua` with the mage's Forever effects and the glow pairs confirmed, and the Options page.
-  In-game check on the frost mage.
+  In-game check on the frost mage, by playing it (the owner's choice, 2026-11-23: no probe
+  procedure). Ships the five Forever mage effects' overlays, the sound on the three that pulse, and
+  the two glow pairs checked in game (Fingers of Frost and a frozen target, both on Ice Lance).
+  The frozen target lighting Ice Lance alone was seen in run #630; its ring going out on an
+  unfrozen target and with no target is checked in the owner's play before PR 1 merges, and
+  the pair is dropped from `ProcData.lua` if it fails (Codex, PR #124).
+  Deep Freeze, Arcane Missiles (Missile Barrage) and Pyroblast (Heating Up at 3) glow once checked.
 - **PR 2, the other classes:** their aura effects, glow pairs confirmed per class in play,
   Revelation.
 - **PR 3, counters:** its own probe round first (above). They ship only if it allows them.

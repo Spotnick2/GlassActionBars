@@ -7,6 +7,9 @@
 dofile("tests/wow_stubs.lua")
 dofile("tests/harness.lua")
 
+-- A mage with Ice Lance on a bar: the proc alerts build overlays, glows and sounds (#115).
+WoW.playerClass = "MAGE"
+WoW.actionSpells[3] = 1240044
 local GAB = loadAddon()
 -- Every event, then a few seconds of frames and timers.
 WoW.fireAllRegistered()
@@ -47,7 +50,7 @@ for _, cmd in ipairs({ "", "failures", "version", "options", "inspect", "inspect
                         "theme class", "theme clear", "material", "micro pill", "micro tiles", "gryphons on",
                         "gryphons off", "hotkeys off", "hotkeys on", "macros off", "macros on", "fade",
                         "fade 2 mouseover", "fade 2 off", "dock", "dock utility off", "dock utility 1",
-                        "utility off", "utility on", "look", "look soft", "look glass", "follow" }) do
+                        "utility off", "utility on", "look", "look soft", "look glass", "follow", "procs" }) do
     SlashCmdList.GLASSACTIONBARS(cmd)
     WoW.tick()
 end

@@ -588,6 +588,67 @@ Options.utility2Page = Options.AddPage("Utility bar 2", function(page, title)
     Options._test.utility2Enabled = enabled
 end)
 
+-- Proc alerts (#115): the three switches, the overlays' look, and each effect
+-- of the player's class.
+Options.PROC_SWITCHES = {
+    { "overlays", "Screen overlays while a proc is up" },
+    { "glow", "Glow on the action button of the spell to press" },
+    { "sound", "A sound when a proc comes" },
+}
+Options.PROC_LOOK = { { "opacity", "Overlay opacity" }, { "scale", "Overlay size" }, { "offset", "Overlay spacing" } }
+Options.procsPage = Options.AddPage("Proc alerts", function(page, title)
+    local Procs = GAB.Procs
+    local note = label(page, "", "GameFontHighlightSmall")
+    note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    note:SetPoint("RIGHT", page, "RIGHT", -16, 0)
+    note:SetJustifyH("LEFT")
+    building[#building + 1] = function()
+        local t = "Blizzard's own proc art, shown by the game's aura engine, in combat too. A glow fades with its "
+            .. "bar when the bar fades."
+        if Procs.SAOLoaded() then
+            t = t .. " SpellActivationOverlay is loaded, so these start off: tick them to use GAB's instead, and "
+                .. "turn SpellActivationOverlay off in the AddOns list."
+        end
+        if Procs.Waiting() then t = t .. " |cffffd100A change waits for the fight or the boss encounter to end.|r" end
+        note:SetText(t)
+    end
+    Options._test.procNote = note
+    -- The note follows the queue while the page is open: a change queued, or
+    -- applied when the fight or encounter ends.
+    Procs.OnQueueChanged = function()
+        if page:IsShown() then Options.RefreshPage(page) end
+    end
+    local last = note
+    Options._test.procSwitches = {}
+    for i, s in ipairs(Options.PROC_SWITCHES) do
+        local cb = Options.checkbox(page, last, s[2], function() return Procs.Enabled(s[1]) end,
+            function(on) GAB.Settings.SetProc(s[1], on) end)
+        if i == 1 then cb:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -12) end
+        Options._test.procSwitches[s[1]] = cb
+        last = cb
+    end
+    Options._test.procLook = {}
+    for i, r in ipairs(Options.PROC_LOOK) do
+        local name = label(page, r[2])
+        name:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, i == 1 and -16 or -10)
+        local _, group = Options.radios(page, name, Procs.LOOK[r[1]][2], function() return Procs.Look(r[1]) end,
+            function(v) GAB.Settings.SetProcLook(r[1], v) end, { 140, 120 })
+        Options._test.procLook[r[1]] = group
+        last = name
+    end
+    local effects = Procs.Effects()
+    local head = label(page, #effects > 0 and "Your class's alerts" or "Your class has no proc alerts yet.", "GameFontNormal")
+    head:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -20)
+    last = head
+    Options._test.procEffects = {}
+    for _, e in ipairs(effects) do
+        local cb = Options.checkbox(page, last, e.label, function() return Procs.EffectOn(e.key) end,
+            function(on) GAB.Settings.SetProcEffect(e.key, on) end)
+        Options._test.procEffects[e.key] = cb
+        last = cb
+    end
+end)
+
 -- Called once at PLAYER_LOGIN by GlassActionBars.lua.
 function Options.Register()
     if category or not (Settings and Settings.RegisterCanvasLayoutCategory) then return end
