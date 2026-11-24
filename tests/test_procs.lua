@@ -204,6 +204,35 @@ WoW.fire("PLAYER_REGEN_ENABLED")
 check(not OP:IsShown() and not P.Waiting(), "  applied when it ends")
 Settings.SetProc("overlays", true)
 
+-- While a change waits, the alerts still on screen keep following: a page
+-- change retargets the glow, a target change refreshes the target containers
+-- (Codex, PR #124: Frostbolt could inherit Ice Lance's ring).
+WoW.combat = true
+WoW.fire("PLAYER_REGEN_DISABLED")
+Settings.SetProc("glow", false)
+Settings.SetProc("overlays", false)
+check(P.Waiting() and s3.player:IsShown() and OP:IsShown(), "queued off: the glow and overlays still on screen")
+WoW.actionSpells[3] = FROSTBOLT
+ActionButton3:Update()
+check(gp.enabled == false and gt.enabled == false, "  paging away still clears the ring")
+WoW.actionSpells[3] = ICE_LANCE
+ActionButton3:Update()
+check(gp.enabled and gt.enabled, "  and paging back lights it")
+rt, ro = s3.target._refreshes, OT._refreshes
+WoW.fire("PLAYER_TARGET_CHANGED")
+WoW.flushTimers(0)
+check(s3.target._refreshes == rt + 1 and OT._refreshes == ro + 1, "  a target change still refreshes both")
+WoW.combat = false
+WoW.fire("PLAYER_REGEN_ENABLED")
+check(not s3.player:IsShown() and not OP:IsShown() and not P.Waiting(), "  applied when the fight ends")
+WoW.actionSpells[3] = FROSTBOLT
+ActionButton3:Update()
+check(gp.enabled, "  then a page change while off writes nothing")
+Settings.SetProc("glow", true)
+Settings.SetProc("overlays", true)
+WoW.actionSpells[3] = ICE_LANCE
+ActionButton3:Update()
+
 -- At a boss: the Encounter restriction holds it. Only its own Inactive wakes
 -- it, read from the payload (the question answers false during that event).
 local R, S = Enum.AddOnRestrictionType, Enum.AddOnRestrictionState
@@ -256,6 +285,17 @@ check(GAB.db.procs.off.clearcasting and not OP._slots["clearcasting:1"].enabled,
 ot.procSwitches.sound:SetChecked(false)
 ot.procSwitches.sound:GetScript("OnClick")(ot.procSwitches.sound)
 check(GAB.db.procs.sound == false and next(WoW.auraSounds) == nil, "  the sound unticked from the page")
+-- The note follows the queue while the page is open (Codex, PR #124).
+local function noteWaits() return (ot.procNote:GetText() or ""):find("waits") ~= nil end
+check(not noteWaits(), "  the note: nothing waiting")
+WoW.combat = true
+WoW.fire("PLAYER_REGEN_DISABLED")
+ot.procSwitches.sound:SetChecked(true)
+ot.procSwitches.sound:GetScript("OnClick")(ot.procSwitches.sound)
+check(noteWaits(), "  a change queued from the open page: the note says it waits")
+WoW.combat = false
+WoW.fire("PLAYER_REGEN_ENABLED")
+check(not noteWaits() and count(WoW.auraSounds) == 6, "  applied at the fight's end: the note clears")
 
 -- /gab procs: a line per overlay slot, our setting beside the engine's.
 local chat0 = #WoW.chat

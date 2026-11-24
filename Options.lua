@@ -612,6 +612,12 @@ Options.procsPage = Options.AddPage("Proc alerts", function(page, title)
         if Procs.Waiting() then t = t .. " |cffffd100A change waits for the fight or the boss encounter to end.|r" end
         note:SetText(t)
     end
+    Options._test.procNote = note
+    -- The note follows the queue while the page is open: a change queued, or
+    -- applied when the fight or encounter ends.
+    Procs.OnQueueChanged = function()
+        if page:IsShown() then Options.RefreshPage(page) end
+    end
     local last = note
     Options._test.procSwitches = {}
     for i, s in ipairs(Options.PROC_SWITCHES) do

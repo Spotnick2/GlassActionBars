@@ -68,6 +68,7 @@ local st = {
     slots = {},           -- effect key -> { { container, slotKey } }
     glowUnits = {},       -- unit -> true, the units some effect glows from
     built = { overlays = false, glow = false },
+    applied = {},         -- each switch as last applied: what's on screen while a change waits
     sounds = {},          -- "unit:auraId" -> { id1, id2 }
     hooked = {},          -- buttons whose Update is hooked (a hook can't be taken back)
     writes = 0,           -- filter writes, for the tests
@@ -401,7 +402,7 @@ end
 -- written and is enabled, even with the same ids as before.
 local function retarget(b)
     local s = side[b]
-    if not s or not st.built.glow or not Procs.Enabled("glow") then return end
+    if not s or not st.built.glow or not st.applied.glow then return end
     local spell = spellOf(b)
     for unit in pairs(st.glowUnits) do
         local want = spell and glowIndex[unit] and glowIndex[unit][spell]
@@ -486,8 +487,8 @@ end
 
 -- A target change: the target containers, a frame later (SAO's).
 local function refreshTarget()
-    if st.overlay.target and Procs.Enabled("overlays") then API.Try("procs:target", st.overlay.target.UpdateAllAuras, st.overlay.target) end
-    if st.built.glow and st.glowUnits.target and Procs.Enabled("glow") then
+    if st.overlay.target and st.applied.overlays then API.Try("procs:target", st.overlay.target.UpdateAllAuras, st.overlay.target) end
+    if st.built.glow and st.glowUnits.target and st.applied.glow then
         for _, s in pairs(side) do
             if s.key.target then API.Try("procs:target", s.target.UpdateAllAuras, s.target) end
         end
@@ -549,22 +550,32 @@ end
 
 function Procs.Waiting() return st.pending end
 
+-- The options page's note follows the queue (Options sets this).
+Procs.OnQueueChanged = nil
+local function setPending(v)
+    local was = st.pending
+    st.pending = v
+    if was ~= v and Procs.OnQueueChanged then API.Try("procs:notice", Procs.OnQueueChanged) end
+end
+
 -- askEncounter = false only from the restriction event's handler, where the
 -- question always answers false.
 local function apply(askEncounter)
     if API.InCombat() or (askEncounter ~= false and encounterOn()) then
-        st.pending = true
+        setPending(true)
         return "queued"
     end
-    st.pending = false
+    setPending(false)
     local any = false
     for _, f in ipairs(Procs.FEATURES) do any = any or Procs.Enabled(f) end
     if #Procs.Effects() == 0 then return "no effects" end
     if (any or st.built.overlays or st.built.glow) and not loadEngine() then return "no engine" end
     rebuildIndex()
-    API.Try("procs:overlays", applyOverlays, Procs.Enabled("overlays"))
-    API.Try("procs:glow", applyGlow, Procs.Enabled("glow"))
-    API.Try("procs:sound", applySounds, Procs.Enabled("sound"))
+    -- Applied first, so the glow's own retarget pass (applyGlow) sees it on.
+    for _, f in ipairs(Procs.FEATURES) do st.applied[f] = Procs.Enabled(f) end
+    API.Try("procs:overlays", applyOverlays, st.applied.overlays)
+    API.Try("procs:glow", applyGlow, st.applied.glow)
+    API.Try("procs:sound", applySounds, st.applied.sound)
     return "applied"
 end
 
