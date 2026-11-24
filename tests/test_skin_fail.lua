@@ -49,9 +49,10 @@ newChat()
 SlashCmdList.GLASSACTIONBARS("failures")
 check(chatHas("skin:level:ActionButton5"), "/gab failures names it")
 
--- The skin off: nothing touched.
+-- The skin off: nothing touched. The proc glow off too: it hooks Update on
+-- its own (the stub's warlock has glows), which isn't the skin's.
 dofile("tests/wow_stubs.lua")
-GAB = loadAddon({ db = { skin = false } })
+GAB = loadAddon({ db = { skin = false, procs = { glow = false } } })
 check(not GAB.Buttons.IsSkinned(ActionButton1), "skin off: no glass")
 eq(ActionButton1.NormalTexture:GetAlpha(), 1, "  Blizzard's art as it was")
 eq(MainActionBar.BorderArt:GetAlpha(), 1, "  the main bar's art as it was")

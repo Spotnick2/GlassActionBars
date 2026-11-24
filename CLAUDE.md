@@ -214,9 +214,14 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
 - **`ProcData.lua`**: the proc alerts' effects per class (#115, [docs/PLAN-procs.md](docs/PLAN-procs.md)),
   ported from SpellActivationOverlay's Forever table (MIT, LICENSE's third-party section): `key`,
   `label`, `unit` / `filter`, `auras` (every alias; never SAO's freeze stand-in 5276), `overlays`
-  (SAO's textures and positions, `stacks` gated at that many or more), `sound`, `glow` (every rank of
-  the cast spell: no API maps ranks here). Only glow pairs checked in game ship: mage's Fingers of
-  Frost and a frozen target, both on Ice Lance (runs #620-#630).
+  (SAO's textures, positions and draw `level`s, `stacks` gated at that many or more, `color` with an
+  optional alpha), `sound`, `glow` (every rank of the cast spell: no API maps ranks here). Eight
+  classes' aura effects plus each one's Revelation enchant buff (warrior: counters only, PR 3);
+  `Procs.Effects()` hands a character its own class's only. The mage's glow pairs were checked in
+  game (Fingers of Frost and a frozen target on Ice Lance, runs #620-#630); the others (Nightfall ->
+  Shadow Bolt, Decimation -> Soul Fire, Infusion of Light -> Holy Light / Flash of Light,
+  Cutthroat -> Ambush) come from SAO's other versions and are checked as the owner plays the class.
+  Eclipse's texture is shipped (`Media/Eclipse_Moon.tga`, `Tools/make_eclipse.py`).
 - **`Procs.lua`**: the proc alerts. A proc can't be read in combat, so Blizzard's aura engine
   (`Blizzard_AuraContainer`, loaded first; a refusal is `procs:engine`) shows our frames: one
   overlay container per unit under UIParent (a slot per effect and overlay, SAO's geometry, the

@@ -432,11 +432,26 @@ The probe is removed from the client when the findings are written (owner, 2026-
   procedure). Ships the five Forever mage effects' overlays, the sound on the three that pulse, and
   the two glow pairs checked in game (Fingers of Frost and a frozen target, both on Ice Lance).
   The frozen target lighting Ice Lance alone was seen in run #630; its ring going out on an
-  unfrozen target and with no target is checked in the owner's play before PR 1 merges, and
-  the pair is dropped from `ProcData.lua` if it fails (Codex, PR #124).
+  unfrozen target and with no target is checked in the owner's play, and the pair is dropped from
+  `ProcData.lua` if it fails (Codex, PR #124). The owner merged PR 1 (#124, 2026-11-24) with that
+  check still to come.
   Deep Freeze, Arcane Missiles (Missile Barrage) and Pyroblast (Heating Up at 3) glow once checked.
-- **PR 2, the other classes:** their aura effects, glow pairs confirmed per class in play,
-  Revelation.
+- **PR 2, the other classes:** their aura effects and Revelation, with no probe round (the owner,
+  2026-11-24: each class is checked as they play it, which for most is a long way off; what must
+  hold now is that a character only ever gets its own class's alerts). SAO's Forever table gives
+  16 aura effects for seven classes, plus a Revelation for each of those and the mage (the warrior
+  has only counters). Decisions:
+  - **Glow pairs:** only where SAO's other versions glow a button for the same aura id: Nightfall
+    -> Shadow Bolt, Decimation -> Soul Fire, Infusion of Light -> Holy Light and Flash of Light,
+    Cutthroat -> Ambush. Every rank from `SkillLineAbility` (70959). Unchecked until played.
+    Maelstrom Weapon's glow at 5 isn't ported: the glow slot has no stack gate.
+  - **Stacked layers** (Eclipse 1-4, Maelstrom Weapon 1-5) are ported as SAO declares them, each
+    at that many stacks or more, the composite SAO's own engine path draws on Forever.
+  - **Draw levels** are SAO's (`level`, default 3), the mage's too, and a colour may carry SAO's
+    alpha.
+  - **Omen of Clarity** keeps one texture in every form (above).
+  - **Defaults:** every effect on, as for the mage. SAO starts Nature's Grace, Martyrdom and the
+    mage's Clearcasting off; a player unticks them on the page.
 - **PR 3, counters:** its own probe round first (above). They ship only if it allows them.
 - **Later issues:** the countdown, a glass-styled glow, a proc revealing a faded bar if ever
   measurable, and the stance, pet and Utility buttons.

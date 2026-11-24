@@ -34,7 +34,9 @@ remains the work of its author:
                            repository.
 
 The proc alerts' data (ProcData.lua) is ported from SpellActivationOverlay
-3.0.0-forever's effect table (classes/mage.lua), under its MIT License:
+3.0.0-forever's effect tables (classes/*.lua, components/item.lua), and
+Media/Eclipse_Moon.tga is converted from its textures/eclipse_moon.blp
+(Tools/make_eclipse.py), under its MIT License:
 
   MIT License
 

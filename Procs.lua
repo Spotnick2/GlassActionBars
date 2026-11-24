@@ -43,6 +43,7 @@ Procs.RING = 1.4               -- the ring's size, times the button's
 Procs.LEVEL_UP = 5             -- the glow over the glass (session 10: + 1 and + 5 both draw over it)
 Procs.SOUND_FILE = 568016      -- SoundKit 23287, UI_POWER_AURA_GENERIC (SAO's sound), build 71037
 Procs.PULSE = { 1.08, 0.9259, 0.5 }   -- SAO's pulse: up, back, seconds each way
+Procs.LEVEL = 3                       -- an overlay's level over its container unless the data says (SAO's default)
 
 Procs.FEATURES = { "overlays", "glow", "sound" }
 Procs.LOOK = {
@@ -285,11 +286,11 @@ local function pulse(t)
     return ag
 end
 
-local function overlaySlot(c, spec, level, key)
+local function overlaySlot(c, spec, key)
     return function(f)
         f:EnableMouse(false)
         if f.GetIcon and f:GetIcon() then f:GetIcon():Hide() end
-        f:SetFrameLevel(c:GetFrameLevel() + level)
+        f:SetFrameLevel(c:GetFrameLevel() + (spec.level or Procs.LEVEL))   -- SAO's draw order
         local holder = f
         if (spec.stacks or 1) > 1 then
             holder = CreateFrame("StatusBar", nil, f)
@@ -301,7 +302,7 @@ local function overlaySlot(c, spec, level, key)
         t:SetTexture(spec.texture)
         texCoords(t, spec)
         local col = spec.color
-        if col then t:SetVertexColor(col[1] / 255, col[2] / 255, col[3] / 255, 1) end
+        if col then t:SetVertexColor(col[1] / 255, col[2] / 255, col[3] / 255, (col[4] or 255) / 255) end
         local o = { frame = f, spec = spec, container = c, key = key }
         -- Played once here, as SAO does: no script on the slot frame. The
         -- engine forbids untrusted scripts on it right after this function,
@@ -334,7 +335,7 @@ local function buildOverlays()
         for i, spec in ipairs(e.overlays) do
             local key = e.key .. ":" .. i
             local ok, err = pcall(c.AddAuraSlot, c, key, e.filter, sortOpts({
-                candidateFilters = { includeSpellIDs = idSet(e.auras) }, initializeFrame = overlaySlot(c, spec, i, key) }))
+                candidateFilters = { includeSpellIDs = idSet(e.auras) }, initializeFrame = overlaySlot(c, spec, key) }))
             if ok then
                 st.slots[e.key][#st.slots[e.key] + 1] = { c, key }
             else
