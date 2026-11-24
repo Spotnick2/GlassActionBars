@@ -46,8 +46,9 @@ local function sameFields(a, b)
     return true
 end
 
--- Not a mage: nothing built, the page says so.
-local P = fresh({ class = "WARLOCK" })
+-- A class with no aura effects (the warrior's are all counters, PR 3):
+-- nothing built, the page says so.
+local P = fresh({ class = "WARRIOR" })
 eq(#WoW.containers, 0, "a class with no effects: no container")
 eq(next(WoW.auraSounds), nil, "  no sound")
 GAB.Options.procsPage:Show()
@@ -71,7 +72,7 @@ local OP, OT = T.st.overlay.player, T.st.overlay.target
 check(OP and OT and OP:GetParent() == UIParent and OT:GetParent() == UIParent, "overlays: a player and a target container")
 check(OP._unit == "player" and OT._unit == "target" and OP._enabled and OT._enabled and OP:IsShown(), "  their units, enabled, shown")
 check(OP:IsMouseEnabled() == false and OT:IsMouseEnabled() == false, "  click-through")
-eq(count(OP._slots), 12, "  12 player slots: barrage 2, clearcasting 2, Fingers 2, Heating Up 6")
+eq(count(OP._slots), 14, "  14 player slots: barrage 2, clearcasting 2, Fingers 2, Heating Up 6, Revelation 2")
 eq(count(OT._slots), 1, "  one target slot: the freeze")
 local fz = OT._slots["freeze:1"]
 check(fz.filter == "HARMFUL" and fz.ids[865] and fz.ids[5276] == nil, "  the freeze: harmful, its aliases, not SAO's stand-in")
@@ -89,6 +90,14 @@ check(top[1] == "BOTTOM" and top[3] == "TOP" and fz.frame._width > fz.frame._hei
 local mb = OP._slots["missile_barrage:1"].frame._points[1]
 check(math.abs(mb[4] + 0.32 * 102.4) < 0.01, "  Missile Barrage pushed out by SAO's outer")
 check(math.abs(OP._width - 204.8) < 0.01 and OP:GetAlpha() == 1, "  the container SAO's size, opaque")
+local lvl = OP:GetFrameLevel()
+eq(OP._slots["missile_barrage:1"].frame:GetFrameLevel() - lvl, 5, "  SAO's draw levels: Missile Barrage at 5")
+eq(OP._slots["clearcasting:1"].frame:GetFrameLevel() - lvl, 7, "  Clearcasting at 7, over it")
+eq(fof1.frame:GetFrameLevel() - lvl, 3, "  Fingers of Frost at the default 3")
+local rv = OP._slots["revelation:2"]
+local rvt = rv.frame._regions[1]
+check(rv.ids[1248808] and rvt._vertex and math.abs(rvt._vertex[2] - 145 / 255) < 1e-6 and rvt._vertex[4] == 1,
+    "  Revelation: the mage's enchant buff, SAO's pink, opaque")
 
 -- The glow: every stock button of bars 1-8, a player and a target container.
 local s3 = T.side[ActionButton3]
@@ -278,7 +287,7 @@ local O = GAB.Options
 O.procsPage:Show()
 local ot = O._test
 check(ot.procSwitches.overlays:GetChecked() and ot.procSwitches.glow:GetChecked(), "page: the switches read")
-eq(count(ot.procEffects), 5, "  the mage's five effects")
+eq(count(ot.procEffects), 6, "  the mage's six effects")
 ot.procEffects.clearcasting:SetChecked(false)
 ot.procEffects.clearcasting:GetScript("OnClick")(ot.procEffects.clearcasting)
 check(GAB.db.procs.off.clearcasting and not OP._slots["clearcasting:1"].enabled, "  an effect unticked from the page")
@@ -308,7 +317,7 @@ check(report:find("fingers_of_frost:2: setting on, engine true, its frame same, 
     "  a ticked one: on, shown or not, where it's anchored")
 local lines = 0
 for _ in report:gmatch("setting %a+, engine") do lines = lines + 1 end
-eq(lines, 13, "  all 13 slots")
+eq(lines, 15, "  all 15 slots")
 
 -- Nothing written on a Blizzard frame, no protected change.
 eq(#WoW.violations, 0, "no protected change in the whole run")
@@ -322,7 +331,7 @@ check(GAB.failures["procs:slot:missile_barrage:1"] and GAB.failures["procs:slot:
 local orphan = WoW.slotFrames[1]
 check(orphan.key == "missile_barrage:1" and not orphan.frame:IsShown(), "  its frame hidden")
 OP = P._test.st.overlay.player
-check(count(OP._slots) == 11 and OP._slots["missile_barrage:2"] and P._test.st.overlay.target, "  the other slots built")
+check(count(OP._slots) == 13 and OP._slots["missile_barrage:2"] and P._test.st.overlay.target, "  the other slots built")
 for _, o in ipairs(P._test.st.frames) do check(o.key ~= "missile_barrage:1", "  and forgotten") end
 local made = #WoW.slotFrames
 GAB.Settings.SetProcLook("opacity", 0.5)
@@ -364,5 +373,114 @@ GAB.Settings.SetProc("glow", true)
 check(P.Enabled("glow") and count(P._test.side) == 96 and not P._test.st.overlay.player, "  ticked: the glow alone built")
 eq(GAB.db.procs.glow, true, "  an explicit true saved")
 check(sameFields(before, fields(ActionButton3)), "  the glow's build writes nothing on a Blizzard button")
+
+-- Every class's data: the shape the engine needs.
+local TOKENS = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PRIEST = true, ROGUE = true,
+    SHAMAN = true, WARLOCK = true, WARRIOR = true }
+local UNIT_OF = { HELPFUL = "player", HARMFUL = "target", ["HARMFUL|PLAYER"] = "target" }
+local POSITIONS = { LEFT = true, RIGHT = true, TOP = true }
+local function isId(v) return type(v) == "number" and v > 0 and v == math.floor(v) end
+local bad = {}
+local function flag(class, key, why) bad[#bad + 1] = class .. "." .. tostring(key) .. ": " .. why end
+local classes = {}
+for class, effects in pairs(GAB.ProcData) do
+    classes[#classes + 1] = class
+    if not TOKENS[class] then flag(class, "", "not a class token") end
+    local keys = {}
+    for _, e in ipairs(effects) do
+        local k = e.key
+        if type(k) ~= "string" or keys[k] then flag(class, k, "key missing or repeated") end
+        keys[k or ""] = true
+        if type(e.label) ~= "string" then flag(class, k, "no label") end
+        if UNIT_OF[e.filter] == nil or UNIT_OF[e.filter] ~= e.unit then flag(class, k, "unit and filter don't match") end
+        if #e.auras == 0 then flag(class, k, "no aura") end
+        for _, id in ipairs(e.auras) do
+            if not isId(id) or id == 5276 then flag(class, k, "aura " .. tostring(id)) end
+        end
+        for _, id in ipairs(e.glow or {}) do if not isId(id) then flag(class, k, "glow " .. tostring(id)) end end
+        if #e.overlays == 0 then flag(class, k, "no overlay") end
+        local pulses = false
+        for i, o in ipairs(e.overlays) do
+            pulses = pulses or o.pulse == true
+            if not POSITIONS[o.position] then flag(class, k, i .. ": position " .. tostring(o.position)) end
+            -- SAO's Forever art faces inward: every right side is its left mirrored.
+            if o.position == "RIGHT" and not o.hflip then flag(class, k, i .. ": right side not mirrored") end
+            local t = o.texture
+            if type(t) == "string" then
+                local rel = t:match("^Interface\\AddOns\\GlassActionBars\\(Media\\[%w_]+)$")
+                local f = rel and io.open(rel:gsub("\\", "/") .. ".tga", "rb")
+                if f then f:close() else flag(class, k, i .. ": texture not shipped: " .. t) end
+            elseif not isId(t) then
+                flag(class, k, i .. ": texture " .. tostring(t))
+            end
+            if o.stacks ~= nil and not (isId(o.stacks) and o.stacks >= 1) then flag(class, k, i .. ": stacks") end
+            if o.color then
+                local n = #o.color
+                if n < 3 or n > 4 then flag(class, k, i .. ": color size") end
+                for _, v in ipairs(o.color) do if type(v) ~= "number" or v < 0 or v > 255 then flag(class, k, i .. ": color") end end
+            end
+        end
+        -- SAO's rule: the sound goes with the pulse.
+        if (e.sound == true) ~= pulses then flag(class, k, "sound without a pulse, or a pulse without a sound") end
+    end
+end
+eq(table.concat(bad, "; "), "", "data: every class's effects well formed")
+check(#classes == 8 and GAB.ProcData.WARRIOR == nil, "  eight classes; the warrior's are counters (PR 3)")
+table.sort(classes)
+
+-- Each class gets its own effects and nothing else: every slot built, no
+-- other class's aura in a filter, its effects alone on the page.
+for _, class in ipairs(classes) do
+    P = fresh({ class = class })
+    local own, want = {}, 0
+    for _, e in ipairs(GAB.ProcData[class]) do
+        for _, a in ipairs(e.auras) do own[a] = true end
+        want = want + #e.overlays
+    end
+    local built, stray = 0, 0
+    local function scan(c)
+        for _, s in pairs(c._slots) do
+            for id in pairs(s.ids or {}) do if not own[id] then stray = stray + 1 end end
+        end
+    end
+    for _, c in pairs(P._test.st.overlay) do
+        for _ in pairs(c._slots) do built = built + 1 end
+        scan(c)
+    end
+    for _, s in pairs(P._test.side) do
+        if s.player then scan(s.player) end
+        if s.target then scan(s.target) end
+    end
+    eq(next(GAB.failures), nil, class .. ": nothing failed")
+    eq(built, want, "  every overlay slot built")
+    eq(stray, 0, "  no other class's aura in a filter")
+    GAB.Options.procsPage:Show()
+    eq(count(GAB.Options._test.procEffects), #GAB.ProcData[class], "  its effects alone on the page")
+end
+
+-- A warlock's glow: Shadow Bolt lights on Nightfall; Ice Lance doesn't.
+P = fresh({ class = "WARLOCK" })
+WoW.actionSpells[5] = 686
+ActionButton5:Update()
+local w5 = P._test.side[ActionButton5]
+check(w5.player._slots.glow.enabled and w5.player._slots.glow.ids[17941], "warlock: Shadow Bolt glows on Shadow Trance")
+check(P._test.side[ActionButton3].player._slots.glow.enabled == false and P._test.side[ActionButton3].target == nil,
+    "  Ice Lance: nothing, and no target container (no target glow)")
+-- And a mage's Shadow Bolt stays dark.
+P = fresh()
+WoW.actionSpells[5] = 686
+ActionButton5:Update()
+check(P._test.side[ActionButton5].player._slots.glow.enabled == false, "a mage's Shadow Bolt: no glow")
+
+-- A colour's own alpha (Rapid Killing's 222); the shaman's mine-only target debuff.
+P = fresh({ class = "HUNTER" })
+local rk = P._test.st.overlay.player._slots["rapid_killing:1"].frame._regions[1]
+check(rk._vertex and math.abs(rk._vertex[4] - 222 / 255) < 1e-6, "hunter: Rapid Killing at SAO's alpha")
+P = fresh({ class = "SHAMAN" })
+local ss = P._test.st.overlay.target._slots["stormstrike:1"]
+check(ss.filter == "HARMFUL|PLAYER" and ss.ids[27775], "shaman: Stormstrike on the target, mine only")
+P = fresh({ class = "DRUID" })
+local ec = P._test.st.overlay.player._slots["eclipse:1"].frame._regions[1]
+eq(ec:GetTexture(), GAB.MEDIA .. "Eclipse_Moon", "druid: Eclipse's shipped texture")
 
 done("test_procs")
