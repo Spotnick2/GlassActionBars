@@ -529,7 +529,8 @@ function Settings.SetProcEffect(key, on)
     if not known then return false end
     local p = procs()
     p.off = type(p.off) == "table" and p.off or {}
-    p.off[key] = (not on) or nil
+    on = on == true
+    if on == GAB.Procs.EffectDefault(key) then p.off[key] = nil else p.off[key] = not on end
     procsDone()
     return true
 end

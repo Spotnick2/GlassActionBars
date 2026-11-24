@@ -46,9 +46,9 @@ local function sameFields(a, b)
     return true
 end
 
--- A class with no aura effects (the warrior's are all counters, PR 3):
--- nothing built, the page says so.
-local P = fresh({ class = "WARRIOR" })
+-- A class with no proc data (not one of Forever's): nothing built, the page
+-- says so.
+local P = fresh({ class = "DEATHKNIGHT" })
 eq(#WoW.containers, 0, "a class with no effects: no container")
 eq(next(WoW.auraSounds), nil, "  no sound")
 GAB.Options.procsPage:Show()
@@ -287,7 +287,7 @@ local O = GAB.Options
 O.procsPage:Show()
 local ot = O._test
 check(ot.procSwitches.overlays:GetChecked() and ot.procSwitches.glow:GetChecked(), "page: the switches read")
-eq(count(ot.procEffects), 6, "  the mage's six effects")
+eq(count(ot.procEffects), 7, "  the mage's seven effects (Ice Barrier's counter too)")
 ot.procEffects.clearcasting:SetChecked(false)
 ot.procEffects.clearcasting:GetScript("OnClick")(ot.procEffects.clearcasting)
 check(GAB.db.procs.off.clearcasting and not OP._slots["clearcasting:1"].enabled, "  an effect unticked from the page")
@@ -392,15 +392,25 @@ for class, effects in pairs(GAB.ProcData) do
         if type(k) ~= "string" or keys[k] then flag(class, k, "key missing or repeated") end
         keys[k or ""] = true
         if type(e.label) ~= "string" then flag(class, k, "no label") end
-        if UNIT_OF[e.filter] == nil or UNIT_OF[e.filter] ~= e.unit then flag(class, k, "unit and filter don't match") end
-        if #e.auras == 0 then flag(class, k, "no aura") end
-        for _, id in ipairs(e.auras) do
-            if not isId(id) or id == 5276 then flag(class, k, "aura " .. tostring(id)) end
+        if e.kind == "counter" then
+            -- A counter: its cast ranks, nothing of an aura's.
+            if type(e.spell) ~= "table" or #e.spell == 0 then flag(class, k, "no spell") end
+            for _, id in ipairs(e.spell or {}) do if not isId(id) then flag(class, k, "spell " .. tostring(id)) end end
+            if e.unit or e.filter or e.auras or e.glow then flag(class, k, "a counter with aura fields") end
+            if e.combatOnly ~= nil and e.combatOnly ~= true then flag(class, k, "combatOnly") end
+        else
+            if e.kind ~= nil then flag(class, k, "kind " .. tostring(e.kind)) end
+            if UNIT_OF[e.filter] == nil or UNIT_OF[e.filter] ~= e.unit then flag(class, k, "unit and filter don't match") end
+            if #e.auras == 0 then flag(class, k, "no aura") end
+            for _, id in ipairs(e.auras) do
+                if not isId(id) or id == 5276 then flag(class, k, "aura " .. tostring(id)) end
+            end
+            for _, id in ipairs(e.glow or {}) do if not isId(id) then flag(class, k, "glow " .. tostring(id)) end end
+            if #e.overlays == 0 then flag(class, k, "no overlay") end
         end
-        for _, id in ipairs(e.glow or {}) do if not isId(id) then flag(class, k, "glow " .. tostring(id)) end end
-        if #e.overlays == 0 then flag(class, k, "no overlay") end
+        if e.default ~= nil and e.default ~= false then flag(class, k, "default is false or absent") end
         local pulses = false
-        for i, o in ipairs(e.overlays) do
+        for i, o in ipairs(e.overlays or {}) do
             pulses = pulses or o.pulse == true
             if not POSITIONS[o.position] then flag(class, k, i .. ": position " .. tostring(o.position)) end
             -- SAO's Forever art faces inward: every right side is its left mirrored.
@@ -429,11 +439,11 @@ eq(table.concat(bad, "; "), "", "data: every class's effects well formed")
 -- Independent of the table: one known aura per class stays in that class
 -- alone, and no aura id is in two classes (Codex, PR #125).
 local SIGNATURE = { MAGE = 400670, WARLOCK = 17941, HUNTER = 415407, PALADIN = 53672, PRIEST = 27828,
-    ROGUE = 462707, SHAMAN = 408505, DRUID = 408255 }
+    ROGUE = 462707, SHAMAN = 408505, DRUID = 408255, WARRIOR = 7384 }
 local owner, shared, misplaced = {}, {}, {}
 for class, effects in pairs(GAB.ProcData) do
     for _, e in ipairs(effects) do
-        for _, a in ipairs(e.auras) do
+        for _, a in ipairs(e.auras or e.spell) do   -- a counter's ranks too
             if owner[a] and owner[a] ~= class then shared[#shared + 1] = a end
             owner[a] = class
         end
@@ -442,19 +452,21 @@ end
 for class, a in pairs(SIGNATURE) do
     if owner[a] ~= class then misplaced[#misplaced + 1] = class .. " " .. a .. " in " .. tostring(owner[a]) end
 end
-eq(table.concat(shared, ", "), "", "  no aura id in two classes")
+eq(table.concat(shared, ", "), "", "  no aura or counter id in two classes")
 eq(table.concat(misplaced, "; "), "", "  each class's known aura in that class alone")
-check(#classes == 8 and GAB.ProcData.WARRIOR == nil, "  eight classes; the warrior's are counters (PR 3)")
+eq(#classes, 9, "  nine classes")
 table.sort(classes)
 
 -- Each class gets its own effects and nothing else: every slot built, no
 -- other class's aura in a filter, its effects alone on the page.
 for _, class in ipairs(classes) do
     P = fresh({ class = class })
-    local own, want = {}, 0
+    local own, want, counters = {}, 0, {}
     for _, e in ipairs(GAB.ProcData[class]) do
-        for _, a in ipairs(e.auras) do own[a] = true end
-        want = want + #e.overlays
+        if e.kind == "counter" then counters[e.key] = true else
+            for _, a in ipairs(e.auras) do own[a] = true end
+            want = want + #e.overlays
+        end
     end
     local built, stray = 0, 0
     local function scan(c)
@@ -473,6 +485,9 @@ for _, class in ipairs(classes) do
     eq(next(GAB.failures), nil, class .. ": nothing failed")
     eq(built, want, "  every overlay slot built")
     eq(stray, 0, "  no other class's aura in a filter")
+    local strayCounter = 0
+    for k in pairs(P._test.counters) do if not counters[k] then strayCounter = strayCounter + 1 end end
+    eq(strayCounter, 0, "  no other class's counter")
     GAB.Options.procsPage:Show()
     eq(count(GAB.Options._test.procEffects), #GAB.ProcData[class], "  its effects alone on the page")
 end
@@ -501,5 +516,181 @@ check(ss.filter == "HARMFUL|PLAYER" and ss.ids[27775], "shaman: Stormstrike on t
 P = fresh({ class = "DRUID" })
 local ec = P._test.st.overlay.player._slots["eclipse:1"].frame._regions[1]
 eq(ec:GetTexture(), GAB.MEDIA .. "Eclipse_Moon", "druid: Eclipse's shipped texture")
+
+-- Counters (PR 3). A warrior has counters only: the aura engine never loads,
+-- the counters still build.
+local OVERPOWER2, REVENGE1 = 7887, 6572
+local function settle() WoW.flushTimers(0) end
+local function fireSettle(ev, ...) WoW.fire(ev, ...); settle() end
+P = fresh({ class = "WARRIOR" })
+T = P._test
+local before5 = fields(ActionButton5)
+eq(WoW.loaded.Blizzard_AuraContainer, nil, "warrior: the aura engine not loaded")
+eq(#WoW.containers, 0, "  no aura container")
+check(T.st.built.counters and T.st.built.rings and T.st.built.counterOverlays, "  the counters built")
+eq(count(T.rings), 96, "  a ring on every button of bars 1-8")
+check(not T.rings[ActionButton5]:IsShown() and T.rings[ActionButton5]:GetParent() == ActionButton5, "  hidden, a child of the button")
+check(T.rings[ActionButton5]:GetFrameLevel() == ActionButton5:GetFrameLevel() + 5 and not T.rings[ActionButton5]:IsMouseEnabled(),
+    "  over the glass, click-through")
+eq(next(GAB.failures), nil, "  nothing failed")
+
+-- Overpower rank 2 known and on button 5; the window opens in combat.
+WoW.known[7384], WoW.known[OVERPOWER2] = true, true
+WoW.usable[7384] = { true, false }          -- rank 1 isn't the one read
+WoW.usable[OVERPOWER2] = { false, false }
+WoW.actionSpells[5] = OVERPOWER2
+ActionButton5:Update()
+fireSettle("PLAYER_REGEN_DISABLED")
+local op = T.counters.overpower
+check(op.active == false and not T.rings[ActionButton5]:IsShown(), "Overpower: dark while not usable (the highest rank read)")
+WoW.usable[OVERPOWER2] = { true, false }
+fireSettle("SPELL_UPDATE_USABLE")
+check(op.active and T.rings[ActionButton5]:IsShown(), "  usable: its button rings, in combat")
+check(op.frames[1].frame:IsShown(), "  its overlay shown")
+eq(#WoW.played, 1, "  the sound once")
+check(WoW.played[1] and WoW.played[1][1] == 568016, "  the proc sound's file")
+check(not T.rings[ActionButton3]:IsShown(), "  another button stays dark")
+-- Paging away and back, in combat: the ring follows the slot.
+WoW.actionSpells[5] = REVENGE1
+ActionButton5:Update()
+check(not T.rings[ActionButton5]:IsShown(), "  paged to Revenge: dark")
+WoW.actionSpells[5] = 7384
+ActionButton5:Update()
+check(T.rings[ActionButton5]:IsShown(), "  back to a lower rank: lit (every rank glows)")
+fireSettle("SPELL_UPDATE_USABLE")
+eq(#WoW.played, 1, "  no new sound while it stays up")
+-- Execute has no overlay and no sound (SAO's): lit silently.
+WoW.known[5308] = true
+fireSettle("SPELL_UPDATE_USABLE")
+check(T.counters.execute.active, "Execute: lit")
+eq(#WoW.played, 1, "  silently")
+WoW.known[5308] = nil
+fireSettle("SPELL_UPDATE_USABLE")
+-- The window closes.
+WoW.usable[OVERPOWER2] = { false, false }
+fireSettle("SPELL_UPDATE_USABLE")
+check(not op.active and not T.rings[ActionButton5]:IsShown() and not op.frames[1].frame:IsShown(), "  gone: ring and overlay out")
+eq(#WoW.violations, 0, "  no protected change in combat")
+check(sameFields(before5, fields(ActionButton5)), "  nothing written on the button")
+
+-- Short of rage still shows (SAO's); short of mana doesn't.
+WoW.usable[OVERPOWER2] = { false, true }
+fireSettle("SPELL_UPDATE_USABLE")
+check(op.active, "short of rage: shown")
+WoW.known[OVERPOWER2] = nil             -- rank 1 now: its cost not cached yet
+WoW.powerCosts[7384] = { { name = "MANA" } }
+WoW.usable[7384] = { false, true }
+fireSettle("SPELL_UPDATE_USABLE")
+check(not op.active, "short of mana: dark")
+WoW.known[OVERPOWER2], WoW.usable[7384] = true, { true, false }
+-- Entering the world re-checks (a login or a zone change).
+WoW.usable[OVERPOWER2] = { true, false }
+WoW.fire("PLAYER_ENTERING_WORLD")
+check(not op.active, "  (decided a frame later)")
+settle()
+check(op.active, "entering the world: re-checked")
+WoW.usable[OVERPOWER2] = { false, false }
+fireSettle("SPELL_UPDATE_USABLE")
+
+-- The cooldown. isOnGCD is read inside SPELL_UPDATE_COOLDOWN only.
+WoW.usable[OVERPOWER2] = { true, false }
+WoW.cooldowns[OVERPOWER2] = { isActive = true, isOnGCD = false }
+fireSettle("SPELL_UPDATE_COOLDOWN")
+check(not op.active and op.cd == "cd", "on its cooldown: dark")
+WoW.cooldowns[OVERPOWER2] = { isActive = true }          -- isOnGCD unreliable outside the event
+fireSettle("SPELL_UPDATE_USABLE")
+check(not op.active, "  an unclassified read outside the event keeps the event's answer")
+WoW.cooldowns[OVERPOWER2] = { isActive = true, isOnGCD = true }
+fireSettle("SPELL_UPDATE_COOLDOWN")
+check(op.active, "  the GCD alone: lit")
+WoW.cooldowns[OVERPOWER2] = { isActive = true, isOnGCD = false }
+fireSettle("SPELL_UPDATE_COOLDOWN")
+WoW.cooldowns[OVERPOWER2] = { isActive = false }
+fireSettle("SPELL_UPDATE_USABLE")
+check(op.active, "  a plain isActive false clears it anywhere")
+
+-- No classification yet: the duration without the GCD decides when readable,
+-- and the re-check lands past its end.
+WoW.now = 100
+op.cd = nil
+WoW.cooldowns[OVERPOWER2] = { isActive = true }
+WoW.durations[OVERPOWER2] = { HasSecretValues = function() return false end, IsActive = function() return true end,
+    GetEndTime = function() return 103 end }
+fireSettle("SPELL_UPDATE_USABLE")
+check(not op.active and WoW.ignoreGCD[OVERPOWER2] == true, "the duration without the GCD: on cooldown, dark")
+WoW.cooldowns[OVERPOWER2] = { isActive = false }
+WoW.advance(2.9)
+check(not op.active, "  not re-checked before its end")
+WoW.advance(0.2)
+settle()
+check(op.active, "  re-checked just past its end: lit")
+-- Unresolved (active, nothing readable, no classification): dark, polled.
+WoW.durations[OVERPOWER2] = { HasSecretValues = function() return true end }
+WoW.cooldowns[OVERPOWER2] = { isActive = true, isOnGCD = false }
+fireSettle("SPELL_UPDATE_COOLDOWN")
+op.cd = nil
+WoW.cooldowns[OVERPOWER2] = { isActive = true }
+local un = op.reads.unresolved
+fireSettle("SPELL_UPDATE_USABLE")
+check(not op.active and op.reads.unresolved == un + 1, "unresolved: dark, counted")
+WoW.cooldowns[OVERPOWER2] = { isActive = false }
+WoW.advance(0.5)
+settle()
+check(op.active, "  polled every 0.5 s: lit once clear")
+WoW.durations[OVERPOWER2] = nil
+-- A secret where the docs say plain: dark, counted, nothing failed.
+local sec = op.reads.secret
+WoW.usable[OVERPOWER2] = { WoW.Secret("usable"), false }
+fireSettle("SPELL_UPDATE_USABLE")
+check(not op.active and op.reads.secret == sec + 1, "a secret usable: dark, counted")
+eq(next(GAB.failures), nil, "  nothing failed")
+WoW.usable[OVERPOWER2] = { true, false }
+fireSettle("SPELL_UPDATE_USABLE")
+
+-- The switches, out of combat: overlays off hides the overlay, the ring stays,
+-- no sound replayed.
+fireSettle("PLAYER_REGEN_ENABLED")
+local played = #WoW.played
+GAB.Settings.SetProc("overlays", false)
+settle()
+check(op.active and not op.frames[1].frame:IsShown() and T.rings[ActionButton5]:IsShown(), "overlays off: the ring stays")
+GAB.Settings.SetProc("glow", false)
+settle()
+check(not T.rings[ActionButton5]:IsShown(), "  glow off: the ring out")
+GAB.Settings.SetProc("overlays", true)
+GAB.Settings.SetProc("glow", true)
+settle()
+check(op.frames[1].frame:IsShown() and T.rings[ActionButton5]:IsShown(), "  both back")
+eq(#WoW.played, played, "  no sound for a repaint")
+GAB.Settings.SetProcEffect("overpower", false)
+settle()
+check(not op.active and not T.rings[ActionButton5]:IsShown(), "  unticked: out")
+eq(GAB.db.procs.off.overpower, true, "  saved as off")
+local report = table.concat(P.Report(), "\n")
+check(report:find("counter overpower: setting off, rank 7887, active false"), "/gab procs: the counter's state")
+check(report:find("reads plain %d+, secret 1, unresolved %d+"), "  and what its reads gave")
+
+-- Default-off counters: the mage's Ice Barrier, combat only.
+P = fresh()
+T = P._test
+check(not P.EffectOn("ice_barrier") and not T.st.built.counters and count(T.rings) == 0,
+    "mage: Ice Barrier off by default, nothing built for it")
+GAB.Settings.SetProcEffect("ice_barrier", true)
+check(P.EffectOn("ice_barrier") and GAB.db.procs.off.ice_barrier == false, "  ticked: saved as an explicit false")
+check(T.st.built.counters and count(T.rings) == 96, "  built")
+WoW.known[13031] = true
+WoW.actionSpells[6] = 13031
+ActionButton6:Update()
+fireSettle("SPELLS_CHANGED")
+check(not T.counters.ice_barrier.active, "  out of combat: dark (combat only)")
+fireSettle("PLAYER_REGEN_DISABLED")
+check(T.counters.ice_barrier.active and T.rings[ActionButton6]:IsShown(), "  in combat: lit")
+check(not T.side[ActionButton6] or not T.side[ActionButton6].player._slots.glow.enabled, "  the aura glow untouched")
+fireSettle("PLAYER_REGEN_ENABLED")
+GAB.Settings.SetProcEffect("ice_barrier", false)
+eq(rawget(GAB.db, "procs"), nil, "  unticked back to its default: nothing saved")
+-- Codex on PR 3: no off table at all reads the default, not "ticked".
+P = fresh({ db = { procs = { sound = false } } })
+check(not P.EffectOn("ice_barrier") and P.EffectOn("freeze"), "a saved switch, no off table: each effect's own default")
 
 done("test_procs")

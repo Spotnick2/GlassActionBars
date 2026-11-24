@@ -214,7 +214,27 @@ end
 C_Item.RequestLoadItemDataByID = function(id) WoW.requested[id] = (WoW.requested[id] or 0) + 1 end
 C_Spell.IsSpellUsable = function(id)
     if id == 6991 then return WoW.feedUsable ~= false, false end
+    local u = WoW.usable and WoW.usable[id]
+    if u then return u[1], u[2] end
     return true, false
+end
+-- The proc counters (#115 PR 3): WoW.usable[id] = { isUsable, insufficientPower }
+-- (either may be a secret); WoW.cooldowns[id] = SpellCooldownInfo (default:
+-- none active); WoW.powerCosts[id] = { { name = "MANA" }, ... }; WoW.played
+-- records PlaySoundFile. A duration object from WoW.durations gets the second
+-- argument (ignoreGCD) recorded in WoW.ignoreGCD.
+WoW.usable, WoW.cooldowns, WoW.powerCosts, WoW.played, WoW.ignoreGCD = {}, {}, {}, {}, {}
+C_Spell.GetSpellCooldown = function(id)
+    return WoW.cooldowns[id] or { startTime = 0, duration = 0, isEnabled = true, isActive = false, modRate = 1, isOnGCD = false }
+end
+C_Spell.GetSpellPowerCost = function(id) return WoW.powerCosts[id] or {} end
+C_Spell.GetSpellCooldownDuration = function(id, ignoreGCD)
+    WoW.ignoreGCD[id] = ignoreGCD
+    return WoW.durations[id]
+end
+function PlaySoundFile(file, channel)
+    WoW.played[#WoW.played + 1] = { file, channel }
+    return true
 end
 -- The cursor: WoW.cursorInfo = { "spell", slot, bank, spellID } (#86), else WoW.cursorItem's kind alone.
 function GetCursorInfo()

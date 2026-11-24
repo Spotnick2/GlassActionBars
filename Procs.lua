@@ -19,6 +19,10 @@
 --   PLAYER_TARGET_CHANGED, a frame later, as SAO does.
 -- - Sound: C_UnitAuras.AddAuraSound on Added and ApplicationsIncreased, per
 --   aura id of an enabled effect that has one; the engine plays it.
+-- - Counters (kind = "counter"): a reactive or ready ability, not an aura, so
+--   addon code decides it from values Blizzard documents as plain (Counters,
+--   below) and shows our own frames: a ring on each button holding a rank of
+--   it, its overlays, its sound.
 --
 -- Everything that builds or changes the alerts waits out combat and a boss's
 -- Encounter restriction (Apply queues it). The queue is woken by the
@@ -68,7 +72,9 @@ local st = {
     frames = {},          -- the overlays' slot frames: { frame, spec, container, holder }
     slots = {},           -- effect key -> { { container, slotKey } }
     glowUnits = {},       -- unit -> true, the units some effect glows from
-    built = { overlays = false, glow = false },
+    built = { overlays = false, glow = false, counters = false, counterOverlays = false, rings = false },
+    counterBox = nil,     -- the counters' overlays' frame under UIParent
+    counterFrames = {},   -- the counters' overlay frames: { frame, spec, container, key, pulse }
     applied = {},         -- each switch as last applied: what's on screen while a change waits
     sounds = {},          -- "unit:auraId" -> { id1, id2 }
     hooked = {},          -- buttons whose Update is hooked (a hook can't be taken back)
@@ -100,9 +106,25 @@ function Procs.Look(key)
     return Procs.LOOK[key][1]
 end
 
+-- An effect's own default: on, unless its data says default = false (SAO's
+-- off-by-default counters).
+function Procs.EffectDefault(key)
+    for _, e in ipairs(Procs.Effects()) do
+        if e.key == key then return e.default ~= false end
+    end
+    return true
+end
+
+-- off[key]: true = unticked, false = ticked (saved only for a default-off
+-- effect), nil = the default.
 function Procs.EffectOn(key)
     local db = saved()
-    return not (db and type(db.off) == "table" and db.off[key] == true)
+    if db and type(db.off) == "table" then
+        local v = db.off[key]
+        if v == true then return false end
+        if v == false then return true end
+    end
+    return Procs.EffectDefault(key)
 end
 
 function Procs.ValidLook(key, v)
@@ -124,7 +146,7 @@ function Procs.Prune(db)
     if db.off ~= nil then
         if type(db.off) ~= "table" then db.off = nil else
             for k, v in pairs(db.off) do
-                if type(k) ~= "string" or v ~= true then db.off[k] = nil end
+                if type(k) ~= "string" or type(v) ~= "boolean" then db.off[k] = nil end
             end
             if next(db.off) == nil then db.off = nil end
         end
@@ -150,6 +172,16 @@ function Procs.Effects()
     return class and GAB.ProcData and GAB.ProcData[class] or {}
 end
 
+local function ofKind(counter)
+    local t = {}
+    for _, e in ipairs(Procs.Effects()) do
+        if (e.kind == "counter") == counter then t[#t + 1] = e end
+    end
+    return t
+end
+local function auraEffects() return ofKind(false) end
+local function counterEffects() return ofKind(true) end
+
 local function idSet(list)
     local t = {}
     for _, id in ipairs(list) do t[id] = true end
@@ -160,7 +192,7 @@ end
 local glowIndex = {}
 local function rebuildIndex()
     local sets = {}
-    for _, e in ipairs(Procs.Effects()) do
+    for _, e in ipairs(auraEffects()) do
         if e.glow and Procs.EffectOn(e.key) then
             sets[e.unit] = sets[e.unit] or {}
             for _, spell in ipairs(e.glow) do
@@ -320,11 +352,16 @@ local function placeContainers()
         c:SetSize(size, size)
         c:SetAlpha(Procs.Look("opacity"))
     end
+    if st.counterBox then
+        st.counterBox:SetSize(size, size)
+        st.counterBox:SetAlpha(Procs.Look("opacity"))
+    end
     for _, o in ipairs(st.frames) do placeOverlay(o) end
+    for _, o in ipairs(st.counterFrames) do placeOverlay(o) end
 end
 
 local function buildOverlays()
-    for _, e in ipairs(Procs.Effects()) do
+    for _, e in ipairs(auraEffects()) do
         if not st.overlay[e.unit] then
             local c = newContainer(UIParent, e.unit)
             c:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
@@ -383,25 +420,42 @@ local function spellOf(b)
 end
 
 -- The ring: the probe's recipe (Blizzard's ActionButtonSpellAlertTemplate,
--- its loop played; it restarts after an OnHide by itself, run #622).
+-- its loop played; it restarts after an OnHide by itself, run #622). Its
+-- holder is what's shown and hidden.
+local function makeRing(holder, w, h)
+    local g = CreateFrame("Frame", nil, holder, "ActionButtonSpellAlertTemplate")
+    g:SetSize(w * Procs.RING, h * Procs.RING)
+    g:SetPoint("CENTER", holder, "CENTER", 0, 0)
+    g.animationPlaying = true
+    g:Show()
+    if g.ProcLoop then g.ProcLoop:Play() end
+    return g
+end
+
 local function ringSlot(c, w, h)
     return function(f)
         f:EnableMouse(false)
         f:ClearAllPoints()
         f:SetAllPoints(c)
         if f.GetIcon and f:GetIcon() then f:GetIcon():Hide() end
-        local g = CreateFrame("Frame", nil, f, "ActionButtonSpellAlertTemplate")
-        g:SetSize(w * Procs.RING, h * Procs.RING)
-        g:SetPoint("CENTER", f, "CENTER", 0, 0)
-        g.animationPlaying = true
-        g:Show()
-        if g.ProcLoop then g.ProcLoop:Play() end
+        makeRing(f, w, h)
     end
+end
+
+-- A button's Update runs both: the aura glow's retarget and the counter ring.
+local retarget, paintRing
+local function hookButton(b)
+    if st.hooked[b] then return end
+    st.hooked[b] = true
+    hooksecurefunc(b, "Update", function(self)
+        retarget(self)
+        paintRing(self)
+    end)
 end
 
 -- One button's slots follow its spell. A slot back from off gets its filter
 -- written and is enabled, even with the same ids as before.
-local function retarget(b)
+function retarget(b)
     local s = side[b]
     if not s or not st.built.glow or not st.applied.glow then return end
     local spell = spellOf(b)
@@ -428,13 +482,13 @@ end
 
 local function buildGlow()
     st.glowUnits = {}
-    for _, e in ipairs(Procs.Effects()) do
+    for _, e in ipairs(auraEffects()) do
         if e.glow then st.glowUnits[e.unit] = true end
     end
     st.built.glow = true
     if not next(st.glowUnits) then return end   -- a class with no glow: nothing on its buttons
     local filters = {}
-    for _, e in ipairs(Procs.Effects()) do
+    for _, e in ipairs(auraEffects()) do
         if e.glow then filters[e.unit] = filters[e.unit] or e.filter end
     end
     for _, b in ipairs(stockButtons()) do
@@ -452,7 +506,7 @@ local function buildGlow()
                 -- Made with a real filter (an empty set's meaning isn't ours to
                 -- guess), then off until retarget says otherwise.
                 local any
-                for _, e in ipairs(Procs.Effects()) do
+                for _, e in ipairs(auraEffects()) do
                     if e.glow and e.unit == unit then any = idSet(e.auras); break end
                 end
                 c:AddAuraSlot("glow", filters[unit], sortOpts({ initializeFrame = ringSlot(c, w, h),
@@ -468,10 +522,7 @@ local function buildGlow()
         else
             side[b] = s
         end
-        if not st.hooked[b] then
-            st.hooked[b] = true
-            hooksecurefunc(b, "Update", retarget)
-        end
+        hookButton(b)
     end
 end
 
@@ -502,7 +553,7 @@ end
 local function applySounds(on)
     local want = {}
     if on then
-        for _, e in ipairs(Procs.Effects()) do
+        for _, e in ipairs(auraEffects()) do
             if e.sound and Procs.EffectOn(e.key) then
                 for _, a in ipairs(e.auras) do want[e.unit .. ":" .. a] = { e.unit, a } end
             end
@@ -539,6 +590,250 @@ local function applySounds(on)
 end
 
 -- ------------------------------------------------------------------
+-- Counters (PR 3, docs/PLAN-procs.md "Counter effects"): shown while the
+-- spell is known, usable and off its real cooldown (SAO's
+-- variables/actionusable.lua). Every value read is one Blizzard's API docs
+-- (71037) mark plain, checked with issecretvalue anyway: a secret turns the
+-- counter off for that pass and is counted for /gab procs, never compared or
+-- kept. A combatOnly counter shows in combat only.
+
+Procs.RECHECK = 0.5    -- a waiting counter's re-check when its cooldown's end is unreadable (SAO's)
+Procs.MARGIN = 0.05    -- past the cooldown's end, so the re-check doesn't land just before it
+
+local cs = {}          -- counter key -> { e, active, cd, waitAt, frames, reads }
+local rings = setmetatable({}, { __mode = "k" })   -- button -> its counter ring's holder
+local activeSpells = {}                            -- cast spell id -> true: the ranks of every active counter
+local queued = false
+
+local function counter(e)
+    local c = cs[e.key]
+    if not c then
+        c = { e = e, active = false, frames = {}, reads = { plain = 0, secret = 0, unresolved = 0 } }
+        cs[e.key] = c
+    end
+    return c
+end
+
+-- The highest rank known (the data lists them lowest first).
+local function knownRank(e)
+    local known = C_SpellBook and C_SpellBook.IsSpellKnown
+    if not known then return nil end
+    for i = #e.spell, 1, -1 do
+        local ok, k = pcall(known, e.spell[i])
+        if ok and not API.IsSecret(k) and k == true then return e.spell[i] end
+    end
+    return nil
+end
+
+-- SAO's: a spell short of rage, energy or focus still shows; short of mana
+-- it doesn't. Unreadable: as if it cost mana (not shown on low power).
+local manaCost = {}
+local function costsMana(id)
+    if manaCost[id] ~= nil then return manaCost[id] end
+    local ok, costs = pcall(C_Spell and C_Spell.GetSpellPowerCost or error, id)
+    if not ok or API.IsSecret(costs) or type(costs) ~= "table" then return true end
+    local mana = false
+    for _, cost in ipairs(costs) do
+        local name = type(cost) == "table" and cost.name
+        if API.IsSecret(name) then return true end
+        if name == "MANA" then mana = true end
+    end
+    manaCost[id] = mana
+    return mana
+end
+
+-- isActive and isOnGCD are NeverSecret (SpellSharedDocumentation.lua), but
+-- isOnGCD is trusted only inside SPELL_UPDATE_COOLDOWN (the same docs): it's
+-- classified there and kept (c.cd).
+local function noteCooldown(c, id)
+    local ok, info = pcall(C_Spell and C_Spell.GetSpellCooldown or error, id)
+    if not ok or type(info) ~= "table" then return end
+    local active, gcd = info.isActive, info.isOnGCD
+    if API.IsSecret(active) or API.IsSecret(gcd) then c.cd = nil; return end
+    if active == false then c.cd = "clear"
+    elseif gcd == true then c.cd = "clear"
+    elseif gcd == false then c.cd = "cd"
+    else c.cd = nil end
+end
+
+-- "clear", "cd" or nil (unresolved), and the cooldown's end when readable.
+-- A plain isActive false clears it anywhere; an active one asks the duration
+-- without the GCD when that's readable, else keeps the event's classification.
+local function cooldown(c, id)
+    local ok, info = pcall(C_Spell and C_Spell.GetSpellCooldown or error, id)
+    if not ok or type(info) ~= "table" or API.IsSecret(info.isActive) then return nil end
+    if info.isActive == false then c.cd = "clear"; return "clear" end
+    local okD, d = pcall(C_Spell.GetSpellCooldownDuration or error, id, true)
+    if okD and d ~= nil and not API.IsSecret(d) then
+        local okS, secret = pcall(d.HasSecretValues, d)
+        if okS and secret == false then
+            local okA, a = pcall(d.IsActive, d)
+            if okA and type(a) == "boolean" then
+                local okE, endTime = pcall(d.GetEndTime, d)
+                return a and "cd" or "clear", okE and type(endTime) == "number" and endTime or nil
+            end
+        end
+    end
+    return c.cd
+end
+
+local request
+-- One re-check per waiting counter, the earliest asked for.
+local function wait(c, endTime)
+    local now = GetTime()
+    local at = endTime and (math.max(endTime, now) + Procs.MARGIN) or (now + Procs.RECHECK)
+    if c.waitAt and c.waitAt <= at and c.waitAt > now then return end
+    c.waitAt = at
+    C_Timer.After(at - now, function()
+        if c.waitAt == at then c.waitAt = nil; request() end
+    end)
+end
+
+local function decide(c)
+    local e = c.e
+    if not Procs.EffectOn(e.key) then return false end
+    if e.combatOnly and not API.InCombat() then return false end
+    local id = knownRank(e)
+    if not id then return false end
+    local ok, usable, noPower = pcall(C_Spell and C_Spell.IsSpellUsable or error, id)
+    if not ok then return false end
+    if API.IsSecret(usable) or API.IsSecret(noPower) then
+        c.reads.secret = c.reads.secret + 1
+        return false
+    end
+    c.reads.plain = c.reads.plain + 1
+    if not (usable == true or (noPower == true and not costsMana(id))) then return false end
+    local cd, endTime = cooldown(c, id)
+    if cd == "clear" then return true end
+    if cd == nil then c.reads.unresolved = c.reads.unresolved + 1 end
+    wait(c, endTime)
+    return false
+end
+
+local function showCounter(c)
+    local on = c.active and st.applied.overlays
+    for _, o in ipairs(c.frames) do
+        if on then
+            o.frame:Show()
+            if o.pulse then o.pulse:Stop(); o.pulse:Play() end
+        else
+            o.frame:Hide()
+        end
+    end
+end
+
+function paintRing(b)
+    local holder = rings[b]
+    if not holder then return end
+    local spell = st.applied.glow and spellOf(b)
+    if spell and activeSpells[spell] then holder:Show() else holder:Hide() end
+end
+
+-- Every counter decided again; what changed is shown, the sound played on a
+-- counter turning on (a repaint, applyCounters, changes nothing here).
+local function pass()
+    queued = false
+    if not st.built.counters then return end
+    local changed = false
+    for _, c in pairs(cs) do
+        local was = c.active
+        local ok, now = pcall(decide, c)
+        if not ok then API.Fail("procs:counter:" .. c.e.key, now) end
+        now = ok and now == true
+        if now ~= was then
+            c.active, changed = now, true
+            showCounter(c)
+            if now and c.e.sound and st.applied.sound then
+                pcall(PlaySoundFile, Procs.SOUND_FILE, "Master")
+            end
+        end
+    end
+    if changed then
+        activeSpells = {}
+        for _, c in pairs(cs) do
+            if c.active then for _, id in ipairs(c.e.spell) do activeSpells[id] = true end end
+        end
+        for b in pairs(rings) do paintRing(b) end
+    end
+end
+
+-- Coalesced: one pass on the next frame.
+function request()
+    if queued or not st.built.counters then return end
+    queued = true
+    C_Timer.After(0, pass)
+end
+
+local function buildCounterOverlays()
+    local box = CreateFrame("Frame", nil, UIParent)
+    box:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    box:EnableMouse(false)
+    st.counterBox = box
+    for _, e in ipairs(counterEffects()) do
+        local c = counter(e)
+        for i, spec in ipairs(e.overlays or {}) do
+            local f = CreateFrame("Frame", nil, box)
+            f:EnableMouse(false)
+            f:SetFrameLevel(box:GetFrameLevel() + (spec.level or Procs.LEVEL))
+            local t = f:CreateTexture(nil, "ARTWORK")
+            t:SetAllPoints(f)
+            t:SetTexture(spec.texture)
+            texCoords(t, spec)
+            local col = spec.color
+            if col then t:SetVertexColor(col[1] / 255, col[2] / 255, col[3] / 255, (col[4] or 255) / 255) end
+            local o = { frame = f, spec = spec, container = box, key = e.key .. ":" .. i }
+            if spec.pulse then o.pulse = pulse(t); o.pulse:Stop() end
+            f:Hide()
+            c.frames[#c.frames + 1] = o
+            st.counterFrames[#st.counterFrames + 1] = o
+            placeOverlay(o)
+        end
+    end
+end
+
+-- A ring holder on each button of bars 1-8, hidden; shown by paintRing.
+local function buildRings()
+    for _, b in ipairs(stockButtons()) do
+        local ok, err = pcall(function()
+            local w, h = b:GetSize()
+            local holder = CreateFrame("Frame", nil, b)
+            holder:SetAllPoints(b)
+            holder:SetFrameLevel(b:GetFrameLevel() + Procs.LEVEL_UP)
+            holder:EnableMouse(false)
+            makeRing(holder, w, h)
+            holder:Hide()
+            rings[b] = holder
+        end)
+        if not ok then API.Fail("procs:counterglow:" .. tostring(b:GetName()), err) end
+        hookButton(b)
+    end
+end
+
+-- Built (out of combat, once each) only when a counter is on; then every
+-- counter shown afresh from the applied switches.
+local function applyCounters()
+    local list = counterEffects()
+    if #list == 0 then return end
+    local any = false
+    for _, e in ipairs(list) do counter(e); any = any or Procs.EffectOn(e.key) end
+    if not any and not st.built.counters then return end
+    st.built.counters = true
+    if st.applied.overlays and not st.built.counterOverlays then
+        st.built.counterOverlays = true
+        buildCounterOverlays()
+        placeContainers()
+    end
+    if st.applied.glow and not st.built.rings then
+        st.built.rings = true
+        buildRings()
+    end
+    if st.counterBox then placeContainers() end
+    for _, c in pairs(cs) do showCounter(c) end   -- to the switches as applied now
+    for b in pairs(rings) do paintRing(b) end
+    request()                                     -- an unticked counter goes out there
+end
+
+-- ------------------------------------------------------------------
 -- Apply: everything to the settings, or queued.
 
 local function encounterOn()
@@ -570,13 +865,20 @@ local function apply(askEncounter)
     local any = false
     for _, f in ipairs(Procs.FEATURES) do any = any or Procs.Enabled(f) end
     if #Procs.Effects() == 0 then return "no effects" end
-    if (any or st.built.overlays or st.built.glow) and not loadEngine() then return "no engine" end
+    -- The engine only for aura effects: a class with counters alone (the
+    -- warrior) never loads it, and a refusal leaves its counters working.
+    local auras = #auraEffects() > 0
+    local engine = auras and (not (any or st.built.overlays or st.built.glow) or loadEngine())
     rebuildIndex()
     -- Applied first, so the glow's own retarget pass (applyGlow) sees it on.
     for _, f in ipairs(Procs.FEATURES) do st.applied[f] = Procs.Enabled(f) end
-    API.Try("procs:overlays", applyOverlays, st.applied.overlays)
-    API.Try("procs:glow", applyGlow, st.applied.glow)
-    API.Try("procs:sound", applySounds, st.applied.sound)
+    if engine then
+        API.Try("procs:overlays", applyOverlays, st.applied.overlays)
+        API.Try("procs:glow", applyGlow, st.applied.glow)
+        API.Try("procs:sound", applySounds, st.applied.sound)
+    end
+    API.Try("procs:counters", applyCounters)
+    if auras and not engine then return "no engine" end
     return "applied"
 end
 
@@ -598,6 +900,16 @@ events:SetScript("OnEvent", function(_, event, a1, a2)
         local E, S = Enum and Enum.AddOnRestrictionType, Enum and Enum.AddOnRestrictionState
         if st.pending and E and S and a1 == E.Encounter and a2 == S.Inactive then apply(false) end
     end
+    if st.built.counters then
+        -- isOnGCD is trusted here only: each counter's cooldown classified now.
+        if event == "SPELL_UPDATE_COOLDOWN" then
+            for _, c in pairs(cs) do
+                local id = Procs.EffectOn(c.e.key) and knownRank(c.e)
+                if id then API.Try("procs:cooldown", noteCooldown, c, id) end
+            end
+        end
+        request()
+    end
 end)
 
 local function saoLoaded()
@@ -611,8 +923,13 @@ function Procs.Start()
     if st.started then return end
     st.started = true
     st.sao = saoLoaded()
-    API.RegisterEvents(events, { "PLAYER_TARGET_CHANGED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
-        "ADDON_RESTRICTION_STATE_CHANGED" }, "procs")
+    local names = { "PLAYER_TARGET_CHANGED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
+        "ADDON_RESTRICTION_STATE_CHANGED" }
+    if #counterEffects() > 0 then
+        for _, n in ipairs({ "SPELL_UPDATE_USABLE", "SPELL_UPDATE_COOLDOWN", "SPELLS_CHANGED",
+            "PLAYER_ENTERING_WORLD" }) do names[#names + 1] = n end
+    end
+    API.RegisterEvents(events, names, "procs")
     apply()
 end
 
@@ -652,8 +969,18 @@ function Procs.Report()
             read(c, "GetAuraSlotFrame", o.key) == f and "same" or "OTHER", tostring(read(f, "IsShown")),
             tostring(read(f, "IsVisible")), where(f, c)))
     end
+    -- Counters: what the reads gave since login (the probe's question,
+    -- answered by play: docs/PLAN-procs.md "Counter effects").
+    for _, e in ipairs(counterEffects()) do
+        local c = cs[e.key]
+        local r = c and c.reads or { plain = 0, secret = 0, unresolved = 0 }
+        add(("counter %s: setting %s, rank %s, active %s, cooldown %s; reads plain %d, secret %d, unresolved %d"):format(
+            e.key, Procs.EffectOn(e.key) and "on" or "off", tostring(knownRank(e) or "none"), tostring(c and c.active or false),
+            tostring(c and c.cd or "?"), r.plain, r.secret, r.unresolved))
+    end
     return lines
 end
 
 Procs._test = { st = st, side = side, retarget = retarget, refreshTarget = refreshTarget,
+    counters = cs, rings = rings, pass = pass, active = function() return activeSpells end,
     index = function() return glowIndex end, encounterOn = encounterOn }
