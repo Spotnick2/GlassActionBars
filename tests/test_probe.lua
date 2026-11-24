@@ -870,6 +870,60 @@ check(T.r3state().on == true, "procs3 through the host: built")
 SlashCmdList.FOREVERPROBE("steps stop")
 check(T.r3state().on == nil and T.procState().on == nil, "  /fp steps stop: torn down")
 
+-- procfreeze (round 3d): the player-side slots off, so only a freeze lights.
+addons.SpellActivationOverlay = true
+check(T.freezeReady() == false, "procfreeze: waits while SAO is loaded")
+addons.SpellActivationOverlay = nil
+local iceSlots = {}
+for k, v in pairs(slots) do if T.glowKey(v) == "ice" then iceSlots[k] = v; slots[k] = nil end end
+local okF, whyF = T.freezeReady()
+check(okF == false and whyF:find("Ice Lance on a visible bar"), "  waits for Ice Lance on a visible bar")
+for k, v in pairs(iceSlots) do slots[k] = v end
+WoW.combat = true
+check(T.freezeReady() == false, "  waits for combat to end")
+WoW.combat = false
+check(T.freezeReady() == true, "  ready with one Ice Lance, no macro or second bar needed")
+local okFB, fbMsg = T.freezeBuild()
+R = T.r3state()
+check(okFB == true and R.only == "target" and R.view ~= nil, "  built, freeze only, with the view")
+local wrong, lit = 0, 0
+for b, st in pairs(R.side) do
+    local ice = T.glowKey(slots[b.action]) == "ice"
+    if st.key.player or st.player._slots.glow.enabled then wrong = wrong + 1 end
+    if (st.key.target ~= nil) ~= ice or st.target._slots.glow.enabled ~= ice then wrong = wrong + 1 end
+    if ice then lit = lit + 1 end
+end
+eq(wrong, 0, "  every player-side slot off; the freeze slot on exactly the Ice Lance buttons")
+eq(fbMsg, ("player-side glow off on 96 of 96 buttons, the freeze glow on %d"):format(lit), "  counted")
+check(T.freezeBuilt() == true, "  the step's check passes")
+R.side[ActionButton3].key.player = "ice"
+check(T.freezeBuilt() == false, "  and fails with a player-side slot on")
+R.side[ActionButton3].key.player = nil
+s3 = R.side[ActionButton3]
+slots[3] = 116
+ActionButton3:Update()
+slots[3] = 400640
+ActionButton3:Update()
+check(s3.player._slots.glow.enabled == false and s3.target._slots.glow.enabled == true and s3.key.player == nil,
+    "  paging back to Ice Lance: the freeze slot back on, the player slot still off")
+lines = #GABProbeDB.log
+T.driftPoll()
+local drifted = false
+for i = lines + 1, #GABProbeDB.log do if GABProbeDB.log[i]:find("DRIFT") then drifted = true end end
+check(not drifted and R.drifts == 0, "  no drift reported for the slots kept off")
+T.r3end()
+check(T.r3state().only == nil and T.freezeBuilt() == false, "  teardown clears freeze-only")
+addons.SpellActivationOverlay = true
+T.freezeReady()
+check(T.freezeBuild() == false and T.r3state().only == nil and T.r3state().on == nil, "  a refused build leaves nothing set")
+addons.SpellActivationOverlay = nil
+SlashCmdList.FOREVERPROBE("steps gab procfreeze")
+WoW.flushTimers()
+T.freezeBuild()
+check(T.freezeBuilt() == true, "procfreeze through the host: built")
+SlashCmdList.FOREVERPROBE("steps stop")
+check(T.r3state().on == nil and T.r3state().only == nil, "  /fp steps stop: torn down")
+
 -- At a boss: the Encounter restriction out of combat starts the build.
 check(T.atBoss() == false, "procboss: waits for the restriction")
 local secretOut = true
