@@ -7,6 +7,9 @@
 dofile("tests/wow_stubs.lua")
 dofile("tests/harness.lua")
 
+-- A mage with Ice Lance on a bar: the proc alerts build overlays, glows and sounds (#115).
+WoW.playerClass = "MAGE"
+WoW.actionSpells[3] = 1240044
 local GAB = loadAddon()
 -- Every event, then a few seconds of frames and timers.
 WoW.fireAllRegistered()

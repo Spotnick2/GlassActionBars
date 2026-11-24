@@ -48,7 +48,7 @@ secret-value `SetCooldown` errors in combat (ForeverUI), and paging them needs s
 
 TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.lua` -> `Look.lua` -> `Theme.lua` ->
 `Buttons.lua` -> `Bars.lua` -> `Bags.lua` -> `MicroMenu.lua` -> `Fade.lua` -> `Dock.lua` ->
-`Follow.lua` -> `Edges.lua` -> `API.lua` -> `Utility.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
+`Follow.lua` -> `Edges.lua` -> `API.lua` -> `Utility.lua` -> `ProcData.lua` -> `Procs.lua` -> `Inspect.lua` -> `Options.lua` -> `GlassActionBars.lua`. Feature files load between
 `Glass.lua` and `Options.lua`.
 
 - **`Compat.lua`**: `GlassActionBars.API`, the only route to client APIs that moved or may be
@@ -211,6 +211,25 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   at each drag), out of combat, only while on the bar; dimmed in combat until GABProbe's `lock`
   procedure measures a combat write. Padlock textures `Media/LockClosed` / `LockOpen`
   (`Tools/make_lock.py`), repainted on `CVAR_UPDATE` for that CVar.
+- **`ProcData.lua`**: the proc alerts' effects per class (#115, [docs/PLAN-procs.md](docs/PLAN-procs.md)),
+  ported from SpellActivationOverlay's Forever table (MIT, LICENSE's third-party section): `key`,
+  `label`, `unit` / `filter`, `auras` (every alias; never SAO's freeze stand-in 5276), `overlays`
+  (SAO's textures and positions, `stacks` gated at that many or more), `sound`, `glow` (every rank of
+  the cast spell: no API maps ranks here). Only glow pairs checked in game ship: mage's Fingers of
+  Frost and a frozen target, both on Ice Lance (runs #620-#630).
+- **`Procs.lua`**: the proc alerts. A proc can't be read in combat, so Blizzard's aura engine
+  (`Blizzard_AuraContainer`, loaded first; a refusal is `procs:engine`) shows our frames: one
+  overlay container per unit under UIParent (a slot per effect and overlay, SAO's geometry, the
+  look's opacity / size / spacing), and on each button of bars 1-8 one container per unit with a
+  `glow` slot holding Blizzard's proc ring, at the button's level + 5. The slot's filter follows
+  the button's spell (`C_ActionBar.GetSpell`) on its own `Update` hook, in combat too (measured);
+  an unchanged one isn't written again, one back from off is enabled again. Target containers get
+  `UpdateAllAuras` a frame after `PLAYER_TARGET_CHANGED`. Sounds: `AddAuraSound` (file 568016) on
+  Added and ApplicationsIncreased. Settings in `GlassActionBarsDB.procs` (`Procs.Prune`): the three
+  switches as explicit true / false (default on, off with SpellActivationOverlay loaded at login),
+  the look unless default, `off[effect]`. Every change waits out combat and the Encounter
+  restriction (`apply` queues; the restriction's own event wakes it from its payload). The
+  "Proc alerts" options page. Off: containers disabled and hidden; on: shown, then enabled.
 - **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using

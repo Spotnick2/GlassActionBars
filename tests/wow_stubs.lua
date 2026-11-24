@@ -353,6 +353,75 @@ C_AddOns = {
     GetAddOnMetadata = function(name, field) if field == "Version" then return WoW.addonVersion end end,
 }
 
+-- Proc alerts (#115). WowTestKit #113: Blizzard_AuraContainer's templates
+-- aren't in the kit. Their methods are Lua mixins, set with rawset so the
+-- methods check doesn't take them for widget methods. A container records its
+-- unit, enabled state, refreshes and slots (filter, includeSpellIDs, enabled,
+-- frame); a slot frame its application bar.
+WoW.containers = {}
+WoW.templates.CustomAuraButtonTemplate = function(w)
+    w:EnableMouse(true)
+    rawset(w, "SetApplicationBar", function(self, bar, o) self._bar = { bar = bar, min = o.minApplications, max = o.maxApplications } end)
+    rawset(w, "GetIcon", function() return nil end)
+end
+WoW.templates.CustomAuraContainerTemplate = function(w)
+    w:EnableMouse(true)
+    w._slots, w._refreshes, w._enabled = {}, 0, false
+    WoW.containers[#WoW.containers + 1] = w
+    rawset(w, "SetUnit", function(self, u) self._unit = u end)
+    rawset(w, "SetEnabled", function(self, on) self._enabled = on end)
+    rawset(w, "AddAuraSlot", function(self, key, filter, opts)
+        assert(type(key) == "string" and self._slots[key] == nil, "a new slot key")
+        local f = CreateFrame("AuraButton", nil, self, "CustomAuraButtonTemplate")
+        self._slots[key] = { filter = filter, ids = (opts.candidateFilters or {}).includeSpellIDs, enabled = true, frame = f }
+        if opts.initializeFrame then opts.initializeFrame(f) end
+        return f
+    end)
+    rawset(w, "SetAuraSlotCandidateFilters", function(self, key, cf)
+        assert(self._slots[key], "no slot " .. tostring(key))
+        self._slots[key].ids = cf.includeSpellIDs
+        WoW.slotWrites = (WoW.slotWrites or 0) + 1
+    end)
+    rawset(w, "SetAuraSlotEnabled", function(self, key, on)
+        assert(self._slots[key] and type(on) == "boolean", "a slot key and a boolean")
+        self._slots[key].enabled = on
+        WoW.slotWrites = (WoW.slotWrites or 0) + 1
+    end)
+    rawset(w, "UpdateAllAuras", function(self) self._refreshes = self._refreshes + 1 end)
+end
+WoW.templates.ActionButtonSpellAlertTemplate = function(w)
+    w.ProcLoop = { Play = function(s) s.playing = true end, Stop = function(s) s.playing = false end }
+end
+-- The engine's load (WoW.loaded[name]; WoW.refuseLoad = a reason to refuse),
+-- each action slot's spell (WoW.actionSpells[slot]), the sound registrations
+-- (WoW.auraSounds[id] = { trigger, info }; WoW.refuseSound = true), the
+-- Encounter restriction (WoW.encounter).
+WoW.loaded, WoW.actionSpells, WoW.auraSounds, WoW.soundsRemoved = {}, {}, {}, {}
+C_AddOns.IsAddOnLoaded = function(name) return WoW.loaded[name] == true end
+C_AddOns.LoadAddOn = function(name)
+    if WoW.refuseLoad then return false, WoW.refuseLoad end
+    WoW.loaded[name] = true
+    return true
+end
+C_ActionBar = { GetSpell = function(slot) return WoW.actionSpells[slot] end }
+local soundId = 0
+C_UnitAuras.AddAuraSound = function(trigger, info)
+    if WoW.refuseSound then return nil end
+    soundId = soundId + 1
+    WoW.auraSounds[soundId] = { trigger = trigger, info = info }
+    return soundId
+end
+C_UnitAuras.RemoveAuraSound = function(id)
+    WoW.auraSounds[id] = nil
+    WoW.soundsRemoved[#WoW.soundsRemoved + 1] = id
+end
+Enum.UnitAuraSoundTrigger = { Added = 0, ApplicationsIncreased = 1, Removed = 2 }
+Enum.AddOnRestrictionType = { Combat = 0, Encounter = 1, ChallengeMode = 2, PvPMatch = 3 }
+Enum.AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 }
+C_RestrictedActions = { IsAddOnRestrictionActive = function(t)
+    return t == Enum.AddOnRestrictionType.Encounter and WoW.encounter == true
+end }
+
 -- The Settings framework (Blizzard_Settings): canvas categories, recorded.
 WoW.categories = {}
 Settings = {

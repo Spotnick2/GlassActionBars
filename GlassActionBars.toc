@@ -23,6 +23,8 @@ Follow.lua
 Edges.lua
 API.lua
 Utility.lua
+ProcData.lua
+Procs.lua
 Inspect.lua
 Options.lua
 GlassActionBars.lua

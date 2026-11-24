@@ -147,6 +147,8 @@ local function ensureDefaults()
             end
         end
     end
+    -- Proc alerts (#115): their own table, pruned by Procs (nil / true / false kept apart).
+    if db.procs ~= nil then db.procs = GAB.Procs.Prune(db.procs) end
     if db.fadeAlpha ~= nil and (type(db.fadeAlpha) ~= "number" or not (db.fadeAlpha >= 0 and db.fadeAlpha <= 1)) then
         db.fadeAlpha = nil
     end
@@ -495,6 +497,43 @@ function Settings.SetUtilityBar(key, n)
     return true
 end
 
+-- Proc alerts (#115): a switch (Procs.FEATURES) saved as an explicit true or
+-- false (its default depends on SpellActivationOverlay, so neither is "the
+-- default"); a look key (Procs.LOOK) saved unless it's the default; an effect
+-- of the class off. Applied at once, or queued for combat and a boss.
+local function procs()
+    if type(rawget(GAB.db, "procs")) ~= "table" then GAB.db.procs = {} end
+    return GAB.db.procs
+end
+local function procsDone()
+    GAB.db.procs = GAB.Procs.Prune(GAB.db.procs)
+    return GAB.Procs.Apply()
+end
+function Settings.SetProc(feature, on)
+    local known = false
+    for _, f in ipairs(GAB.Procs.FEATURES) do known = known or f == feature end
+    if not known or type(on) ~= "boolean" then return false end
+    procs()[feature] = on
+    procsDone()
+    return true
+end
+function Settings.SetProcLook(key, value)
+    if not GAB.Procs.ValidLook(key, value) then return false end
+    procs()[key] = value
+    procsDone()
+    return true
+end
+function Settings.SetProcEffect(key, on)
+    local known = false
+    for _, e in ipairs(GAB.Procs.Effects()) do known = known or e.key == key end
+    if not known then return false end
+    local p = procs()
+    p.off = type(p.off) == "table" and p.off or {}
+    p.off[key] = (not on) or nil
+    procsDone()
+    return true
+end
+
 -- The skin can't be taken off live: Blizzard set the art we replaced, and
 -- only its own code puts it back. Takes effect at the next /reload.
 function Settings.SetSkin(on)
@@ -759,6 +798,7 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         start("follow", GAB.Follow.Start)
         start("utility", GAB.Utility.Start)
         start("edges", GAB.Edges.Start)
+        start("procs", GAB.Procs.Start)
     elseif event == "PLAYER_ENTERING_WORLD" then
         GAB.Theme.Retry()
         -- arg1 = isInitialLogin. The build warning asks the developer to
