@@ -425,6 +425,25 @@ for class, effects in pairs(GAB.ProcData) do
     end
 end
 eq(table.concat(bad, "; "), "", "data: every class's effects well formed")
+
+-- Independent of the table: one known aura per class stays in that class
+-- alone, and no aura id is in two classes (Codex, PR #125).
+local SIGNATURE = { MAGE = 400670, WARLOCK = 17941, HUNTER = 415407, PALADIN = 53672, PRIEST = 27828,
+    ROGUE = 462707, SHAMAN = 408505, DRUID = 408255 }
+local owner, shared, misplaced = {}, {}, {}
+for class, effects in pairs(GAB.ProcData) do
+    for _, e in ipairs(effects) do
+        for _, a in ipairs(e.auras) do
+            if owner[a] and owner[a] ~= class then shared[#shared + 1] = a end
+            owner[a] = class
+        end
+    end
+end
+for class, a in pairs(SIGNATURE) do
+    if owner[a] ~= class then misplaced[#misplaced + 1] = class .. " " .. a .. " in " .. tostring(owner[a]) end
+end
+eq(table.concat(shared, ", "), "", "  no aura id in two classes")
+eq(table.concat(misplaced, "; "), "", "  each class's known aura in that class alone")
 check(#classes == 8 and GAB.ProcData.WARRIOR == nil, "  eight classes; the warrior's are counters (PR 3)")
 table.sort(classes)
 
