@@ -388,6 +388,8 @@ WoW.templates.CustomAuraContainerTemplate = function(w)
         WoW.slotWrites = (WoW.slotWrites or 0) + 1
     end)
     rawset(w, "UpdateAllAuras", function(self) self._refreshes = self._refreshes + 1 end)
+    rawset(w, "IsAuraSlotEnabled", function(self, key) return self._slots[key].enabled end)
+    rawset(w, "GetAuraSlotFrame", function(self, key) return self._slots[key] and self._slots[key].frame end)
 end
 WoW.templates.ActionButtonSpellAlertTemplate = function(w)
     w.ProcLoop = { Play = function(s) s.playing = true end, Stop = function(s) s.playing = false end }

@@ -256,6 +256,19 @@ ot.procSwitches.sound:SetChecked(false)
 ot.procSwitches.sound:GetScript("OnClick")(ot.procSwitches.sound)
 check(GAB.db.procs.sound == false and next(WoW.auraSounds) == nil, "  the sound unticked from the page")
 
+-- /gab procs: a line per overlay slot, our setting beside the engine's.
+local chat0 = #WoW.chat
+SlashCmdList.GLASSACTIONBARS("procs")
+local report = table.concat(WoW.chat, "\n", chat0 + 1)
+check(report:find("player container: shown true, alpha 1, CENTER of UIParent CENTER 0,0") and report:find("target container: shown true"),
+    "/gab procs: the containers, where they are")
+check(report:find("clearcasting:1: setting off, engine false, its frame same"), "  an unticked effect: off in both")
+check(report:find("fingers_of_frost:2: setting on, engine true, its frame same, shown %a+, visible %a+, at LEFT of container RIGHT 0,0"),
+    "  a ticked one: on, shown or not, where it's anchored")
+local lines = 0
+for _ in report:gmatch("setting %a+, engine") do lines = lines + 1 end
+eq(lines, 13, "  all 13 slots")
+
 -- Nothing written on a Blizzard frame, no protected change.
 eq(#WoW.violations, 0, "no protected change in the whole run")
 

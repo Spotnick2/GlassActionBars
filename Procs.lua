@@ -273,7 +273,7 @@ local function pulse(t)
     return ag
 end
 
-local function overlaySlot(c, spec, level)
+local function overlaySlot(c, spec, level, key)
     return function(f)
         f:EnableMouse(false)
         if f.GetIcon and f:GetIcon() then f:GetIcon():Hide() end
@@ -290,7 +290,7 @@ local function overlaySlot(c, spec, level)
         texCoords(t, spec)
         local col = spec.color
         if col then t:SetVertexColor(col[1] / 255, col[2] / 255, col[3] / 255, 1) end
-        local o = { frame = f, spec = spec, container = c }
+        local o = { frame = f, spec = spec, container = c, key = key }
         if spec.pulse then
             o.pulse = pulse(t)
             f:HookScript("OnShow", function() o.pulse:Play() end)
@@ -321,7 +321,7 @@ local function buildOverlays()
         for i, spec in ipairs(e.overlays) do
             local key = e.key .. ":" .. i
             c:AddAuraSlot(key, e.filter, sortOpts({ candidateFilters = { includeSpellIDs = idSet(e.auras) },
-                initializeFrame = overlaySlot(c, spec, i) }))
+                initializeFrame = overlaySlot(c, spec, i, key) }))
             st.slots[e.key][#st.slots[e.key] + 1] = { c, key }
         end
     end
@@ -573,6 +573,45 @@ function Procs.Start()
     API.RegisterEvents(events, { "PLAYER_TARGET_CHANGED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
         "ADDON_RESTRICTION_STATE_CHANGED" }, "procs")
     apply()
+end
+
+-- /gab procs: what each overlay slot reports, read out of combat (a slot
+-- frame's IsShown is secret in combat). Every read guarded: a refusal or a
+-- secret prints as such.
+local function read(f, method, ...)
+    local ok, a, b, c, d, e = pcall(f[method], f, ...)
+    if not ok then return "error" end
+    if API.IsSecret(a) then return "secret" end
+    return a, b, c, d, e
+end
+local function where(f, c)
+    local point, rel, relPoint, x, y = read(f, "GetPoint", 1)
+    if point == nil or point == "error" or point == "secret" then return tostring(point) end
+    local relName = rel == UIParent and "UIParent" or rel == c and "container" or tostring(rel)
+    local left, bottom = read(f, "GetLeft"), read(f, "GetBottom")
+    local num = function(v) return type(v) == "number" and ("%.0f"):format(v) or tostring(v) end
+    return ("%s of %s %s %s,%s; left %s bottom %s"):format(tostring(point), relName, tostring(relPoint), num(x), num(y),
+        num(left), num(bottom))
+end
+function Procs.Report()
+    local lines = {}
+    local function add(s) lines[#lines + 1] = s end
+    add(("procs: overlays %s, glow %s, sound %s, SAO %s, engine %s, waiting %s"):format(tostring(Procs.Enabled("overlays")),
+        tostring(Procs.Enabled("glow")), tostring(Procs.Enabled("sound")), tostring(st.sao), tostring(st.engine),
+        tostring(st.pending)))
+    for unit, c in pairs(st.overlay) do
+        add(("%s container: shown %s, alpha %s, %s"):format(unit, tostring(read(c, "IsShown")), tostring(read(c, "GetAlpha")),
+            where(c, UIParent)))
+    end
+    for _, o in ipairs(st.frames) do
+        local c, f = o.container, o.frame
+        local effect = o.key:match("^(.-):")
+        add(("%s: setting %s, engine %s, its frame %s, shown %s, visible %s, at %s"):format(o.key,
+            Procs.EffectOn(effect) and "on" or "off", tostring(read(c, "IsAuraSlotEnabled", o.key)),
+            read(c, "GetAuraSlotFrame", o.key) == f and "same" or "OTHER", tostring(read(f, "IsShown")),
+            tostring(read(f, "IsVisible")), where(f, c)))
+    end
+    return lines
 end
 
 Procs._test = { st = st, side = side, retarget = retarget, refreshTarget = refreshTarget,

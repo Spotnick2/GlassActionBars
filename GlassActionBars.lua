@@ -587,6 +587,7 @@ local function helpLines()
             .. GAB.Buttons.Preset() .. ")",
         "/gab inspect [button; hide n; show n; restore] - what a button draws, layer by layer",
         "/gab layer <name> off/on - hide one layer on every button, for a look (a /reload undoes it)",
+        "/gab procs - what each proc overlay reports (out of combat)",
         "/gab options - open the options page",
         "/gab failures - what failed to build or register",
         "/gab version - client build vs the measured one",
@@ -755,6 +756,8 @@ local function slash(msg)
         if not (name and (state == "on" or state == "off") and GAB.Inspect.Layer(name, state == "on")) then
             say("/gab layer <" .. table.concat(GAB.Inspect.LAYER_NAMES, "/") .. "> off/on")
         end
+    elseif cmd == "procs" then
+        for _, line in ipairs(GAB.Procs.Report()) do say(line) end
     elseif cmd == "options" then
         if not GAB.Options.Open() then say("Esc > Options > AddOns > Glass Action Bars") end
     elseif cmd == "failures" then
