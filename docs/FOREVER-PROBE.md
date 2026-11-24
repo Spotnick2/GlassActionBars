@@ -175,6 +175,27 @@ bars and macro):
   `GLOW_*`. Bugsy has no problem since session 262 (the current one is 307).
 - **The base-spell APIs** again returned each Ice Lance rank's own id.
 
+**Round 3d, `/fp steps gab procfreeze` rev 1, run #630** (2026-11-23, the same mage, level 35, open
+world in Stranglethorn's Venture Co. Base, grouped, SpellActivationOverlay off): the glows built
+with every player-side slot off (96 of 96 buttons; the freeze glow on the 3 Ice Lance buttons:
+two spells and the Alt macro), so only the `target` container could draw the ring.
+- **A frozen target alone lights Ice Lance** (Phase 0 item 3's ring). Two shots in one fight:
+  - before the freeze, both view icons empty: Ice Lance dark;
+  - Frost Nova on the target, both icons showing it: all three Ice Lance buttons ringed.
+
+  The owner answered yes to the glow while frozen.
+- **The clearing on a target switch wasn't measured.** The owner answered no to "did the glow go
+  out on an unfrozen enemy", but no target change happened between the shots, and Frost Nova
+  froze both enemies in range, so the one tabbed to was likely frozen too. No target and back on
+  the frozen one: unsure. The Fingers of Frost control (dark with the proc up): unsure.
+- **The counts:** 28 filter writes (2 in combat), 56 unchanged skipped, 42 `Update` calls (the Alt
+  macro flipping to Frostbolt and back), 15 target changes refreshed without error, nothing
+  blocked with the listener on. No drift count: the poll compares the player slot only, off on
+  every button here, so it couldn't see a stale target filter (Codex, PR #123). Mage's passive count is 33469 `HIDE` with no spell, still no
+  `SHOW` or `GLOW_*`. Bugsy has no problem since session 262 (the current one is 315).
+- **No more probe rounds for item 3** (the owner, 2026-11-23): the clearing is checked by playing
+  with PR 1's freeze glow.
+
 ## Session 9: drops, clicks and pick-up drags on Utility-like buttons (#86), 2026-11-14, build 70938
 
 `/fp steps gab utilitydrag`, run #314, on a level-20-ish hunter. Two probe buttons: S secure
