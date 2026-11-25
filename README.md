@@ -40,6 +40,15 @@ pill (`/gab micro tiles/pill`, or the options page).
 **Blizzard's bars, not a replacement.** Paging, stances and forms, key bindings, Edit Mode
 layouts, cooldowns, range and proc glows all stay the game's own, in and out of combat.
 
+**Proc alerts**, in place of SpellActivationOverlay, in combat too: Blizzard's proc art on the
+screen around your character, a ring on the action button of the spell to press, and a sound, each
+a switch on the **Proc alerts** options page. Each alert uses the ones it has (Missile Barrage
+rings no button; Execute only rings its button). Alerts for every class, from
+SpellActivationOverlay's Forever ones: procs, the Revelation weapon enchant for the classes that
+have one, and ready alerts for abilities such as Overpower, Execute, Riposte and Hammer of Wrath.
+Untick any alert on the page, which also sets the art's opacity, size and spacing. With
+SpellActivationOverlay loaded they start off, so you don't get both.
+
 **Three tints**, switched live: clear, smoked and class colour glass.
 
 **The Utility bar**: your Hearthstone, Cooking, First Aid, Fishing, your professions and their
@@ -99,6 +108,7 @@ Glass Action Bars).
 - `/gab dock` - where smart bars dock: `/gab dock <bar> 1-8/off [side] [align]`,
   `<bar> gap 0-32`, `<bar> match on/off`, `<bar> rows on/off`
 - `/gab follow [on/off]` - the stance and pet bars follow Glass Unit Frames, and why a bar stays
+- `/gab procs` - what each proc alert reports, out of combat (for a bug report)
 - `/gab options` - the options page; `/gab version` - the addon's version and the client build
 
 ## For addon authors
@@ -114,3 +124,5 @@ adopting the API.
 ## License
 
 MIT, see [LICENSE](https://github.com/Spotnick2/GlassActionBars/blob/main/LICENSE). The bundled LibGlass-1.0 keeps its own MIT license.
+The proc alerts' data and the Eclipse texture are ported from SpellActivationOverlay (MIT), whose
+notice LICENSE carries.
