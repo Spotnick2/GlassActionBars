@@ -2,9 +2,9 @@
 --
 -- Ported from SpellActivationOverlay 3.0.0-forever's effect tables
 -- (classes/*.lua, components/item.lua's Revelation), Copyright (c) 2022-2026
--- ennvina, MIT License (see LICENSE, THIRD-PARTY COMPONENTS). Forever's aura
--- effects only: counters (a reactive ability usable) are PR 3. The glow pairs
--- are GAB's own: SAO's aura effects glow no button on Forever.
+-- ennvina, MIT License (see LICENSE, THIRD-PARTY COMPONENTS). Forever's
+-- effects only. The aura glow pairs are GAB's own: SAO's aura effects glow no
+-- button on Forever.
 --
 -- One entry per effect:
 -- - key: its setting key (procs.off[key]), never shown;
@@ -26,6 +26,15 @@
 --   pairs were checked in game (runs #620-#630); every other class's are taken
 --   from SAO's other versions, where the same aura id glows that spell, and
 --   are checked as the owner plays the class (the owner, 2026-11-24).
+--
+-- A counter (kind = "counter", PR 3) is a reactive or ready ability, shown
+-- while known, usable and off its real cooldown (Procs.lua, Counters):
+-- - spell: its cast ranks, lowest first by the level learned (SpellLevels,
+--   70938), same-name helper spells left out; the highest known is the one
+--   read, and every rank's button glows;
+-- - combatOnly: shown in combat only;
+-- - overlays, sound: as for auras (optional);
+-- - default = false: off until ticked (SAO's off-by-default glows).
 --
 -- Textures are client fileDataIDs (SAO's textures/texname.lua), except
 -- Eclipse's, shipped as Media/Eclipse_Moon.tga (Tools/make_eclipse.py).
@@ -54,6 +63,17 @@ local HOLY_LIGHT = { 635, 639, 647, 1026, 1042, 3472, 10328, 10329, 19968, 19980
 local FLASH_OF_LIGHT = { 19750, 19939, 19940, 19941, 19942, 19943, 19993, 412020,
     1313342, 1313343, 1313344, 1313345, 1313346 }
 local AMBUSH = { 8676, 8724, 8725, 11267, 11268, 11269 }
+
+-- Counters' ranks (SkillLineAbility 70959, ordered by SpellLevels 70938).
+local COUNTERATTACK = { 19306, 1242634, 20909, 20910 }
+local MONGOOSE_BITE = { 1495, 14269, 14270, 14271 }
+local ICE_BARRIER = { 11426, 13031, 13032, 13033 }
+local HAMMER_OF_WRATH = { 24275, 24274, 24239 }
+local HOLY_SHOCK = { 1311606, 20473, 20929, 20930 }
+local OVERPOWER = { 7384, 7887, 11584, 11585 }
+local EXECUTE = { 5308, 20658, 20660, 20661, 20662 }
+local REVENGE = { 6572, 6574, 7379, 11600, 11601, 25288 }
+local BANDITS_GUILE, SWORD_AND_BOARD = 1030393, 449494
 
 local function join(...)
     local t = {}
@@ -112,6 +132,8 @@ GAB.ProcData = {
               { texture = HOT_STREAK, position = "RIGHT", hflip = true, stacks = 3, scale = 0.9, level = 3, pulse = true },
           } },
         revelation(1248808),
+        { key = "ice_barrier", label = "Ice Barrier ready", kind = "counter", spell = ICE_BARRIER, combatOnly = true,
+          default = false },
     },
 
     DRUID = {
@@ -141,6 +163,9 @@ GAB.ProcData = {
           auras = { 415407 }, sound = true,
           overlays = { sides({ texture = RAGING_BLOW, scale = 1.2, color = { 255, 255, 255, 222 }, level = 1, pulse = true }) } },
         revelation(1323410),
+        { key = "counterattack", label = "Counterattack", kind = "counter", spell = COUNTERATTACK },
+        { key = "mongoose_bite", label = "Mongoose Bite", kind = "counter", spell = MONGOOSE_BITE, combatOnly = true,
+          sound = true, overlays = { { texture = BANDITS_GUILE, position = "TOP", cw = true, scale = 1.1, pulse = true } } },
     },
 
     PALADIN = {
@@ -153,6 +178,11 @@ GAB.ProcData = {
           auras = { 1311703, 1311701, 1311704, 1311705, 1328198, 1328206 }, sound = true,
           overlays = { { texture = DENOUNCE, position = "TOP", stacks = 3, pulse = true } } },
         revelation(1323419),
+        { key = "hammer_of_wrath", label = "Hammer of Wrath", kind = "counter", spell = HAMMER_OF_WRATH },
+        { key = "holy_shock", label = "Holy Shock ready", kind = "counter", spell = HOLY_SHOCK, combatOnly = true,
+          default = false },
+        -- Exorcism left out: SAO adds a demon or undead target check, and
+        -- UnitCreatureType may be secret on the target (SecretWhenUnitIdentityRestricted).
     },
 
     PRIEST = {
@@ -175,6 +205,8 @@ GAB.ProcData = {
           auras = { 462707 }, sound = true,
           overlays = { sides({ texture = WHITE_TIGER, pulse = true }) },
           glow = AMBUSH },
+        { key = "riposte", label = "Riposte", kind = "counter", spell = { 14251 },
+          sound = true, overlays = { { texture = BANDITS_GUILE, position = "TOP", cw = true, pulse = true } } },
     },
 
     SHAMAN = {
@@ -197,6 +229,9 @@ GAB.ProcData = {
               { texture = 450927, position = "TOP", stacks = 5, level = 5 },
           } },
         revelation(1323418),
+        -- Its own key: "stormstrike" is the debuff on the target.
+        { key = "stormstrike_ready", label = "Stormstrike ready", kind = "counter", spell = { 17364 },
+          combatOnly = true, default = false },
     },
 
     WARLOCK = {
@@ -215,5 +250,17 @@ GAB.ProcData = {
         revelation(1323392),
     },
 
-    -- WARRIOR: SAO's Forever effects are all counters (PR 3).
+    -- The warrior's Forever effects are all counters. SAO's stance settings
+    -- do nothing on Forever (its stance logic is in handlers it turns off there).
+    WARRIOR = {
+        { key = "overpower", label = "Overpower", kind = "counter", spell = OVERPOWER,
+          sound = true, overlays = { { texture = BANDITS_GUILE, position = "TOP", cw = true, scale = 1.2,
+                                       color = { 255, 255, 255, 234 }, pulse = true } } },
+        { key = "execute", label = "Execute", kind = "counter", spell = EXECUTE },
+        { key = "revenge", label = "Revenge", kind = "counter", spell = REVENGE,
+          sound = true, overlays = { sides({ texture = SWORD_AND_BOARD, scale = 1.1, pulse = true }) } },
+        { key = "victory_rush", label = "Victory Rush", kind = "counter", spell = { 402927 },
+          sound = true, overlays = { { texture = SERENDIPITY, position = "TOP", scale = 0.9, level = 4,
+                                       color = { 255, 32, 32 }, pulse = true } } },
+    },
 }

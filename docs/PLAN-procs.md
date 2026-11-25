@@ -39,6 +39,17 @@ Review: Codex (gpt-6.2-astra, high).
   - Eclipse's texture ships as a `.tga`, so deployment and the package check carry it.
 - **Its follow-up (commit 1e5f3ad):** one P2, folded in: turning an option back on calls `Show()`
   as well as `SetEnabled(true)`, with an off -> on check in Phase 0.
+- **PR 3's counters (2026-11-24):** one blocker and four should-fixes, folded in:
+  - `isOnGCD` is trusted only inside `SPELL_UPDATE_COOLDOWN`, so it's classified there and kept;
+    elsewhere a plain `isActive == false` clears it, and an active one asks the duration without
+    the GCD (readable only), else stays dark;
+  - a `PLAYER_ENTERING_WORLD` re-check;
+  - `EffectOn` read a saved switch with no `off` table as "ticked"; and the Stormstrike counter's
+    own key (`stormstrike` is the target debuff);
+  - ranks ordered by the level learned (`SpellLevels`), not by id (Hammer of Wrath 24275 ->
+    24274 -> 24239), helper spells left out (Execute 20647, Holy Shock's six);
+  - a class with counters only goes through the real build path (no aura engine), tested from
+    combat through a page change to the proc's end.
 
 ## What was measured (docs/FOREVER-PROBE.md session 10, build 71037)
 
@@ -255,18 +266,84 @@ unit test checks that an off -> on toggle leaves every container shown and enabl
   can't reveal the bar, since GAB can't see it. Documented, not worked around.
 - **Theme:** Blizzard's own flipbook look. A glass-styled glow (LibGlass) is a later issue.
 
-### Counter effects
+### Counter effects (PR 3)
 
-They come only if PR 3's probe round shows `C_Spell.IsSpellUsable` and the cooldown read plain in combat for
-those spells. They cover Overpower, Revenge, Victory Rush, Execute, Counterattack, Mongoose Bite,
-Riposte, Hammer of Wrath, Holy Shock, Ice Barrier and Stormstrike.
+A counter is a reactive or ready ability: SAO shows it while the spell is usable and off its
+cooldown. **No probe round** (the owner, 2026-11-24: checked in play, as PR 2's classes are; no
+character of theirs can test one yet). Instead of measuring first, the code reads only values
+Blizzard's generated API documentation (71037) marks plain, checks each with `issecretvalue`
+anyway, and counts what it saw, so `/gab procs` answers the probe's question after a fight.
 
-If they do read plain, addon code decides, and the glow and overlay need an addon-driven path:
-- **The glow:** the same `ActionButtonSpellAlertTemplate` frame, shown by GAB, on its own frame per
-  button.
-- **The overlay:** a plain texture frame.
+**What decides (addon code, SAO's `variables/actionusable.lua`; Codex's review folded in):**
+- **Known:** `C_SpellBook.IsSpellKnown(id)` on the counter's ranks; the highest known rank is the
+  one read. No rank known: off.
+- **Usable:** `C_Spell.IsSpellUsable(id)` (no secret-return flag): `isUsable`, or
+  `insufficientPower` for a spell that costs no mana (SAO's: rage, energy and focus don't hide it).
+- **Off cooldown:** `C_Spell.GetSpellCooldown(id)`. Its `startTime` / `duration` are
+  `SecretWhenCooldownsRestricted`, but `isActive` and `isOnGCD` are `NeverSecret`
+  (`SpellSharedDocumentation.lua`). `isOnGCD` is trusted only inside `SPELL_UPDATE_COOLDOWN` (the
+  same docs), so it's classified there (active and not on the GCD = on cooldown) and kept. In
+  any other pass, a plain `isActive == false` clears it; an active one asks
+  `GetSpellCooldownDuration(id, true)` (the GCD ignored) when its `HasSecretValues()` is false,
+  and takes `IsActive()` and the end time from it; else the event's classification; else it's
+  unresolved and stays dark.
+- **`combatOnly`** counters show only in combat.
+- **A secret where the docs say plain:** that counter is off for that pass, and the read is counted
+  (`/gab procs`: per counter, plain and secret reads). Never compared, stored or printed. Every
+  read the docs call plain is counted: `IsSpellKnown`, `IsSpellUsable`, the power cost,
+  `isActive` and `isOnGCD` (Codex on PR #126). The duration object's own restriction is only
+  unresolved.
 
-If they don't, they are out, and Blizzard's own usable tint stays the only cue.
+**When:** `SPELL_UPDATE_USABLE`, `SPELL_UPDATE_COOLDOWN`, `SPELLS_CHANGED`,
+`PLAYER_TARGET_CHANGED`, `PLAYER_REGEN_DISABLED` / `ENABLED`, coalesced to one pass on the next
+frame, plus `PLAYER_ENTERING_WORLD`. A counter usable but on cooldown or unresolved is re-checked
+at its end plus 0.05 s (the duration's end time, when readable), else every 0.5 s while it waits
+(SAO's); one pending re-check per counter.
+
+**Display (addon frames, shown and hidden in combat):**
+- **Glow:** on each button of bars 1-8, one addon-owned frame (a child of the button,
+  `SetAllPoints`, level + 5, mouse off), holding an `ActionButtonSpellAlertTemplate`, made out of
+  combat with the glow build and kept hidden. Shown while the button's spell (the existing
+  `Update` hook's `C_ActionBar.GetSpell`) is a rank of an active counter. Not a protected frame:
+  `Show` / `Hide` on it are legal in combat (LibButtonGlow, SAO's glow on Forever, does the same).
+  The ring's loop restarts on its own `OnHide` (Phase 0 item 2). A counter's glow is its own
+  spell, every rank.
+- **Overlay:** one plain frame per counter overlay under the overlay container's parent, SAO's
+  geometry and look through the same `placeOverlay`; shown and hidden by the decision, the pulse
+  played on show.
+- **Sound:** `PlaySoundFile(568016, "Master")` when a counter with `sound` turns active.
+- The three switches apply as for auras. Building waits out combat and the Encounter restriction
+  like every build; the show and hide at runtime aren't an option change and don't wait. Each
+  counter's tick is snapshotted at the last Apply (`c.on`), and the passes and the cooldown event
+  read that, never the live setting, so a tick in combat waits like the other changes (Codex on
+  PR #126).
+
+**Data:** `{ key, label, kind = "counter", spell = { ranks, highest last }, combatOnly, overlays,
+sound, default }`. Every cast rank from `SkillLineAbility` (70959), ordered by `SpellLevels`
+(70938), same-name helper spells left out. Shaman's counter is `stormstrike_ready`.
+
+| class | counter | combat only | overlay | default |
+|---|---|---|---|---|
+| hunter | Counterattack | | | on |
+| hunter | Mongoose Bite | yes | Bandit's Guile, top, rotated, 1.1 | on |
+| mage | Ice Barrier | yes | | **off** |
+| paladin | Hammer of Wrath | | | on |
+| paladin | Holy Shock | yes | | **off** |
+| rogue | Riposte | | Bandit's Guile, top, rotated | on |
+| shaman | Stormstrike | yes | | **off** |
+| warrior | Overpower | | Bandit's Guile, top, rotated, 1.2, alpha 234 | on |
+| warrior | Execute | | | on |
+| warrior | Revenge | | Sword and Board, both sides, 1.1 | on |
+| warrior | Victory Rush (402927) | | Serendipity, top, 0.9, red, level 4 | on |
+
+- **Exorcism is left out:** SAO adds a demon or undead target check, and `UnitCreatureType` is
+  `SecretWhenUnitIdentityRestricted`, so in combat (where it's `combatOnly`) it could never show.
+  SAO starts it off too.
+- **Defaults:** SAO's off-by-default glows (Holy Shock, Ice Barrier, Stormstrike) start off
+  here. An effect's `default = false` makes `off[key] = false` the saved "ticked on"; `true` stays
+  "off", and the setting is saved only when it differs from the default.
+- **Warrior's stances:** SAO's stance settings do nothing on Forever (its stance logic is in
+  handlers it turns off there), so none here.
 
 ### Settings (`GlassActionBarsDB.procs`, only what the player set)
 
@@ -416,11 +493,9 @@ PR 1, the mage slice, can start. GABProbe comes off the client now that these fi
 written. `procboss` and the passive count on other classes need it deployed again
 (`Tools\deploy.ps1 -Probe`).
 
-Counters are measured in PR 3's own probe round, not here. A readable cooldown table alone doesn't
-make a working counter. That round tests, for each supported spell:
-- `IsSpellUsable`'s two returns;
-- the cooldown's `isActive` / `isOnGCD`;
-- a reactive window seen opening and closing.
+Counters were to be measured in PR 3's own probe round. The owner chose play instead
+(2026-11-24); PR 3 reads only documented-plain values and counts them for `/gab procs` (Counter
+effects, above).
 
 The probe is removed from the client when the findings are written (owner, 2026-11-21).
 
@@ -452,7 +527,8 @@ The probe is removed from the client when the findings are written (owner, 2026-
   - **Omen of Clarity** keeps one texture in every form (above).
   - **Defaults:** every effect on, as for the mage. SAO starts Nature's Grace, Martyrdom and the
     mage's Clearcasting off; a player unticks them on the page.
-- **PR 3, counters:** its own probe round first (above). They ship only if it allows them.
+- **PR 3, counters:** the eleven Forever counters above, no probe round; `/gab procs` reports what
+  the reads gave once one is played.
 - **Later issues:** the countdown, a glass-styled glow, a proc revealing a faded bar if ever
   measurable, and the stance, pet and Utility buttons.
 

@@ -216,12 +216,14 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `label`, `unit` / `filter`, `auras` (every alias; never SAO's freeze stand-in 5276), `overlays`
   (SAO's textures, positions and draw `level`s, `stacks` gated at that many or more, `color` with an
   optional alpha), `sound`, `glow` (every rank of the cast spell: no API maps ranks here). Eight
-  classes' aura effects plus each one's Revelation enchant buff (warrior: counters only, PR 3);
+  classes' aura effects plus each one's Revelation enchant buff (the warrior has counters only);
   `Procs.Effects()` hands a character its own class's only. The mage's glow pairs were checked in
   game (Fingers of Frost and a frozen target on Ice Lance, runs #620-#630); the others (Nightfall ->
   Shadow Bolt, Decimation -> Soul Fire, Infusion of Light -> Holy Light / Flash of Light,
   Cutthroat -> Ambush) come from SAO's other versions and are checked as the owner plays the class.
-  Eclipse's texture is shipped (`Media/Eclipse_Moon.tga`, `Tools/make_eclipse.py`).
+  Eclipse's texture is shipped (`Media/Eclipse_Moon.tga`, `Tools/make_eclipse.py`). Counters
+  (PR 3): `spell` (cast ranks by learn level), `combatOnly`, `default = false`; eleven across
+  six classes, Exorcism left out.
 - **`Procs.lua`**: the proc alerts. A proc can't be read in combat, so Blizzard's aura engine
   (`Blizzard_AuraContainer`, loaded first; a refusal is `procs:engine`) shows our frames: one
   overlay container per unit under UIParent (a slot per effect and overlay, SAO's geometry, the
@@ -232,9 +234,20 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `UpdateAllAuras` a frame after `PLAYER_TARGET_CHANGED`. Sounds: `AddAuraSound` (file 568016) on
   Added and ApplicationsIncreased. Settings in `GlassActionBarsDB.procs` (`Procs.Prune`): the three
   switches as explicit true / false (default on, off with SpellActivationOverlay loaded at login),
-  the look unless default, `off[effect]`. Every change waits out combat and the Encounter
+  the look unless default, `off[effect]` (`true` unticked; `false` ticked, saved only for a
+  `default = false` effect). Every change waits out combat and the Encounter
   restriction (`apply` queues; the restriction's own event wakes it from its payload). The
   "Proc alerts" options page. Off: containers disabled and hidden; on: shown, then enabled.
+  **Counters** (`kind = "counter"`, PR 3): addon code decides (known: the highest known rank;
+  `IsSpellUsable`, or short of a non-mana power; off its real cooldown: `isActive` / `isOnGCD`,
+  `NeverSecret`, `isOnGCD` classified inside `SPELL_UPDATE_COOLDOWN` only, else
+  `GetSpellCooldownDuration(id, true)` when readable, else dark and re-checked every 0.5 s); a
+  secret read is counted, never used (`/gab procs` lists each counter's reads); each counter's
+  tick as applied (`c.on`), so a change in combat waits. Shown on our own
+  frames, in combat: a ring holder per button of bars 1-8 (hidden; shown while the button's
+  spell is a rank of an active counter, on the shared `Update` hook), overlay frames under
+  UIParent, `PlaySoundFile` on turning on. Built only once a counter is on; a class with counters
+  alone (the warrior) never loads the aura engine. No probe round: checked in play.
 - **`Inspect.lua`**: `/gab inspect` and `/gab layer`, the in-game layer inspector.
 - **`Options.lua`**: the Esc > Options > AddOns page, the porting guide's recipe. Features add a
   section with `Options.AddSection(function(panel, anchor) ... return last end)`, using
