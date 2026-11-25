@@ -40,12 +40,14 @@ pill (`/gab micro tiles/pill`, or the options page).
 **Blizzard's bars, not a replacement.** Paging, stances and forms, key bindings, Edit Mode
 layouts, cooldowns, range and proc glows all stay the game's own, in and out of combat.
 
-**Proc alerts**, in place of SpellActivationOverlay: when a proc comes up, Blizzard's proc art on
-the screen around your character, a ring on the action button of the spell to press, and a sound,
-in combat too. Every class's Forever procs, each class's Revelation weapon enchant, and ready
-alerts for abilities such as Overpower, Execute, Riposte and Hammer of Wrath. Switch each part
-and each alert on the **Proc alerts** options page, which also sets the art's opacity, size and
-spacing. With SpellActivationOverlay loaded they start off, so you don't get both.
+**Proc alerts**, in place of SpellActivationOverlay, in combat too: Blizzard's proc art on the
+screen around your character, a ring on the action button of the spell to press, and a sound, each
+a switch on the **Proc alerts** options page. Each alert uses the ones it has (Missile Barrage
+rings no button; Execute only rings its button). Alerts for every class, from
+SpellActivationOverlay's Forever ones: procs, the Revelation weapon enchant for the classes that
+have one, and ready alerts for abilities such as Overpower, Execute, Riposte and Hammer of Wrath.
+Untick any alert on the page, which also sets the art's opacity, size and spacing. With
+SpellActivationOverlay loaded they start off, so you don't get both.
 
 **Three tints**, switched live: clear, smoked and class colour glass.
 

@@ -2,18 +2,22 @@
 
 ## v1.2.0 - 2026-11-25
 
-- **Proc alerts**, Glass Action Bars' own, in place of SpellActivationOverlay. When a proc comes
-  up you get Blizzard's proc art on the screen around your character, a ring on the action button
-  of the spell to press, and a sound. Each is a switch on the new **Proc alerts** options page,
-  which also sets the art's opacity, size and spacing.
-  - They work in combat: the game's own aura engine shows them, since addons can't read procs
-    in a fight on this client.
-  - Every class's Forever procs that SpellActivationOverlay shows, such as the mage's Missile
-    Barrage, Clearcasting, Fingers of Frost, Heating Up and a frozen target, plus each class's
-    Revelation weapon enchant. A character only gets its own class's.
-  - **Ready alerts** for the abilities that light up when they become usable: Overpower, Execute,
-    Revenge and Victory Rush; Counterattack and Mongoose Bite; Hammer of Wrath; Riposte. Ice
-    Barrier, Holy Shock and Stormstrike are there too, off until you tick them.
+- **Proc alerts**, Glass Action Bars' own, in place of SpellActivationOverlay, with three
+  switches on the new **Proc alerts** options page: Blizzard's proc art on the screen around your
+  character, a ring on the action button of the spell to press, and a sound. Each alert uses the
+  ones it has: Missile Barrage shows its art and plays the sound, but rings no button; Execute
+  only rings its button. The page also sets the art's opacity, size and spacing.
+  - Alerts for every class, from SpellActivationOverlay's Forever ones: buffs and target effects
+    such as the mage's Missile Barrage, Clearcasting, Fingers of Frost, Heating Up and a frozen
+    target, and the Revelation weapon enchant for the classes that have one. A character only
+    gets its own class's.
+  - They work in combat: the game's own aura engine shows the buff and target alerts, since
+    addons can't read procs in a fight on this client.
+  - **Ready alerts** for the abilities that light up when they become usable, from the spell's
+    usability and cooldown: Overpower, Execute, Revenge and Victory Rush; Counterattack and
+    Mongoose Bite; Hammer of Wrath; Riposte. Ice Barrier, Holy Shock and Stormstrike are there
+    too, off until you tick them. Exorcism isn't one: whether the target is a demon or undead
+    may be hidden from addons in combat.
   - Untick any alert on the page. The rings show on Action Bars 1-8 and fade with their bar.
   - With SpellActivationOverlay loaded, they start off so you don't get both: tick them and turn
     SpellActivationOverlay off.
