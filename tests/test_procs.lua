@@ -644,6 +644,30 @@ WoW.usable[OVERPOWER2] = { WoW.Secret("usable"), false }
 fireSettle("SPELL_UPDATE_USABLE")
 check(not op.active and op.reads.secret == sec + 1, "a secret usable: dark, counted")
 eq(next(GAB.failures), nil, "  nothing failed")
+-- Codex on PR 3: every read documented plain is counted when secret, so
+-- /gab procs can't say secret 0 over a counter kept dark by one.
+WoW.usable[OVERPOWER2] = { true, false }
+WoW.cooldowns[OVERPOWER2] = { isActive = WoW.Secret("isActive") }
+sec, un = op.reads.secret, op.reads.unresolved
+fireSettle("SPELL_UPDATE_USABLE")
+check(not op.active and op.reads.secret == sec + 1 and op.reads.unresolved == un,
+    "a secret isActive: dark, counted as secret, not unresolved")
+fireSettle("SPELL_UPDATE_COOLDOWN")
+eq(op.reads.secret, sec + 3, "  the cooldown event's read counted too")
+WoW.cooldowns[OVERPOWER2] = { isActive = false }
+local rv = T.counters.revenge
+sec = rv.reads.secret
+WoW.known[REVENGE1] = WoW.Secret("known")
+fireSettle("SPELL_UPDATE_USABLE")
+check(not rv.active and rv.reads.secret > sec, "a secret IsSpellKnown: counted")
+WoW.known[REVENGE1] = true
+WoW.usable[REVENGE1] = { false, true }
+WoW.powerCosts[REVENGE1] = WoW.Secret("cost")
+sec = rv.reads.secret
+fireSettle("SPELL_UPDATE_USABLE")
+check(not rv.active and rv.reads.secret == sec + 1, "a secret power cost: dark (as if mana), counted")
+WoW.known[REVENGE1], WoW.usable[REVENGE1], WoW.powerCosts[REVENGE1] = nil, nil, nil
+eq(next(GAB.failures), nil, "  nothing failed")
 WoW.usable[OVERPOWER2] = { true, false }
 fireSettle("SPELL_UPDATE_USABLE")
 
@@ -668,7 +692,33 @@ check(not op.active and not T.rings[ActionButton5]:IsShown(), "  unticked: out")
 eq(GAB.db.procs.off.overpower, true, "  saved as off")
 local report = table.concat(P.Report(), "\n")
 check(report:find("counter overpower: setting off, rank 7887, active false"), "/gab procs: the counter's state")
-check(report:find("reads plain %d+, secret 1, unresolved %d+"), "  and what its reads gave")
+check(report:find("counter overpower: [^\n]*reads plain %d+, secret 4, unresolved %d+"), "  and what its reads gave")
+
+-- Codex on PR 3: a counter ticked or unticked in combat waits like every
+-- other change; the passes and the cooldown event read what was applied.
+GAB.Settings.SetProcEffect("overpower", true)
+settle()
+check(op.active, "ticked back out of combat: lit")
+fireSettle("PLAYER_REGEN_DISABLED")
+GAB.Settings.SetProcEffect("overpower", false)
+check(P.Waiting(), "unticked in combat: the change waits")
+fireSettle("SPELL_UPDATE_USABLE")
+check(op.active and T.rings[ActionButton5]:IsShown() and op.frames[1].frame:IsShown(), "  still shown on a pass")
+WoW.cooldowns[OVERPOWER2] = { isActive = true, isOnGCD = false }
+fireSettle("SPELL_UPDATE_COOLDOWN")
+check(not op.active and op.cd == "cd", "  the cooldown event still classifies it (as applied)")
+WoW.cooldowns[OVERPOWER2] = { isActive = false }
+fireSettle("SPELL_UPDATE_USABLE")
+check(op.active, "  clear again: lit")
+fireSettle("PLAYER_REGEN_ENABLED")
+check(not op.active and not T.rings[ActionButton5]:IsShown(), "  applied once the fight ends: out")
+fireSettle("PLAYER_REGEN_DISABLED")
+played = #WoW.played
+GAB.Settings.SetProcEffect("overpower", true)
+fireSettle("SPELL_UPDATE_USABLE")
+check(not op.active and #WoW.played == played, "ticked in combat: dark and silent while it waits")
+fireSettle("PLAYER_REGEN_ENABLED")
+check(op.active and #WoW.played == played + 1, "  then lit, with its sound")
 
 -- Default-off counters: the mage's Ice Barrier, combat only.
 P = fresh()

@@ -242,7 +242,8 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   `IsSpellUsable`, or short of a non-mana power; off its real cooldown: `isActive` / `isOnGCD`,
   `NeverSecret`, `isOnGCD` classified inside `SPELL_UPDATE_COOLDOWN` only, else
   `GetSpellCooldownDuration(id, true)` when readable, else dark and re-checked every 0.5 s); a
-  secret read is counted, never used (`/gab procs` lists each counter's reads). Shown on our own
+  secret read is counted, never used (`/gab procs` lists each counter's reads); each counter's
+  tick as applied (`c.on`), so a change in combat waits. Shown on our own
   frames, in combat: a ring holder per button of bars 1-8 (hidden; shown while the button's
   spell is a rank of an active counter, on the shared `Update` hook), overlay frames under
   UIParent, `PlaySoundFile` on turning on. Built only once a counter is on; a class with counters

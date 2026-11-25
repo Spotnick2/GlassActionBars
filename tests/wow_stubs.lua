@@ -140,7 +140,12 @@ Enum = { UITextureSliceMode = { Stretched = 0, Tiled = 1 },
 -- true | a secret | "throw"; WoW.bindings[action] = key; WoW.durations[spellID]
 -- = a duration object; WoW.itemCooldowns[itemID] = { start, duration }.
 WoW.known, WoW.items, WoW.auras, WoW.bindings, WoW.durations, WoW.itemCooldowns = {}, {}, {}, {}, {}, {}
-C_SpellBook = { IsSpellKnown = function(id) return WoW.known[id] == true end }
+-- A secret in WoW.known is returned as is (the proc counters' diagnostic).
+C_SpellBook = { IsSpellKnown = function(id)
+    local k = WoW.known[id]
+    if issecretvalue(k) then return k end
+    return k == true
+end }
 C_Item = {
     GetItemCount = function(id) return WoW.items[id] or 0 end,
     GetItemIconByID = function(id) return 100000 + id end,

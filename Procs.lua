@@ -600,7 +600,7 @@ end
 Procs.RECHECK = 0.5    -- a waiting counter's re-check when its cooldown's end is unreadable (SAO's)
 Procs.MARGIN = 0.05    -- past the cooldown's end, so the re-check doesn't land just before it
 
-local cs = {}          -- counter key -> { e, active, cd, waitAt, frames, reads }
+local cs = {}          -- counter key -> { e, on (as applied), active, cd, waitAt, frames, reads }
 local rings = setmetatable({}, { __mode = "k" })   -- button -> its counter ring's holder
 local activeSpells = {}                            -- cast spell id -> true: the ranks of every active counter
 local queued = false
@@ -614,13 +614,19 @@ local function counter(e)
     return c
 end
 
+-- A read the docs call plain came back secret: counted for /gab procs.
+local function secretRead(c)
+    if c then c.reads.secret = c.reads.secret + 1 end
+end
+
 -- The highest rank known (the data lists them lowest first).
-local function knownRank(e)
+local function knownRank(e, c)
     local known = C_SpellBook and C_SpellBook.IsSpellKnown
     if not known then return nil end
     for i = #e.spell, 1, -1 do
         local ok, k = pcall(known, e.spell[i])
-        if ok and not API.IsSecret(k) and k == true then return e.spell[i] end
+        if ok and API.IsSecret(k) then secretRead(c)
+        elseif ok and k == true then return e.spell[i] end
     end
     return nil
 end
@@ -628,14 +634,15 @@ end
 -- SAO's: a spell short of rage, energy or focus still shows; short of mana
 -- it doesn't. Unreadable: as if it cost mana (not shown on low power).
 local manaCost = {}
-local function costsMana(id)
+local function costsMana(id, c)
     if manaCost[id] ~= nil then return manaCost[id] end
     local ok, costs = pcall(C_Spell and C_Spell.GetSpellPowerCost or error, id)
-    if not ok or API.IsSecret(costs) or type(costs) ~= "table" then return true end
+    if ok and API.IsSecret(costs) then secretRead(c); return true end
+    if not ok or type(costs) ~= "table" then return true end
     local mana = false
     for _, cost in ipairs(costs) do
         local name = type(cost) == "table" and cost.name
-        if API.IsSecret(name) then return true end
+        if API.IsSecret(name) then secretRead(c); return true end
         if name == "MANA" then mana = true end
     end
     manaCost[id] = mana
@@ -649,7 +656,7 @@ local function noteCooldown(c, id)
     local ok, info = pcall(C_Spell and C_Spell.GetSpellCooldown or error, id)
     if not ok or type(info) ~= "table" then return end
     local active, gcd = info.isActive, info.isOnGCD
-    if API.IsSecret(active) or API.IsSecret(gcd) then c.cd = nil; return end
+    if API.IsSecret(active) or API.IsSecret(gcd) then secretRead(c); c.cd = nil; return end
     if active == false then c.cd = "clear"
     elseif gcd == true then c.cd = "clear"
     elseif gcd == false then c.cd = "cd"
@@ -659,9 +666,12 @@ end
 -- "clear", "cd" or nil (unresolved), and the cooldown's end when readable.
 -- A plain isActive false clears it anywhere; an active one asks the duration
 -- without the GCD when that's readable, else keeps the event's classification.
+-- A secret isActive (documented NeverSecret) is counted; the duration
+-- object's own restriction stays merely unresolved.
 local function cooldown(c, id)
     local ok, info = pcall(C_Spell and C_Spell.GetSpellCooldown or error, id)
-    if not ok or type(info) ~= "table" or API.IsSecret(info.isActive) then return nil end
+    if not ok or type(info) ~= "table" then return nil end
+    if API.IsSecret(info.isActive) then secretRead(c); return nil, nil, true end
     if info.isActive == false then c.cd = "clear"; return "clear" end
     local okD, d = pcall(C_Spell.GetSpellCooldownDuration or error, id, true)
     if okD and d ~= nil and not API.IsSecret(d) then
@@ -691,21 +701,18 @@ end
 
 local function decide(c)
     local e = c.e
-    if not Procs.EffectOn(e.key) then return false end
+    if not c.on then return false end   -- as applied: a change in combat waits (apply)
     if e.combatOnly and not API.InCombat() then return false end
-    local id = knownRank(e)
+    local id = knownRank(e, c)
     if not id then return false end
     local ok, usable, noPower = pcall(C_Spell and C_Spell.IsSpellUsable or error, id)
     if not ok then return false end
-    if API.IsSecret(usable) or API.IsSecret(noPower) then
-        c.reads.secret = c.reads.secret + 1
-        return false
-    end
+    if API.IsSecret(usable) or API.IsSecret(noPower) then secretRead(c); return false end
     c.reads.plain = c.reads.plain + 1
-    if not (usable == true or (noPower == true and not costsMana(id))) then return false end
-    local cd, endTime = cooldown(c, id)
+    if not (usable == true or (noPower == true and not costsMana(id, c))) then return false end
+    local cd, endTime, secret = cooldown(c, id)
     if cd == "clear" then return true end
-    if cd == nil then c.reads.unresolved = c.reads.unresolved + 1 end
+    if cd == nil and not secret then c.reads.unresolved = c.reads.unresolved + 1 end
     wait(c, endTime)
     return false
 end
@@ -815,7 +822,11 @@ local function applyCounters()
     local list = counterEffects()
     if #list == 0 then return end
     local any = false
-    for _, e in ipairs(list) do counter(e); any = any or Procs.EffectOn(e.key) end
+    for _, e in ipairs(list) do
+        local c = counter(e)
+        c.on = Procs.EffectOn(e.key)   -- the passes read this, never the live setting
+        any = any or c.on
+    end
     if not any and not st.built.counters then return end
     st.built.counters = true
     if st.applied.overlays and not st.built.counterOverlays then
@@ -904,7 +915,7 @@ events:SetScript("OnEvent", function(_, event, a1, a2)
         -- isOnGCD is trusted here only: each counter's cooldown classified now.
         if event == "SPELL_UPDATE_COOLDOWN" then
             for _, c in pairs(cs) do
-                local id = Procs.EffectOn(c.e.key) and knownRank(c.e)
+                local id = c.on and knownRank(c.e, c)
                 if id then API.Try("procs:cooldown", noteCooldown, c, id) end
             end
         end

@@ -289,7 +289,10 @@ anyway, and counts what it saw, so `/gab procs` answers the probe's question aft
   unresolved and stays dark.
 - **`combatOnly`** counters show only in combat.
 - **A secret where the docs say plain:** that counter is off for that pass, and the read is counted
-  (`/gab procs`: per counter, plain and secret reads). Never compared, stored or printed.
+  (`/gab procs`: per counter, plain and secret reads). Never compared, stored or printed. Every
+  read the docs call plain is counted: `IsSpellKnown`, `IsSpellUsable`, the power cost,
+  `isActive` and `isOnGCD` (Codex on PR #126). The duration object's own restriction is only
+  unresolved.
 
 **When:** `SPELL_UPDATE_USABLE`, `SPELL_UPDATE_COOLDOWN`, `SPELLS_CHANGED`,
 `PLAYER_TARGET_CHANGED`, `PLAYER_REGEN_DISABLED` / `ENABLED`, coalesced to one pass on the next
@@ -310,7 +313,10 @@ at its end plus 0.05 s (the duration's end time, when readable), else every 0.5 
   played on show.
 - **Sound:** `PlaySoundFile(568016, "Master")` when a counter with `sound` turns active.
 - The three switches apply as for auras. Building waits out combat and the Encounter restriction
-  like every build; the show and hide at runtime aren't an option change and don't wait.
+  like every build; the show and hide at runtime aren't an option change and don't wait. Each
+  counter's tick is snapshotted at the last Apply (`c.on`), and the passes and the cooldown event
+  read that, never the live setting, so a tick in combat waits like the other changes (Codex on
+  PR #126).
 
 **Data:** `{ key, label, kind = "counter", spell = { ranks, highest last }, combatOnly, overlays,
 sound, default }`. Every cast rank from `SkillLineAbility` (70959), ordered by `SpellLevels`
