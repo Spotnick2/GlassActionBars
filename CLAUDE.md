@@ -183,8 +183,10 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` -> `Compat.lua` -> `Glass.l
   Editing on the bar (#86): a spell dropped on a button (`OnReceiveDrag`, or a click with it on
   the cursor) is the key `spell:<id>` in `utility.order` (being there is the entry; at most
   `MAX_SPELLS`, 40), a secure `GlassActionBarsUtilSpell_<id>` made at the first Reconcile that
-  shows it, registered only on characters that know that rank (another class's keeps its slot); a
-  built-in entry's spell (any rank) turns that entry on instead. Shift (Blizzard's PICKUPACTION)
+  shows it, registered only on characters that know that rank (another class's keeps its slot),
+  armed with the spell's plain name, not its ID (#133: the ID's `CastSpellByID` forces that rank,
+  "Target is too low level" on a buff; the name casts the highest known rank and the client lowers
+  it), Options' label without the rank; a built-in entry's spell (any rank) turns that entry on instead. Shift (Blizzard's PICKUPACTION)
   + drag moves a button along the bar (`Settings.PlaceUtility`; it takes the slot of the button
   it's dropped on, after it moving forward and before it moving back, #88) or off it (`RemoveUtility`: a
   spell leaves the order, anything else is unticked); our own ghost, nothing on the real cursor.
