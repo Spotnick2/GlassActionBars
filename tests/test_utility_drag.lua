@@ -55,7 +55,7 @@ eq(shown(), "hearthstone cooking", "to start: the Hearthstone and Cooking")
 check(U.ValidKey("spell:1978") and not U.ValidKey("spell:0") and not U.ValidKey("spell:x"), "spell:<id> keys valid, others not")
 eq(U.Registered("spell:1978"), true, "  a known spell's key is registered")
 eq(U.Registered("spell:999"), false, "  an unknown one's isn't")
-eq(U.Label("spell:1978"), "Serpent Sting (Rank 1)", "  its label: name and rank")
+eq(U.Label("spell:1978"), "Serpent Sting", "  its label: the name, no rank (it casts by name, #133)")
 
 -- A spellbook drop on Cooking's leading half: before it.
 layout()
@@ -68,10 +68,19 @@ eq(shown(), "hearthstone spell:1978 cooking", "  the spell before Cooking")
 local sting = _G.GlassActionBarsUtilSpell_1978
 check(sting ~= nil and U.buttons["spell:1978"] == sting, "  its own named secure button")
 eq(sting._template, "SecureActionButtonTemplate", "  secure")
-check(sting:GetAttribute("type") == "spell" and sting:GetAttribute("spell") == 1978, "  armed with the dropped rank")
+eq(sting:GetAttribute("type"), "spell", "  armed as a spell")
+eq(sting:GetAttribute("spell"), "Serpent Sting", "  by its plain name: the highest rank, lowered for a low-level target (#133)")
 eq(WoW.takeDispatched(), "", "  nothing clicked")
 eq(U._test.gesture[cook], nil, "  its gesture ended a frame later")
 check(GAB.db.utility.order ~= nil, "  saved in the order")
+-- A spell without a readable name keeps its ID; a built-in entry is armed by ID.
+WoW.spellNames[1978] = nil
+rebuild()
+eq(sting:GetAttribute("spell"), 1978, "  no name: armed with the dropped ID")
+WoW.spellNames[1978] = "Serpent Sting"
+rebuild()
+eq(sting:GetAttribute("spell"), "Serpent Sting", "  the name back: by name again")
+eq(cook:GetAttribute("spell"), 3413, "  a built-in entry (Cooking) still by its ID")
 
 -- Click-to-place on the last button's trailing half: appended. Both CVar values.
 for _, cv in ipairs({ "1", "0" }) do

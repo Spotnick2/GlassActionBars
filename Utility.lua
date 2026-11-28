@@ -46,7 +46,9 @@
 --
 -- Spells dropped on the bar (#86): key spell:<id>, in the saved order (being
 -- there is the entry), shown on the characters that know that rank; a secure
--- GlassActionBarsUtilSpell_<id> made the first time one shows. A spell of a
+-- GlassActionBarsUtilSpell_<id> made the first time one shows, armed with the
+-- spell's plain name (#133): the highest known rank, lowered by the client for
+-- a low-level target, where the ID would force the dropped rank. A spell of a
 -- built-in entry turns that entry on instead. Editing on the bar: drop a
 -- spell on a button (or click one with a spell on the cursor), Shift-drag
 -- (Blizzard's Pick Up Action key) a button along the bar or off it. A press
@@ -216,21 +218,21 @@ function Utility.Registered(k)
     return isOrderKey[k] == true
 end
 
--- The entry's name in Options.
+-- A spell's plain name (no rank), else nil.
+function Utility.SpellName(id)
+    local ok, name = pcall(C_Spell.GetSpellName, id)
+    name = ok and API.Plain(name)
+    return type(name) == "string" and name ~= "" and name or nil
+end
+
+-- The entry's name in Options. A dropped spell's has no rank: it casts by
+-- name (#133).
 function Utility.Label(k)
     if k == "camping" then return "Camping items" end
     local def = providerDef(k)
     if def then return def.label end
     local id = Utility.SpellId(k)
-    if id then
-        local ok, name = pcall(C_Spell.GetSpellName, id)
-        name = ok and API.Plain(name)
-        if type(name) ~= "string" or name == "" then return "Spell " .. id end
-        local okR, rank = pcall(C_Spell.GetSpellSubtext, id)
-        rank = okR and API.Plain(rank)
-        if type(rank) == "string" and rank ~= "" then return name .. " (" .. rank .. ")" end
-        return name
-    end
+    if id then return Utility.SpellName(id) or ("Spell " .. id) end
     return BY_KEY[k] and BY_KEY[k].label or k
 end
 
@@ -435,7 +437,7 @@ function Utility.Collect(n)
             if Utility.ProviderId(key) then
                 list[#list + 1] = { key = key, kind = "provider", value = Utility.ProviderId(key) }
             elseif Utility.SpellId(key) then
-                list[#list + 1] = { key = key, kind = "spell", value = Utility.SpellId(key) }
+                list[#list + 1] = { key = key, kind = "spell", value = Utility.SpellId(key), byName = true }
             elseif key == "camping" then
                 for _, a in ipairs(Utility.CAMPING) do
                     if API.ItemCount(a.item) > 0 and (a.kit or campfire) then
@@ -1368,7 +1370,8 @@ function Utility.Arm(b)
     elseif s.kind == "spell" then
         b:SetAttribute("type", "spell")
         b:SetAttribute("item", nil)
-        b:SetAttribute("spell", s.value)
+        -- A dropped spell by its plain name (#133); the ID when it has none.
+        b:SetAttribute("spell", s.byName and Utility.SpellName(s.value) or s.value)
     end
 end
 
@@ -1380,7 +1383,7 @@ local function clear(b)
         b:SetAttribute("target-bag", nil)
         b:SetAttribute("target-slot", nil)
     end
-    state[b].kind, state[b].value, state[b].food = nil, nil, nil
+    state[b].kind, state[b].value, state[b].food, state[b].byName = nil, nil, nil, nil
     b:Hide()
 end
 
@@ -1448,7 +1451,7 @@ local function buttonFor(e, bar)
         local ok, icon = pcall(C_Spell.GetSpellTexture, e.value)
         regions[b].icon:SetTexture(ok and API.Plain(icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
     end
-    state[b].kind, state[b].value, state[b].food = e.kind, e.value, e.food
+    state[b].kind, state[b].value, state[b].food, state[b].byName = e.kind, e.value, e.food, e.byName
     Utility.Arm(b)
     b:Show()
     return b
